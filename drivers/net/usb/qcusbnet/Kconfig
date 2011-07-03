@@ -1,0 +1,12 @@
+#
+# QMI configuration
+#
+
+menu "Motorola QMI Net driver"
+
+config QCUSBNET
+        tristate "Motorola MUX QMI driver"
+	depends on USB_USBNET
+        default n
+
+endmenu

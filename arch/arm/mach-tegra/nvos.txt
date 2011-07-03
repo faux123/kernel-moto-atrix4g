@@ -1,0 +1,196 @@
+Binary file built-in.o matches
+include/nvrm_memmgr.h: * NvOsAlloc().  If only the CPU will ever access the memory, this API is
+include/nvrm_memmgr.h: * NvOsAlloc and on AVP, memAPI's are used to allocate memory.
+include/nvutil.h: * dynamically allocate zeroed memory (uses NvOsAlloc())
+include/nvutil.h:    void *p = NvOsAlloc(size);
+include/nvos_trace.h: * this would be the mutex handle. For NvOsAlloc * and NvOsFree this 
+include/nvos.h:void *NvOsAlloc(size_t size);
+include/nvos.h: *      NvOsAlloc().
+include/nvos.h:void *NvOsAllocLeak( size_t size, const char *f, int l );
+include/nvos.h:static NV_INLINE void *NvOsAllocTraced(size_t size, const char *f, int l)
+include/nvos.h:    ptr = (NvOsAllocLeak)(size, f, l);
+include/nvos.h:    ptr = (NvOsAlloc)(size);
+include/nvos.h:    NVOS_TRACE_LOG_PRINTF(("NvOsAlloc, %s, %d, %ums, 0x%x\n",
+include/nvos.h:#define NvOsAlloc(size) NvOsAllocTraced(size, __FILE__, __LINE__)
+nvaes_user.c:                ptr = NvOsAlloc(size);
+Binary file nvaes_user.o matches
+Binary file nvddk/nvddk_fuse_ap20.o matches
+Binary file nvddk/nvddk_usbphy.o matches
+Binary file nvddk/built-in.o matches
+nvddk/nvddk_aes.c:    pAes = NvOsAlloc(sizeof(NvDdkAes));
+nvddk/nvddk_aes.c:    gs_pAesCoreEngine = NvOsAlloc(sizeof(AesCoreEngine));
+nvddk/nvddk_aes.c:    pAesHwCtxt->ppEngineCaps = (AesHwCapabilities **)NvOsAlloc(sizeof(AesHwCapabilities) * AesHwEngine_Num);
+nvddk/nvddk_aes.c:            s_Caps2.pAesInterf = NvOsAlloc(sizeof(AesHwInterface));
+nvddk/nvddk_aes.c:            s_Caps2.pAesInterf = NvOsAlloc(sizeof(AesHwInterface));
+nvddk/nvddk_aes_dispatch.c:        pSecureStorageKey = (NvU8  *)NvOsAlloc( p_in->KeyLength * sizeof( NvU8  ) );
+nvddk/nvddk_aes_dispatch.c:        pSrcBuffer = (NvU8  *)NvOsAlloc( p_in->SrcBufferSize * sizeof( NvU8  ) );
+nvddk/nvddk_aes_dispatch.c:        pDestBuffer = (NvU8  *)NvOsAlloc( p_in->DestBufferSize * sizeof( NvU8  ) );
+nvddk/nvddk_aes_dispatch.c:        pInitialVector = (NvU8  *)NvOsAlloc( p_in->VectorSize * sizeof( NvU8  ) );
+nvddk/nvddk_aes_dispatch.c:        pInitialVector = (NvU8  *)NvOsAlloc( p_in->VectorSize * sizeof( NvU8  ) );
+Binary file nvddk/nvddk_aes_dispatch.o matches
+Binary file nvddk/nvddk_aes.o matches
+nvddk/nvddk_usbphy.c:        s_pUsbPhy = NvOsAlloc(MaxInstances * sizeof(NvDdkUsbPhy));
+nvddk/nvddk_usbphy.c:        s_pUtmiPadConfig = NvOsAlloc(sizeof(NvDdkUsbPhyUtmiPadConfig));
+nvddk/nvddk_nand.c:    s_pNandRec = NvOsAlloc(sizeof(NvDdkNand));
+nvddk/nvddk_nand.c:    s_pNandRec->pEccErrorData = NvOsAlloc(sizeof(NvU32) *
+nvddk/nvddk_nand.c:        pTempDataBuffer = NvOsAlloc(TotPageSize);
+nvddk/nvddk_nand.c:        pRefDataBuffer = NvOsAlloc(TotPageSize);
+nvddk/nvddk_nand.c:        pTempTagBuffer = NvOsAlloc(TotTagSize);
+nvddk/nvddk_nand.c:        pRefTagBuffer = NvOsAlloc(TotTagSize);
+nvddk/nvddk_fuse_ap20.c:    s_pFuseRec = NvOsAlloc(sizeof(NvDdkFuse));
+nvddk/nvddk_fuse_ap20.c:    ps_hRmDevice = NvOsAlloc(sizeof(NvRmDeviceHandle));
+nvec/nvec.c:        ec->hEc = NvOsAlloc( sizeof(NvEc) );
+nvec/nvec.c:    hEc = NvOsAlloc( sizeof(NvEc) );
+nvec/nvec.c:    requestNode = NvOsAlloc(sizeof(NvEcRequestNode));
+nvec/nvec.c:        responseNode = NvOsAlloc(sizeof(NvEcResponseNode));
+nvec/nvec.c:        ec->eventNodes = NvOsAlloc(val * sizeof(NvEcEventNode));
+nvec/nvec.c:    h = NvOsAlloc( sizeof(NvEcEventRegistration));
+nvec/nvec_dispatch.c:        pEventTypes = (NvEcEventType  *)NvOsAlloc( p_in->NumEventTypes * sizeof( NvEcEventType  ) );
+nvec_user.c:			ptr = NvOsAlloc(size);
+nvodm/nvodm_services.c:    pOdmServices = NvOsAlloc(sizeof(NvOdmServicesGpio));
+nvodm/nvodm_services.c:    pOdmServices = NvOsAlloc(sizeof(NvOdmServicesI2c));
+nvodm/nvodm_services.c:    pOdmServices = NvOsAlloc(sizeof(NvOdmServicesI2c));
+nvodm/nvodm_services.c:        buffer = NvOsAlloc(len);
+nvodm/nvodm_services.c:        t = NvOsAlloc(sizeof(NvRmI2cTransactionInfo) * NumberOfTransactions);
+nvodm/nvodm_services.c:    pOdmServices = NvOsAlloc(sizeof(NvOdmServicesSpi));
+nvodm/nvodm_services.c:    pOdmServices = NvOsAlloc(sizeof(NvOdmServicesSpi));
+nvodm/nvodm_services.c:    pOdmServices = NvOsAlloc(sizeof(NvOdmServicesSpi));
+nvodm/nvodm_services.c:    pOdmServices = NvOsAlloc(sizeof(NvOdmServicesPwm));
+Binary file nvodm/nvodm_services.o matches
+Binary file nvodm/built-in.o matches
+nvodm/nvodm_services_os.c:    return NvOsAlloc( size );
+Binary file nvodm/nvodm_services_os.o matches
+nvos/nvos_exports.c:EXPORT_SYMBOL(NvOsAlloc);
+nvos/nvos_exports.c:EXPORT_SYMBOL(NvOsAllocLeak);
+Binary file nvos/built-in.o matches
+Binary file nvos/nvos.o matches
+nvos/nvos.c:#undef NvOsAlloc
+nvos/nvos.c:void *NvOsAlloc(size_t size)
+nvos/nvos.c:        return NvOsAlloc(size);
+nvos/nvos.c:    NewPtr = NvOsAlloc(size);
+nvos/nvos.c:    pNewBlock = (NvOsInterruptBlock *)NvOsAlloc(INTBLOCK_SIZE(IrqListSize));
+nvos/nvos.c:void *NvOsAllocLeak( size_t size, const char *f, int l )
+nvos/nvos.c:    return NvOsAlloc( size );
+Binary file nvos/nvos_exports.o matches
+nvos_user.c:    Instance = NvOsAlloc(sizeof(NvOsInstance));
+nvos_user.c:    irqList = NvOsAlloc(k.nIrqs * sizeof(NvU32));
+nvos_user.c:    semList = NvOsAlloc(k.nIrqs * sizeof(NvOsSemaphoreHandle));
+nvos_user.c:    node = NvOsAlloc(sizeof(NvOsIrqListNode));
+nvos_user.c:        p = NvOsAlloc( sizeof(NvOsMemRangeParams) );
+Binary file nvos_user.o matches
+Binary file nvreftrack/nvreftrack.o matches
+Binary file nvreftrack/built-in.o matches
+nvreftrack/nvreftrack.c:    ret = NvOsAlloc(size);
+nvreftrack/nvreftrack.c:    Ctx = NvOsAlloc(sizeof(NvRt));
+nvreftrack/nvreftrack.c:        Ctx->ObjTypeIdxLUT = NvOsAlloc(sizeof(NvU32)*Ctx->MaxTypesPerPkg*NumPackages);
+Binary file nvrm/built-in.o matches
+Binary file nvrm/io/ap15/built-in.o matches
+nvrm/io/ap15/ap15rm_pwm.c:    s_hPwm = NvOsAlloc(sizeof(NvRmPwm));
+nvrm/io/ap15/nvrm_gpio_stub_helper.c:    h = (NvRmGpioInterruptHandle)NvOsAlloc(sizeof(struct NvRmGpioInterruptRec));
+Binary file nvrm/io/ap15/ap15rm_pwm.o matches
+nvrm/io/ap15/rm_spi_slink.c:    hRmSpiSlink = NvOsAlloc(sizeof(NvRmSpi));
+nvrm/io/ap15/rm_spi_slink.c:        hRmSpiSlink->pRxCpuBuffer = NvOsAlloc(CpuBufferSize);
+nvrm/io/ap15/rm_spi_slink.c:            hRmSpiSlink->pTxCpuBuffer = NvOsAlloc(CpuBufferSize);
+Binary file nvrm/io/ap15/rm_spi_slink.o matches
+Binary file nvrm/io/ap15/nvrm_gpio_stub_helper.o matches
+Binary file nvrm/io/ap20/ap20rm_i2c.o matches
+Binary file nvrm/io/ap20/built-in.o matches
+nvrm/io/ap20/ap20rm_i2c.c:        hRmI2cCont->pCpuBuffer = NvOsAlloc(DEFAULT_I2C_CPU_BUFFER_SIZE);
+Binary file nvrm/core/common/built-in.o matches
+nvrm/core/common/nvrm_power.c:            /* fall back to NvOsAlloc */
+nvrm/core/common/nvrm_power.c:            p = NvOsAlloc( s );
+nvrm/core/common/nvrm_power.c:    pNewClient = NvOsAlloc(sizeof(*pNewClient));
+nvrm/core/common/nvrm_power.c:        // FIXME: handle NvOsRealloc failure -- try NvOsAlloc instead
+nvrm/core/common/nvrm_power.c:        pVoltageReq = NvOsAlloc(sizeof(*pVoltageReq));
+nvrm/core/common/nvrm_power.c:            NvBool* p = NvOsAlloc(s);
+nvrm/core/common/nvrm_power.c:        return NvOsAlloc(sizeof(BusyHintReq));
+nvrm/core/common/nvrm_clocks_limits.c:        s_pShmooData = NvOsAlloc(TotalSize);
+nvrm/core/common/nvrm_clocks_limits.c:        s_pShmooData = NvOsAlloc(TotalSize);
+nvrm/core/common/nvrm_transport.c:        s_TmpIsrMsgBuffer = NvOsAlloc(MAX_MESSAGE_LENGTH);
+nvrm/core/common/nvrm_transport.c:        hPort = NvOsAlloc( sizeof(*hPort) );
+nvrm/core/common/nvrm_transport.c:        hPort->RecvMessageQueue.pReceiveMsg = NvOsAlloc( sizeof(RmReceiveMessage) * (MAX_MESSAGE_DEPTH+1));
+nvrm/core/common/nvrm_transport.c:    pNewReceiveMsg = NvOsAlloc( sizeof(RmReceiveMessage) * (MaxQueueDepth+1));
+Binary file nvrm/core/common/nvrm_keylist.o matches
+Binary file nvrm/core/common/nvrm_chiplib.o matches
+nvrm/core/common/nvrm_chiplib.c:    s_Interrupt.pVtable = NvOsAlloc(sizeof(IInterruptVtable));
+nvrm/core/common/nvrm_chiplib.c:        *argv = NvOsAlloc(size * sizeof(char *));
+nvrm/core/common/nvrm_chiplib.c:    copy = NvOsAlloc(len);
+Binary file nvrm/core/common/nvrm_transport.o matches
+Binary file nvrm/core/common/nvrm_power.o matches
+Binary file nvrm/core/common/nvrm_clocks_limits.o matches
+nvrm/core/common/nvrm_keylist.c:        pList = NvOsAlloc(sizeof(Key));
+nvrm/core/ap15/ap15rm_xpc.c:    hNewXpcMsgHandle = NvOsAlloc(sizeof(*hNewXpcMsgHandle));
+Binary file nvrm/core/ap15/ap15rm_xpc.o matches
+Binary file nvrm/core/ap15/built-in.o matches
+Binary file nvrm/core/ap15/nvrm_diag.o matches
+nvrm/core/ap15/nvrm_diag.c:    p = NvOsAlloc(s);
+Binary file nvrm/core/ap15/nvrm_clocks.o matches
+nvrm/core/ap15/nvrm_clocks.c:        NvOsAlloc(sizeof (NvRmModuleClockState) * s_moduleClockTableSize);
+Binary file nvrm/dispatch/nvrm_i2c_dispatch.o matches
+Binary file nvrm/dispatch/nvrm_diag_dispatch.o matches
+nvrm/dispatch/nvrm_memmgr_dispatch.c:        hMems = (NvRmMemHandle  *)NvOsAlloc( p_in->Count * sizeof( NvRmMemHandle  ) );
+nvrm/dispatch/nvrm_memmgr_dispatch.c:        hMems = (NvRmMemHandle  *)NvOsAlloc( p_in->Count * sizeof( NvRmMemHandle  ) );
+nvrm/dispatch/nvrm_memmgr_dispatch.c:        Addrs = (NvU32  *)NvOsAlloc( p_in->Count * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_memmgr_dispatch.c:        Heaps = (NvRmHeap  *)NvOsAlloc( p_in->NumHeaps * sizeof( NvRmHeap  ) );
+Binary file nvrm/dispatch/nvrm_transport_dispatch.o matches
+Binary file nvrm/dispatch/nvrm_analog_dispatch.o matches
+Binary file nvrm/dispatch/built-in.o matches
+nvrm/dispatch/nvrm_diag_dispatch.c:        phRailList = (NvRmDiagPowerRailHandle  *)NvOsAlloc( p_inout->pListSize * sizeof( NvRmDiagPowerRailHandle  ) );
+nvrm/dispatch/nvrm_diag_dispatch.c:        phRailList = (NvRmDiagPowerRailHandle  *)NvOsAlloc( p_inout->pListSize * sizeof( NvRmDiagPowerRailHandle  ) );
+nvrm/dispatch/nvrm_diag_dispatch.c:        phSourceList = (NvRmDiagClockSourceHandle  *)NvOsAlloc( p_inout->pListSize * sizeof( NvRmDiagClockSourceHandle  ) );
+nvrm/dispatch/nvrm_diag_dispatch.c:        phSourceList = (NvRmDiagClockSourceHandle  *)NvOsAlloc( p_inout->pListSize * sizeof( NvRmDiagClockSourceHandle  ) );
+nvrm/dispatch/nvrm_diag_dispatch.c:        phSourceList = (NvRmDiagClockSourceHandle  *)NvOsAlloc( p_inout->pListSize * sizeof( NvRmDiagClockSourceHandle  ) );
+nvrm/dispatch/nvrm_diag_dispatch.c:        pIdList = (NvRmDiagModuleID  *)NvOsAlloc( p_inout->pListSize * sizeof( NvRmDiagModuleID  ) );
+nvrm/dispatch/nvrm_owr_dispatch.c:        Data = (NvU8  *)NvOsAlloc( p_in->DataLen * sizeof( NvU8  ) );
+nvrm/dispatch/nvrm_owr_dispatch.c:        Transaction = (NvRmOwrTransactionInfo  *)NvOsAlloc( p_in->NumOfTransactions * sizeof( NvRmOwrTransactionInfo  ) );
+nvrm/dispatch/nvrm_spi_dispatch.c:        pReadBuffer = (NvU8  *)NvOsAlloc( p_in->BytesRequested * sizeof( NvU8  ) );
+nvrm/dispatch/nvrm_spi_dispatch.c:        pWriteBuffer = (NvU8  *)NvOsAlloc( p_in->BytesRequested * sizeof( NvU8  ) );
+nvrm/dispatch/nvrm_spi_dispatch.c:        pReadBuffer = (NvU8  *)NvOsAlloc( p_in->BytesRequested * sizeof( NvU8  ) );
+nvrm/dispatch/nvrm_spi_dispatch.c:        pWriteBuffer = (NvU8  *)NvOsAlloc( p_in->BytesRequested * sizeof( NvU8  ) );
+nvrm/dispatch/nvrm_pinmux_dispatch.c:        pCaps = (void*  )NvOsAlloc( p_in->CapStructSize );
+Binary file nvrm/dispatch/nvrm_pinmux_dispatch.o matches
+nvrm/dispatch/nvrm_i2c_dispatch.c:        Data = (NvU8  *)NvOsAlloc( p_in->DataLen * sizeof( NvU8  ) );
+nvrm/dispatch/nvrm_i2c_dispatch.c:        Transaction = (NvRmI2cTransactionInfo  *)NvOsAlloc( p_in->NumOfTransactions * sizeof( NvRmI2cTransactionInfo  ) );
+nvrm/dispatch/nvrm_module_dispatch.c:        values = (NvU32  *)NvOsAlloc( p_in->num * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_module_dispatch.c:        values = (NvU32  *)NvOsAlloc( p_in->num * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_module_dispatch.c:        offsets = (NvU32  *)NvOsAlloc( p_in->num * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_module_dispatch.c:        values = (NvU32  *)NvOsAlloc( p_in->num * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_module_dispatch.c:        offsets = (NvU32  *)NvOsAlloc( p_in->num * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_module_dispatch.c:        values = (NvU32  *)NvOsAlloc( p_in->num * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_module_dispatch.c:        pBytes = (void*  )NvOsAlloc( p_in->NumBytes );
+nvrm/dispatch/nvrm_module_dispatch.c:        pId = (void*  )NvOsAlloc( p_in->IdSize );
+nvrm/dispatch/nvrm_module_dispatch.c:        pCaps = (NvRmModuleCapability  *)NvOsAlloc( p_in->NumCaps * sizeof( NvRmModuleCapability  ) );
+nvrm/dispatch/nvrm_module_dispatch.c:        pModuleInfo = (NvRmModuleInfo  *)NvOsAlloc( p_inout->pNum * sizeof( NvRmModuleInfo  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pActiveCyclesList = (NvU32  *)NvOsAlloc( p_in->LogDomainsCount * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pAveragesList = (NvRmFreqKHz  *)NvOsAlloc( p_in->LogDomainsCount * sizeof( NvRmFreqKHz  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pFrequenciesList = (NvRmFreqKHz  *)NvOsAlloc( p_in->LogDomainsCount * sizeof( NvRmFreqKHz  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pLogMeanFreqList = (NvRmFreqKHz  *)NvOsAlloc( p_in->LogMeanFreqListCount * sizeof( NvRmFreqKHz  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pSamplesNoList = (NvU32  *)NvOsAlloc( p_in->DfsProfileCount * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pProfileTimeUsList = (NvU32  *)NvOsAlloc( p_in->DfsProfileCount * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pDfsTargetFreqList = (NvRmFreqKHz  *)NvOsAlloc( p_in->DfsFreqListCount * sizeof( NvRmFreqKHz  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pDfsLowFreqList = (NvRmFreqKHz  *)NvOsAlloc( p_in->DfsFreqListCount * sizeof( NvRmFreqKHz  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pMultiHint = (NvRmDfsStarvationHint  *)NvOsAlloc( p_in->NumHints * sizeof( NvRmDfsStarvationHint  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pMultiHint = (NvRmDfsBusyHint  *)NvOsAlloc( p_in->NumHints * sizeof( NvRmDfsBusyHint  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pIdList = (NvRmModuleID  *)NvOsAlloc( p_inout->pListSize * sizeof( NvRmModuleID  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        pActiveList = (NvBool  *)NvOsAlloc( p_inout->pListSize * sizeof( NvBool  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        PrefVoltageList = (NvRmMilliVolts  *)NvOsAlloc( p_in->PrefVoltageListCount * sizeof( NvRmMilliVolts  ) );
+nvrm/dispatch/nvrm_power_dispatch.c:        PrefFreqList = (NvRmFreqKHz  *)NvOsAlloc( p_in->PrefFreqListCount * sizeof( NvRmFreqKHz  ) );
+nvrm/dispatch/nvrm_transport_dispatch.c:            pMessageBuffer = (void* )NvOsAlloc( p_in->MaxSize );
+nvrm/dispatch/nvrm_transport_dispatch.c:            message = (void*  )NvOsAlloc( p_in->MessageSize );
+nvrm/dispatch/nvrm_transport_dispatch.c:            pMessageBuffer = (void*  )NvOsAlloc( p_in->MessageSize );
+nvrm/dispatch/nvrm_transport_dispatch.c:            PortName = (NvU8  *)NvOsAlloc( p_in->PortNameSize * sizeof( NvU8  ) );
+nvrm/dispatch/nvrm_transport_dispatch.c:            pPortName = NvOsAlloc( p_in->pPortName_len );
+Binary file nvrm/dispatch/nvrm_owr_dispatch.o matches
+Binary file nvrm/dispatch/nvrm_power_dispatch.o matches
+Binary file nvrm/dispatch/nvrm_gpio_dispatch.o matches
+nvrm/dispatch/nvrm_gpio_dispatch.c:        pin = (NvRmGpioPinHandle  *)NvOsAlloc( p_in->pinCount * sizeof( NvRmGpioPinHandle  ) );
+nvrm/dispatch/nvrm_gpio_dispatch.c:        Irq = (NvU32  *)NvOsAlloc( p_in->pinCount * sizeof( NvU32  ) );
+nvrm/dispatch/nvrm_gpio_dispatch.c:        pin = (NvRmGpioPinHandle  *)NvOsAlloc( p_in->pinCount * sizeof( NvRmGpioPinHandle  ) );
+nvrm/dispatch/nvrm_gpio_dispatch.c:        pin = (NvRmGpioPinHandle  *)NvOsAlloc( p_in->pinCount * sizeof( NvRmGpioPinHandle  ) );
+nvrm/dispatch/nvrm_gpio_dispatch.c:        pPinState = (NvRmGpioPinState  *)NvOsAlloc( p_in->pinCount * sizeof( NvRmGpioPinState  ) );
+nvrm/dispatch/nvrm_gpio_dispatch.c:        pin = (NvRmGpioPinHandle  *)NvOsAlloc( p_in->pinCount * sizeof( NvRmGpioPinHandle  ) );
+nvrm/dispatch/nvrm_gpio_dispatch.c:        pinState = (NvRmGpioPinState  *)NvOsAlloc( p_in->pinCount * sizeof( NvRmGpioPinState  ) );
+nvrm/dispatch/nvrm_gpio_dispatch.c:        hPin = (NvRmGpioPinHandle  *)NvOsAlloc( p_in->pinCount * sizeof( NvRmGpioPinHandle  ) );
+Binary file nvrm/dispatch/nvrm_memmgr_dispatch.o matches
+nvrm/dispatch/nvrm_analog_dispatch.c:        Config = (void*  )NvOsAlloc( p_in->ConfigLength );
+nvrm/dispatc
