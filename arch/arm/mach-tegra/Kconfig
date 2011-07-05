@@ -199,6 +199,16 @@ config TEGRA_LP2POLICY_IGNORE_LC
 
 endchoice
 
+config AVP_OVERCLOCK
+	bool "AVP Overclocking"
+	depends on MACH_STAR
+	default n
+
+config STOCK_VOLTAGE
+	bool "stock voltage values"
+	depends on MACH_STAR
+	default n
+	
 if TEGRA_ODM_KIT
 source "arch/arm/mach-tegra/odm_kit/Kconfig"
 endif
