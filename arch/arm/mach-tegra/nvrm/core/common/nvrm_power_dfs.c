@@ -836,7 +836,7 @@ static void DfsParametersInit(NvRmDfs* pDfs)
 #ifndef CONFIG_STOCK_VOLTAGE
 	pDfs->HighCornerKHz.Domains[NvRmDfsClockId_Cpu] = 1100000;
 #else
-	pDfs->HighCornerKHz.Domains[NvRmDfsClockId_Cpu] = 1015000;
+	pDfs->HighCornerKHz.Domains[NvRmDfsClockId_Cpu] = 1000000;
 #endif // CONFIG_STOCK_VOLTAGE
 #endif // FAKE_SHMOO
 
