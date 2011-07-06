@@ -175,8 +175,7 @@ NvError NvRmDmaAllocate(NvRmDeviceHandle rm, NvRmDmaHandle *rm_dma,
 	else
 		mode = TEGRA_DMA_MODE_ONESHOT;
 
-	dma->ch = tegra_dma_allocate_channel(mode, "nvrm_%d_%d",
-		requester, instance);
+	dma->ch = tegra_dma_allocate_channel(mode);
 	if (IS_ERR_OR_NULL(dma->ch)) {
 		e = NvError_Busy;
 		goto fail;

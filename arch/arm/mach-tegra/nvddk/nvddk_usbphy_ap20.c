@@ -368,7 +368,7 @@ Ap20UsbPhySuspendPort(
 
     // Set the SUSP bit (7:7) in the PORTSC1 reg to suspend the port.
     //This bit is RW in host mode only.
-    if (!pUsbPhy->IsHostMode)
+    if (pUsbPhy->pProperty->UsbMode != NvOdmUsbModeType_Host)
     {
         return NvError_NotSupported;
     }
@@ -596,9 +596,6 @@ Ap20UsbPhyUtmiPowerControl(
     }
     else
     {
-        // Suspend port before suspending the phy
-        Ap20UsbPhySuspendPort(pUsbPhy);
-
         // Put the Phy in the suspend mode
         if (pUsbPhy->Instance == 0)
         {
@@ -610,6 +607,8 @@ Ap20UsbPhyUtmiPowerControl(
         // Put the Phy in the suspend mode
         if (pUsbPhy->Instance == 2)
         {
+            // Suspend port before setting PHCD bit
+            Ap20UsbPhySuspendPort(pUsbPhy);
             RegVal = USB_REG_RD(PORTSC1);
             RegVal = USB_FLD_SET_DRF_DEF(PORTSC1, PHCD, ENABLE, RegVal); 
             USB_REG_WR(PORTSC1, RegVal);

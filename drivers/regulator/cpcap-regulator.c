@@ -68,8 +68,6 @@ static const int vaudio_val_tbl[] = {0, 2775000};
 
 static struct {
 	const enum cpcap_reg reg;
-	const enum cpcap_reg assignment_reg;
-	const unsigned short assignment_mask;
 	const unsigned short mode_mask;
 	const unsigned short volt_mask;
 	const unsigned char volt_shft;
@@ -85,8 +83,6 @@ static struct {
         const unsigned int bit_offset_from_cpcap_lowest_voltage;
 } cpcap_regltr_data[CPCAP_NUM_REGULATORS] = {
 	[CPCAP_SW1]      = {CPCAP_REG_S1C1,
-			    CPCAP_REG_ASSIGN2,
-			    CPCAP_BIT_SW1_SEL,
 			    0x6F00,
 			    0x007F,
 			    0,
@@ -100,8 +96,6 @@ static struct {
                             0x0c},
 
 	[CPCAP_SW2]      = {CPCAP_REG_S2C1,
-			    CPCAP_REG_ASSIGN2,
-			    CPCAP_BIT_SW2_SEL,
 			    0x6F00,
 			    0x007F,
 			    0,
@@ -115,8 +109,6 @@ static struct {
                             0x18},
 
 	[CPCAP_SW3]      = {CPCAP_REG_S3C,
-			    CPCAP_REG_ASSIGN2,
-			    CPCAP_BIT_SW3_SEL,
 				0x0578,
 				0x0003,
 				0,
@@ -129,8 +121,6 @@ static struct {
 				0},
 
 	[CPCAP_SW4]      = {CPCAP_REG_S4C1,
-			    CPCAP_REG_ASSIGN2,
-			    CPCAP_BIT_SW4_SEL,
 			    0x6F00,
 			    0x007F,
 			    0,
@@ -144,8 +134,6 @@ static struct {
                             0x18},
 
 	[CPCAP_SW5]      = {CPCAP_REG_S5C,
-			    CPCAP_REG_ASSIGN2,
-			    CPCAP_BIT_SW5_SEL,
 			    0x002A,
 			    0x0000,
 			    0,
@@ -159,8 +147,6 @@ static struct {
                             0},
 
 	[CPCAP_VCAM]     = {CPCAP_REG_VCAMC,
-			    CPCAP_REG_ASSIGN2,
-			    CPCAP_BIT_VCAM_SEL,
 			    0x0087,
 			    0x0030,
 			    4,
@@ -174,8 +160,6 @@ static struct {
                             0},
 
 	[CPCAP_VCSI]     = {CPCAP_REG_VCSIC,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VCSI_SEL,
 			    0x0047,
 			    0x0010,
 			    4,
@@ -189,8 +173,6 @@ static struct {
                             0},
 
 	[CPCAP_VDAC]     = {CPCAP_REG_VDACC,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VDAC_SEL,
 			    0x0087,
 			    0x0030,
 			    4,
@@ -204,8 +186,6 @@ static struct {
                             0},
 
 	[CPCAP_VDIG]     = {CPCAP_REG_VDIGC,
-			    CPCAP_REG_ASSIGN2,
-			    CPCAP_BIT_VDIG_SEL,
 			    0x0087,
 			    0x0030,
 			    4,
@@ -219,8 +199,6 @@ static struct {
                             0},
 
 	[CPCAP_VFUSE]    = {CPCAP_REG_VFUSEC,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VFUSE_SEL,
 			    0x00A0,
 			    0x000F,
 			    0,
@@ -234,8 +212,6 @@ static struct {
                             0},
 
 	[CPCAP_VHVIO]    = {CPCAP_REG_VHVIOC,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VHVIO_SEL,
 			    0x0017,
 			    0x0000,
 			    0,
@@ -249,8 +225,6 @@ static struct {
                             0},
 
 	[CPCAP_VSDIO]    = {CPCAP_REG_VSDIOC,
-			    CPCAP_REG_ASSIGN2,
-			    CPCAP_BIT_VSDIO_SEL,
 			    0x0087,
 			    0x0038,
 			    3,
@@ -264,8 +238,6 @@ static struct {
                             0},
 
 	[CPCAP_VPLL]     = {CPCAP_REG_VPLLC,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VPLL_SEL,
 			    0x0047,
 			    0x0018,
 			    3,
@@ -279,8 +251,6 @@ static struct {
                             0},
 
 	[CPCAP_VRF1]     = {CPCAP_REG_VRF1C,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VRF1_SEL,
 			    0x00AC,
 			    0x0002,
 			    1,
@@ -294,8 +264,6 @@ static struct {
                             0},
 
 	[CPCAP_VRF2]     = {CPCAP_REG_VRF2C,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VRF2_SEL,
 			    0x0023,
 			    0x0008,
 			    3,
@@ -309,8 +277,6 @@ static struct {
                             0},
 
 	[CPCAP_VRFREF]   = {CPCAP_REG_VRFREFC,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VRFREF_SEL,
 			    0x0023,
 			    0x0008,
 			    3,
@@ -324,8 +290,6 @@ static struct {
                             0},
 
 	[CPCAP_VWLAN1]   = {CPCAP_REG_VWLAN1C,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VWLAN1_SEL,
 			    0x0047,
 			    0x0010,
 			    4,
@@ -339,8 +303,6 @@ static struct {
                             0},
 
 	[CPCAP_VWLAN2]   = {CPCAP_REG_VWLAN2C,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VWLAN2_SEL,
 			    0x020C,
 			    0x00C0,
 			    6,
@@ -354,8 +316,6 @@ static struct {
                             0},
 
 	[CPCAP_VSIM]     = {CPCAP_REG_VSIMC,
-			    CPCAP_REG_ASSIGN3,
-			    0,		/* VSIM and VSIMCARD are on the same control bit, do not allow secondary control. */
 			    0x0023,
 			    0x0008,
 			    3,
@@ -369,8 +329,6 @@ static struct {
                             0},
 
 	[CPCAP_VSIMCARD] = {CPCAP_REG_VSIMC,
-			    CPCAP_REG_ASSIGN3,
-			    0,		/* VSIM and VSIMCARD are on the same control bit, do not allow secondary control. */
 			    0x1E80,
 			    0x0008,
 			    3,
@@ -384,8 +342,6 @@ static struct {
                             0},
 
 	[CPCAP_VVIB]     = {CPCAP_REG_VVIBC,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VVIB_SEL,
 			    0x0001,
 			    0x000C,
 			    2,
@@ -399,8 +355,6 @@ static struct {
                             0},
 
 	[CPCAP_VUSB]     = {CPCAP_REG_VUSBC,
-			    CPCAP_REG_ASSIGN3,
-			    CPCAP_BIT_VUSB_SEL,
 			    0x011C,
 			    0x0040,
 			    6,
@@ -414,8 +368,6 @@ static struct {
                             0},
 
 	[CPCAP_VAUDIO]   = {CPCAP_REG_VAUDIOC,
-			    CPCAP_REG_ASSIGN4,
-			    CPCAP_BIT_VAUDIO_SEL,
 			    0x0016,
 			    0x0001,
 			    0,
@@ -521,13 +473,6 @@ static int cpcap_regulator_enable(struct regulator_dev *rdev)
 				    cpcap_regltr_data[regltr_id].mode_val,
 				    cpcap_regltr_data[regltr_id].mode_mask);
 
-	if ((retval == 0) &&
-		(cpcap_regltr_data[regltr_id].mode_val & CPCAP_REG_OFF_MODE_SEC)) {
-		retval = cpcap_regacc_write(cpcap,
-									cpcap_regltr_data[regltr_id].assignment_reg,
-									0,
-									cpcap_regltr_data[regltr_id].assignment_mask);
-	}
 	if ((cpcap_regltr_data[regltr_id].turn_on_time) && (retval == 0))
 		udelay(cpcap_regltr_data[regltr_id].turn_on_time);
 
@@ -538,27 +483,17 @@ static int cpcap_regulator_disable(struct regulator_dev *rdev)
 {
 	struct cpcap_device *cpcap = rdev_get_drvdata(rdev);
 	int regltr_id;
-	int retval;
 	enum cpcap_reg regnr;
 
 	regltr_id = rdev_get_id(rdev);
 	if (regltr_id >= CPCAP_NUM_REGULATORS)
 		return -EINVAL;
+
 	regnr = cpcap_regltr_data[regltr_id].reg;
 
-	retval = 0;
-	if (cpcap_regltr_data[regltr_id].mode_val & CPCAP_REG_OFF_MODE_SEC) {
-		retval = cpcap_regacc_write(cpcap,
-									cpcap_regltr_data[regltr_id].assignment_reg,
-									cpcap_regltr_data[regltr_id].assignment_mask,
-									cpcap_regltr_data[regltr_id].assignment_mask);
-	}
-	if (retval == 0) {
-		retval = cpcap_regacc_write(cpcap, regnr,
-									cpcap_regltr_data[regltr_id].off_mode_val,
-									cpcap_regltr_data[regltr_id].mode_mask);
-	}
-	return (retval);
+	return cpcap_regacc_write(cpcap, regnr,
+				  cpcap_regltr_data[regltr_id].off_mode_val,
+				  cpcap_regltr_data[regltr_id].mode_mask);
 }
 
 static int cpcap_regulator_is_enabled(struct regulator_dev *rdev)

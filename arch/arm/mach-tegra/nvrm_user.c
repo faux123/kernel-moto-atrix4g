@@ -643,16 +643,12 @@ int tegra_pm_notifier(struct notifier_block *nb,
 #ifdef CONFIG_HAS_EARLYSUSPEND
 void tegra_display_off(struct early_suspend *h)
 {
-    printk(KERN_INFO "%s: power off notification\n", __func__);
     notify_daemon(STRING_PM_DISPLAY_OFF);
-    printk(KERN_INFO "%s: done...\n", __func__);
 }
 
 void tegra_display_on(struct early_suspend *h)
 {
-    printk(KERN_INFO "%s: power ON notification\n", __func__);
     notify_daemon(STRING_PM_DISPLAY_ON);
-    printk(KERN_INFO "%s: done...\n", __func__);
 }
 
 static struct early_suspend tegra_display_power =

@@ -50,7 +50,7 @@
 #include <linux/preempt.h>
 #include <asm/io.h>
 
-#include <linux/apanic.h>
+#include "apanic.h"
 
 
 /* Grab some external hooks */

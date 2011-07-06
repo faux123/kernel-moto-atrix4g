@@ -51,14 +51,13 @@ struct spi_tty_s {
 	int					open_count;
 	LOCK_T 					port_lock;
 	wait_queue_head_t                       write_wait;
-	u32                                      write_buf_full;
-	u32					ap_dtr; // DTR from AP
-	u32					bp_dtr; // DTR from BP
+	u8                                      write_buf_full;
+	u8					dtr;
 	struct circ_buf				*write_buf;
-	u32					throttle;
+	u8					throttle;
 	// when need read, null data packet will be created if no data to send
 	// this is for DTR change and MRDY request case
-	u32					tx_null;
+	u8					tx_null;
 	struct mdm6600_spi_device		*spi_slave_dev;
 	struct mutex 				work_lock;
 	struct work_struct 			write_work;
@@ -132,7 +131,6 @@ static void spi_tty_handle_data(void *context, u8 *buf, u32 count)
 		return;
 	}
 
-	spi_tty->bp_dtr = header.dtr;
 	if (spi_tty->open_count > 0 && header.len > 0) {
 		len = header.len;
 		spi_ipc_buf_dump_ascii("rx data: ", buf+SPI_MSG_HEADER_LEN, (len>16?16:len));
@@ -251,34 +249,17 @@ void spi_tty_write_worker(struct work_struct *work)
 		&& (!spi_tty->throttle)
 		&& (!spi_tty->spi_slave_dev->peer_is_dead))
 	{
+		if (spi_tty->tx_null)
+			spi_tty->tx_null = 0;
+
 		// initiate spi_big_trans
 		memset(spi_big_trans.tx_buf, 0x0, SPI_TRANSACTION_LEN*2);
 		spi_big_msg.actual_length = 0;
 
-		// IKOLYMP-11349: Do not send any real data except DTR to BP if DTR is off
-		if (spi_tty->bp_dtr) {
-			// DTR is OK, send data with DTR
-			c = MIN(c, SPI_MTU);
-			spi_tty_buf_get(spi_tty->write_buf,
-					spi_big_trans.tx_buf+SPI_MSG_HEADER_LEN,
-					c);
-		}else{
-			// DTR is OFF, for below cases:
-			// 1. BP asserts MRDY
-			// 2. AP wants to send DTR
-			// 3. AP has data to send
-			// Only send NULL packet with DTR for case 1&2, 3 is blocked
-			if (spi_tty->tx_null) {
-				c = 0;
-				SPI_IPC_INFO("DTR disabled, only send DTR to BP\n");
-			}else {
-				SPI_IPC_INFO("DTR disabled, do not send anything to BP\n");
-				goto exit;
-			}
-		}
-
-		if (spi_tty->tx_null)
-			spi_tty->tx_null = 0;
+		c = MIN(c, SPI_MTU);
+		spi_tty_buf_get(spi_tty->write_buf,
+				spi_big_trans.tx_buf+SPI_MSG_HEADER_LEN,
+				c);
 
 		if (spi_tty->tty && spi_tty->open_count)
 			tty_wakeup(spi_tty->tty);
@@ -286,7 +267,7 @@ void spi_tty_write_worker(struct work_struct *work)
 
 		header.type = 1;
 		header.len = c;
-		header.dtr = spi_tty->ap_dtr;
+		header.dtr = spi_tty->dtr;
 		crc = spi_msg_cal_crc(&header);
 		header.fcs = crc;
 		spi_msg_set_header(spi_big_trans.tx_buf, &header);
@@ -309,7 +290,6 @@ void spi_tty_write_worker(struct work_struct *work)
 		spin_lock_irqsave(&(spi_tty->port_lock), flags);
 	}
 
-exit:
 	spin_unlock_irqrestore(&(spi_tty->port_lock), flags);
 	mutex_unlock(&(spi_tty->work_lock));
 	SPI_IPC_INFO("%s Exit\n", __func__);
@@ -383,12 +363,12 @@ static int spi_tty_tiocmset(struct tty_struct *tty, struct file *file,
 
 	if (set & TIOCM_DTR) {
 		SPI_IPC_INFO("set DTR\n");
-		spi_tty->ap_dtr = 1;
+		spi_tty->dtr = 1;
 	}
 
 	if (clear & TIOCM_DTR) {
 		SPI_IPC_INFO("clear DTR\n");
-		spi_tty->ap_dtr = 0;
+		spi_tty->dtr = 0;
 	}
 
 	spi_tty->tx_null = 1;
@@ -472,9 +452,11 @@ static int spi_tty_ioctl(struct tty_struct *tty, struct file *file,
 	return -ENOIOCTLCMD;
 }
 
+// Our API will be called by PPP from irq, so that only spinlock can be used
 static int spi_tty_open(struct tty_struct *tty, struct file *file)
 {
 	unsigned long flags;
+	int index;
 	struct spi_tty_s *spi_tty;
 
 	SPI_IPC_INFO("%s, tty=%p\n", __func__, tty);
@@ -483,6 +465,7 @@ static int spi_tty_open(struct tty_struct *tty, struct file *file)
 
 	spin_lock_irqsave(&spi_tty->port_lock, flags);
 
+	index = tty->index;
 	tty->driver_data = spi_tty;
 	tty->low_latency = 1;
 	spi_tty->tty = tty;
@@ -499,16 +482,12 @@ static void do_close(struct spi_tty_s *spi_tty)
 
 	SPI_IPC_INFO("%s\n", __func__);
 	spin_lock_irqsave(&spi_tty->port_lock, flags);
+
 	if (!spi_tty->open_count) {
 		goto exit;
 	}
+
 	--spi_tty->open_count;
-	spin_unlock_irqrestore(&spi_tty->port_lock, flags);
-	// IKOLYMP-11213: flush pending workqueue after decrease open_count
-	// and before clear tty, new work queued after this will not access
-	// tty any more.
-	flush_workqueue(spi_tty->work_queue);
-	spin_lock_irqsave(&spi_tty->port_lock, flags);
 	if (spi_tty->open_count <= 0) {
 		/* The port is being closed by the last user. */
 		spi_tty->tty = NULL;
@@ -524,7 +503,6 @@ static void spi_tty_close(struct tty_struct *tty, struct file *file)
 	SPI_IPC_INFO("%s\n", __func__);
 	if (spi_tty)
 		do_close(spi_tty);
-	SPI_IPC_INFO("%s Exit\n", __func__);
 }
 
 static struct tty_operations serial_ops = {
@@ -581,8 +559,6 @@ static int __init spi_tty_init(void)
 
 	init_waitqueue_head(&spi_tty->write_wait);
 	spi_tty->write_buf_full = 0;
-	spi_tty->ap_dtr = 0;
-	spi_tty->bp_dtr = 0;
 
 	spi_tty->work_queue = create_singlethread_workqueue("spi_tty_wq");
 	if (spi_tty->work_queue  == NULL) {
@@ -628,7 +604,9 @@ static int __init spi_tty_init(void)
 
 	tty_register_device(spi_tty_driver, 0, NULL);
 
+	// Depends on module_init() call sequence, mdm6600_dev_probe may
 	mdm6600_spi_dev.cb_context = spi_tty;
+	//mdm6600_spi_dev.callback = spi_tty_handle_data;
 	mdm6600_spi_dev.callback = NULL;
 	mdm6600_spi_dev.handle_master_mrdy = spi_tty_handle_mrdy;
 	spi_tty->spi_slave_dev = &mdm6600_spi_dev;
@@ -653,6 +631,7 @@ static void __exit spi_tty_exit(void)
 		spi_tty_buf_free(spi_tty->write_buf);
 		wake_lock_destroy(&spi_tty->wakelock);
 
+		//TODO: flush can destory work queue
 		kfree(spi_tty);
 		spi_tty_gbl = NULL;
 	}

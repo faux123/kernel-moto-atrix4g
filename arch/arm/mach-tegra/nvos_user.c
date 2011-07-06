@@ -550,9 +550,6 @@ int nvos_mmap(struct file *filp, struct vm_area_struct *vma)
     unsigned long pfn;
     NvOsInstance *Instance = (NvOsInstance *)filp->private_data;
 
-    if (filp->f_op != &knvos_fops)
-        return -EACCES;
-
     size = vma->vm_end - vma->vm_start;
     pfn = vma->vm_pgoff;
     addr = pfn << PAGE_SHIFT;

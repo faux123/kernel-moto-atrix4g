@@ -44,9 +44,9 @@
 #include <linux/console.h>
 #include <linux/preempt.h>
 #include <linux/mmc/mmc_simple.h>
-#include <linux/apanic.h>
 
 #include <mach/apanic.h>
+#include "apanic.h"
 
 
 #define DRVNAME "apanic_handle_mmc: "
@@ -250,7 +250,8 @@ out:
 	return NOTIFY_DONE;
 }
 
-int apanic_annotate(const char *annotation)
+static int apanic_annotate(struct file *file, const char __user *annotation,
+                           unsigned long count, void *data)
 {
 	struct apanic_data *ctx = &drv_ctx;
 	char *buffer;
@@ -280,14 +281,6 @@ int apanic_annotate(const char *annotation)
 	ctx->annotation = buffer;
 
 	return 0;
-}
-EXPORT_SYMBOL(apanic_annotate);
-
-static int apanic_proc_annotate(struct file *file,
-				const char __user *annotation,
-				unsigned long count, void *data)
-{
-	return apanic_annotate(annotation);
 }
 
 static struct notifier_block panic_blk = {
@@ -336,7 +329,7 @@ static int apanic_handle_mmc_probe(struct platform_device *pdev)
 			   __func__);
 	else {
 		drv_ctx.proc_annotate->read_proc = NULL;
-		drv_ctx.proc_annotate->write_proc = apanic_proc_annotate;
+		drv_ctx.proc_annotate->write_proc = apanic_annotate;
 		drv_ctx.proc_annotate->size = 1;
 		drv_ctx.proc_annotate->data = NULL;
 	}

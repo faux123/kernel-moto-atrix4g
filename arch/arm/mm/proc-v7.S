@@ -271,12 +271,6 @@ __v7_setup:
 	orreq	r10, r10, #1 << 6		@ set bit #6
 	mcreq	p15, 0, r10, c15, c0, 1		@ write diagnostic register
 #endif
-#ifdef CONFIG_ARM_ERRATA_751472
-	cmp	r6, #0x30			@ present in all r0, r1 and r2 revisions
-	mrclt	p15, 0, r10, c15, c0, 1		@ read diagnostic register
-	orrlt	r10, r10, #1 << 11		    @ do not interrupt cache maintenance
-	mcrlt	p15, 0, r10, c15, c0, 1		@ write diagnostic register
-#endif
 
 4:	mov	r10, #0
 #ifdef HARVARD_CACHE

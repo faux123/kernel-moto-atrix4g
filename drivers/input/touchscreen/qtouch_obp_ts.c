@@ -1240,7 +1240,7 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	} 
 	else 
 	{
-		ts->finger_data[finger].z_data = msg->touch_amp; 
+		ts->finger_data[finger].z_data = 1;
 	}
 
 	/* check to make sure user is not pressing the buttons area */
@@ -2290,7 +2290,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	}
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 1;
+	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	ts->early_suspend.suspend = qtouch_ts_early_suspend;
 	ts->early_suspend.resume = qtouch_ts_late_resume;
 	register_early_suspend(&ts->early_suspend);
@@ -2427,12 +2427,12 @@ static int qtouch_ts_resume(struct i2c_client *client)
 /* use soft reset. hard reset does not generate reset message, so there 
  * will be no re-calibration after the hard reset 
 */
-	qtouch_enable_irq(ts->irqInt);
 	qtouch_force_reset(ts, TRUE);
 /*
 	qtouch_process_info_block(ts);
 */
 	clean_i2c(ts);
+
 
 /*
 	ret = qtouch_power_config(ts, TRUE);
@@ -2445,6 +2445,8 @@ static int qtouch_ts_resume(struct i2c_client *client)
 /*
 	qtouch_force_reset(ts, FALSE);
 */
+
+	qtouch_enable_irq(ts->irqInt);
 
 	wake_unlock(&(ts->wLock));
 

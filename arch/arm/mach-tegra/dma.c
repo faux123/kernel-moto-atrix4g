@@ -97,7 +97,7 @@
 #define APB_SEQ_WRAP_MASK			(0x7<<APB_SEQ_WRAP_SHIFT)
 
 #define TEGRA_SYSTEM_DMA_CH_NR			16
-#define TEGRA_SYSTEM_DMA_AVP_CH_NUM		0
+#define TEGRA_SYSTEM_DMA_AVP_CH_NUM		4
 #define TEGRA_SYSTEM_DMA_CH_MIN			0
 #define TEGRA_SYSTEM_DMA_CH_MAX	\
 	(TEGRA_SYSTEM_DMA_CH_NR - TEGRA_SYSTEM_DMA_AVP_CH_NUM - 1)
@@ -118,7 +118,6 @@ struct tegra_dma_channel {
 	int			id;
 	spinlock_t		lock;
 	char			name[TEGRA_DMA_NAME_SIZE];
-	char			client_name[TEGRA_DMA_NAME_SIZE];
 	void  __iomem		*addr;
 	int			mode;
 	int			irq;
@@ -510,24 +509,11 @@ int tegra_dma_enqueue_req(struct tegra_dma_channel *ch,
 }
 EXPORT_SYMBOL(tegra_dma_enqueue_req);
 
-static void tegra_dma_dump_channel_usage(void)
-{
-	int i;
-	printk(KERN_WARNING "DMA channel dump:\n");
-	for (i = TEGRA_SYSTEM_DMA_CH_MIN; i <= TEGRA_SYSTEM_DMA_CH_MAX; i++) {
-		struct tegra_dma_channel *ch = &dma_channels[i];
-		printk(KERN_WARNING "%d used by %s\n", i, ch->client_name);
-	}
-	return;
-}
-
-struct tegra_dma_channel *tegra_dma_allocate_channel(int mode,
-	const char namefmt[], ...)
+struct tegra_dma_channel *tegra_dma_allocate_channel(int mode)
 {
 	int channel;
 	struct tegra_dma_channel *ch;
 	unsigned long g_irq_flags;
-	va_list args;
 
 	spin_lock_irqsave(&global_dma_lock, g_irq_flags);
 
@@ -539,9 +525,8 @@ struct tegra_dma_channel *tegra_dma_allocate_channel(int mode,
 			ARRAY_SIZE(dma_channels));
 		if (channel >= ARRAY_SIZE(dma_channels)) {
 			spin_unlock_irqrestore(&global_dma_lock, g_irq_flags);
-			tegra_dma_dump_channel_usage();
-			/* Panic the system to get DMA leak information */
-			BUG_ON(1);
+			/* Generate warning if system runs out of dma */
+			WARN_ON(1);
 			return ERR_PTR(-ENODEV);
 		}
 	}
@@ -550,10 +535,6 @@ struct tegra_dma_channel *tegra_dma_allocate_channel(int mode,
 
 	ch = &dma_channels[channel];
 	ch->mode = mode;
-	va_start(args, namefmt);
-	vsnprintf(ch->client_name, sizeof(ch->client_name),
-		namefmt, args);
-	va_end(args);
 	return ch;
 }
 EXPORT_SYMBOL(tegra_dma_allocate_channel);
@@ -570,7 +551,6 @@ void tegra_dma_free_channel(struct tegra_dma_channel *ch)
 	tegra_dma_cancel(ch);
 	spin_lock_irqsave(&global_dma_lock, g_irq_flags);
 	__clear_bit(ch->id, channel_usage);
-	ch->client_name[0] = '\0';
 	spin_unlock_irqrestore(&global_dma_lock, g_irq_flags);
 
 }

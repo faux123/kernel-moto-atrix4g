@@ -50,7 +50,7 @@ extern "C"
 #define ADT7461_ODM_REMOTE_COMPARATOR_LIMIT_VALUE       (115L)
 
 // ODM policy: throttling interrupt limit (in degrees C)
-#define ADT7461_ODM_REMOTE_THROTTLING_LIMIT_VALUE       (90L)
+#define ADT7461_ODM_REMOTE_THROTTLING_LIMIT_VALUE       (85L)
 
 // ODM policy: hysteresis value for critical shutdown and throttlign interrupt (in degrees C)
 #define ADT7461_ODM_THERM_HYSTERESIS                    (05L)

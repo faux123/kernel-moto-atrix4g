@@ -153,25 +153,15 @@ struct tag_nvidia_tegra {
 
 #if defined(CONFIG_MACH_MOT)
 #define ATAG_MOTOROLA 0x41000810
-
-#pragma pack(1)
 struct tag_motorola {
 	__u32 panel_size;
 	__u32 allow_fb_open;
-/*
-	__u32 at_emmc_cid[4];
-	__u32 at_emmc_csd[4];
-	__u32 at_emmc_ext_csd[128];
-*/
-	__u16 at_lpddr2_mr[12];
 	__u8 in_factory;
 	__u8 bl_ver_major;
 	__u8 bl_ver_minor;
 	__u8 uboot_ver_major;
 	__u8 uboot_ver_minor;
-	__u8 cid_suspend_boot;
 };
-#pragma pack()
 
 #define ATAG_WLAN_MAC 0x57464d41
 #define ATAG_WLAN_MAC_LEN 6

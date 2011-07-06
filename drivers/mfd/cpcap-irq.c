@@ -16,7 +16,6 @@
  * 02111-1307, USA
  */
 
-#include <linux/io.h>
 #include <linux/gpio.h>
 #include <linux/input.h>
 #include <linux/interrupt.h>
@@ -62,7 +61,6 @@ struct cpcap_irqdata {
 	struct cpcap_event_handler event_handler[CPCAP_IRQ__NUM];
 	struct cpcap_irq_info irq_info[CPCAP_IRQ__NUM];
 	struct wake_lock wake_lock;
-	bool print_irq_after_wake;
 };
 
 #define EVENT_MASK(event) (1 << ((event) % NUM_INTS_PER_REG))
@@ -352,18 +350,12 @@ static void irq_work_func(struct work_struct *work)
 			index += CPCAP_IRQ__START + (i * NUM_INTS_PER_REG);
 			event_handler = &data->event_handler[index];
 
-			if (data->print_irq_after_wake)
-				dev_info(&spi->dev, "wake source INT%d (1<<%d)\n",
-					i+1, index-((i * NUM_INTS_PER_REG)));
-
 			if (event_handler->func)
 				event_handler->func(index, event_handler->data);
 
 			data->irq_info[index].count++;
 		}
 	}
-	if (data->print_irq_after_wake)
-		data->print_irq_after_wake=false;
 error:
 	mutex_unlock(&data->lock);
 	wake_unlock(&data->wake_lock);
@@ -516,8 +508,6 @@ int cpcap_irq_init(struct cpcap_device *cpcap)
 		printk(KERN_ERR "cpcap_irq: Failed initializing pwrkey.\n");
 		goto error;
 	}
-	data->print_irq_after_wake = false;
-
 #ifdef CONFIG_DEBUG_FS
 	(void)debugfs_create_file("cpcap-irq", S_IRUGO, NULL, data,
 				  &debug_fops);
@@ -708,11 +698,6 @@ int cpcap_irq_suspend(struct cpcap_device *cpcap)
 int cpcap_irq_resume(struct cpcap_device *cpcap)
 {
 	struct spi_device *spi = cpcap->spi;
-	struct cpcap_platform_data *platdata = spi->controller_data;
-	struct cpcap_irqdata *irqdata = cpcap->irqdata;
-
-	if ( platdata->is_cpcap_wake_reason && platdata->is_cpcap_wake_reason() )
-		irqdata->print_irq_after_wake = true;
 
 	enable_irq(spi->irq);
 	return 0;

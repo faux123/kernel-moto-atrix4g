@@ -610,8 +610,7 @@ static int usbnet_bind(struct usb_configuration *c,
 		spin_unlock_irqrestore(&g_usbnet_context->lock, flags);
 	}
 
-	/*Do Not report Self Powered as WHQL tests fail on Win 7 */
-	/* usb_gadget_set_selfpowered(cdev->gadget); */
+	usb_gadget_set_selfpowered(cdev->gadget);
 	return 0;
 
 autoconf_fail:

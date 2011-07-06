@@ -142,10 +142,8 @@ static int cpcap_wdt_ping(struct cpcap_wdt *wdt)
 {
 
 	dev_dbg (wdt->dev, "%s()\n", __func__);
-	if (!wdt){
-		printk (KERN_ERR "%s() invalid wdt\n", __func__);
+	if (!wdt)
 		return -EINVAL;
-	}
 
 	/* secondary macro6 is used to kick the watchdog */
 	return (cpcap_uc_start(wdt->cpcap, CPCAP_BANK_SECONDARY, CPCAP_MACRO_6));

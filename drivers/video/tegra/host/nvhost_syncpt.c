@@ -34,7 +34,6 @@
 #include "nvrm_power.h"
 #include "nvrm_hardware_access.h"
 #include <asm/io.h>
-extern int nvhost_channel_fifo_debug(struct nvhost_dev *m);
 #endif
 
 #define client_managed(id) (BIT(id) & NVSYNCPTS_CLIENT_MANAGED)
@@ -296,7 +295,7 @@ NvModuleNameRangeInfo modules[] =
 		},
 		NV_FALSE,
 		NV_FALSE,
-		1,
+		2,
 		8,
 	},
 };
@@ -436,7 +435,6 @@ int nvhost_syncpt_wait_timeout(struct nvhost_syncpt *sp, u32 id,
         static int debug_done=0;
 	int firsttime;
 	int i;
-	struct nvhost_dev *dev = syncpt_to_dev(sp);
 #endif
 	BUG_ON(!check_max(sp, id, thresh));
 
@@ -477,7 +475,7 @@ int nvhost_syncpt_wait_timeout(struct nvhost_syncpt *sp, u32 id,
 		if (timeout != NVHOST_NO_TIMEOUT)
 			timeout -= SYNCPT_CHECK_PERIOD;
 		if (timeout) {
-			if( firsttime <= 40 )
+			if( firsttime <= 20 )
 			{
 			dev_warn(&syncpt_to_dev(sp)->pdev->dev,
 				"syncpoint id %d (%s) stuck waiting %d  timeout=%d\n",
@@ -485,14 +483,12 @@ int nvhost_syncpt_wait_timeout(struct nvhost_syncpt *sp, u32 id,
 			nvhost_syncpt_debug(sp);
 			}
 #if DEBUG_SYSTEM_SERVER_CRASH
-			if(firsttime==40 && !debug_done)
+			if(firsttime==20 && !debug_done)
 			{
-				nvhost_channel_fifo_debug(dev);
 				dumpinfo();
 				debug_done = 1;
-				break;
 			}
-			if( firsttime <= 40 )
+			if( firsttime <= 20 )
 				firsttime++;
 #endif
 		}

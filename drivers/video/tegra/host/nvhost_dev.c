@@ -61,57 +61,6 @@ struct nvhost_ctrl_userctx {
 	u32 mod_locks[NV_HOST1X_NB_MLOCKS];
 };
 
-struct nvhost_ch_free_list {
-	struct nvhost_ch_free_list *next;
-};
-
-#define NVHOST_CH_FREE_MAX 10
-static struct nvhost_ch_free_list *nvhost_ch_free_list_head;
-static int nvhost_ch_free_list_count;
-static DEFINE_MUTEX(channel_lock);
-
-static struct nvhost_channel_userctx *nvhost_channel_alloc(void)
-{
-	struct nvhost_channel_userctx *newch = NULL;
-	static int channel_size = sizeof(struct nvhost_channel_userctx)
-					+ sizeof(struct nvhost_hwctx);
-
-	mutex_lock(&channel_lock);
-	if (nvhost_ch_free_list_head) {
-		/* We have a free slot, so use it */
-		newch = (struct nvhost_channel_userctx *)
-						nvhost_ch_free_list_head;
-		/* Set the head to the next available free slot */
-		nvhost_ch_free_list_head = nvhost_ch_free_list_head->next;
-		memset(newch, 0, channel_size);
-		nvhost_ch_free_list_count--;
-	} else {
-		/* No free slots, so alloc memory for the channel */
-		newch = kzalloc(channel_size, GFP_KERNEL);
-	}
-	mutex_unlock(&channel_lock);
-
-	return newch;
-}
-
-static void nvhost_channel_free(struct nvhost_channel_userctx *ch)
-{
-	mutex_lock(&channel_lock);
-	if (nvhost_ch_free_list_count < NVHOST_CH_FREE_MAX) {
-		/* We have room to store another free slot, so keep it around */
-		struct nvhost_ch_free_list *freed_slot =
-			(struct nvhost_ch_free_list *)ch;
-		freed_slot->next = nvhost_ch_free_list_head;
-		/* Set this freed slot as the next available */
-		nvhost_ch_free_list_head = freed_slot;
-		nvhost_ch_free_list_count++;
-	} else {
-		/* We have enough free slots, free up memory */
-		kfree(ch);
-	}
-	mutex_unlock(&channel_lock);
-}
-
 static int nvhost_channelrelease(struct inode *inode, struct file *filp)
 {
 	struct nvhost_channel_userctx *priv = filp->private_data;
@@ -129,7 +78,7 @@ static int nvhost_channelrelease(struct inode *inode, struct file *filp)
 		nvmap_free(priv->gather_mem, priv->gathers);
 	if (priv->nvmapctx)
 		fput(priv->nvmapctx);
-	nvhost_channel_free(priv);
+	kfree(priv);
 	return 0;
 }
 
@@ -150,7 +99,7 @@ static int nvhost_channelopen(struct inode *inode, struct file *filp)
 		hwctx_mem = alloc_size;
 		alloc_size += sizeof(struct nvhost_hwctx);
 	}
-	priv = nvhost_channel_alloc();
+	priv = kzalloc(alloc_size, GFP_KERNEL);
 	if (!priv) {
 		nvhost_putchannel(ch, NULL);
 		return -ENOMEM;

@@ -436,7 +436,7 @@ static struct platform_device rndis_device = {
 
 static char *usb_serial_num;
 
-static char *olympus_dev = "ME860";
+static char *olympus_dev = "MB860";
 static char *etna_dev = "Etna";
 static char *sunfire_dev = "Sunfire";
 static char *default_dev = "Motorola AP20";

@@ -60,38 +60,6 @@ static int disable_hotplug = 0;
 extern atomic_t hotplug_policy;
 #endif
 
-/* Frequency table index must be sequential starting at 0 and frequencies must be ascending*/
-static struct cpufreq_frequency_table freq_table_1000[] = {
-	{ 0, 216000 },
-	{ 1, 312000 },
-	{ 2, 456000 },
-	{ 3, 608000 },
-	{ 4, 750000 },
-	{ 5, 816000 },
-	{ 6, 912000 },
-	{ 7, 1000000 },
-	{ 8, CPUFREQ_TABLE_END },
-};
-
-static struct cpufreq_frequency_table freq_table_750[] = {
-	{ 0, 216000 },
-	{ 1, 312000 },
-	{ 2, 456000 },
-	{ 3, 608000 },
-	{ 4, 750000 },
-	{ 5, CPUFREQ_TABLE_END },
-};
-
-static struct cpufreq_frequency_table *freq_table;
-
-static unsigned int tegra_freq_table_get_freq(struct cpufreq_frequency_table *table, unsigned int freq)
-{
-	int index;
-	for (index = 0;  table[index].frequency !=CPUFREQ_TABLE_END; index++)
-		if (table[index].frequency >= freq) return table[index].frequency;
-    return index ? table[index-1].frequency:0;
-}
-
 static void tegra_cpufreq_hotplug(NvRmPmRequest req)
 {
 	int rc = 0;
@@ -171,7 +139,6 @@ static int tegra_cpufreq_dfsd(void *arg)
 {
 	unsigned long rate, last_rate;
 	NvRmPmRequest req = 0;
-	struct cpufreq_freqs freqs;
 
 	BUG_ON(!clk_cpu);
 
@@ -181,7 +148,6 @@ static int tegra_cpufreq_dfsd(void *arg)
 
 	NvRmDfsSetState(rm_cpufreq, NvRmDfsRunState_ClosedLoop);
 	set_freezable_with_signal();
-	freqs.old = tegra_freq_table_get_freq(freq_table,last_rate / 1000);
 
 	while (!kthread_should_stop() && !(req & NvRmPmRequest_ExitFlag)) {
 
@@ -191,9 +157,9 @@ static int tegra_cpufreq_dfsd(void *arg)
 			continue;
 
 		tegra_cpufreq_hotplug(req);
-		rate = clk_get_rate(clk_cpu);
 
 #ifdef CONFIG_USE_ARM_TWD_PRESCALER
+		rate = clk_get_rate(clk_cpu);
 		if (rate != last_rate) {
 			local_timer_rescale(rate / 1000);
 			smp_wmb();
@@ -201,12 +167,6 @@ static int tegra_cpufreq_dfsd(void *arg)
 			last_rate = rate;
 		}
 #endif
-		freqs.new = tegra_freq_table_get_freq(freq_table,rate/ 1000);
-		if( freqs.new != freqs.old ) {
-		   for_each_online_cpu(freqs.cpu)
-		 	 cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
-		   freqs.old = freqs.new;
-		}
 	}
 	pr_info("dvfs thead shutdown\n");
 
@@ -338,19 +298,8 @@ static int tegra_cpufreq_driver_init(struct cpufreq_policy *pol)
 	pol->cpuinfo.max_freq = usage.MaxKHz;
 	pol->cpuinfo.transition_latency = 0;
 
-	if(usage.MaxKHz >= 1000000)
-		freq_table=freq_table_1000;
-	 else
-		freq_table=freq_table_750;
-	cpufreq_frequency_table_cpuinfo(pol, freq_table);
-	cpufreq_frequency_table_get_attr(freq_table, pol->cpu);
 	return 0;
 }
-
-static struct freq_attr *tegra_cpufreq_attr[] = {
-	&cpufreq_freq_attr_scaling_available_freqs,
-	NULL,
-};
 
 static struct cpufreq_driver s_tegra_cpufreq_driver = {
 	.flags		= CPUFREQ_CONST_LOOPS,
@@ -360,7 +309,6 @@ static struct cpufreq_driver s_tegra_cpufreq_driver = {
 	.init		= tegra_cpufreq_driver_init,
 	.name		= "tegra_cpufreq",
 	.owner		= THIS_MODULE,
-	.attr		= tegra_cpufreq_attr,
 
 };
 

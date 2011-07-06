@@ -845,11 +845,11 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	case USB_REQ_GET_CONFIGURATION:
 		if (ctrl->bRequestType != USB_DIR_IN)
 			goto unknown;
-		if (cdev->config)
+		if (cdev->config) {
 			*(u8 *)req->buf = cdev->config->bConfigurationValue;
-		else
-			*(u8 *)req->buf = 0;
 			value = min(w_length, (u16) 1);
+		} else
+			*(u8 *)req->buf = 0;
 		break;
 
 	/* function drivers must handle get/set altsetting; if there's
@@ -1069,8 +1069,7 @@ static int __init composite_bind(struct usb_gadget *gadget)
 	cdev->bufsiz = USB_BUFSIZ;
 	cdev->driver = composite;
 
-	/* Do not report Self Powered as WHQL tests fail on Win7 */
-	/*usb_gadget_set_selfpowered(gadget);*/
+	usb_gadget_set_selfpowered(gadget);
 
 	/* interface and string IDs start at zero via kzalloc.
 	 * we force endpoints to start unassigned; few controller

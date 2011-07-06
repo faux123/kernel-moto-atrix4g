@@ -45,8 +45,6 @@
 
 #define MODULE_NAME "leds_lm3532"
 
-#define LM3532_INIT_REQUESTS 8
-
 unsigned btn_bl_tied = 0;
 module_param(btn_bl_tied, uint, 0664);
 
@@ -55,8 +53,7 @@ module_param(trace_suspend, uint, 0664);
 #define printk_suspend(fmt,args...) if (trace_suspend) printk(KERN_INFO fmt, ##args)
 
 unsigned trace_request = 0;
-/* Initial number of requests logged */
-unsigned trace_request_initial = LM3532_INIT_REQUESTS;
+unsigned trace_request_initial = 6;  /* Initial number of requests logged */
 module_param(trace_request, uint, 0664);
 #define printk_request(fmt,args...) if (trace_request || trace_request_initial) {printk(KERN_INFO fmt, ##args); if (trace_request_initial) trace_request_initial--;}
 
@@ -90,7 +87,6 @@ struct lm3532_data {
 	unsigned in_webtop_mode;
     uint8_t revision;
     uint8_t enable_reg;
-	atomic_t suspended;
     atomic_t in_suspend;   // Whether the driver is in TCMD SUSPEND mode
     unsigned bvalue;       // Current brightness register value
     unsigned saved_bvalue; // Brightness before TCMD SUSPEND
@@ -490,24 +486,16 @@ static ssize_t lm3532_registers_show (struct device *dev,
 {
 	struct i2c_client *client = container_of(dev->parent,
 		struct i2c_client, dev);
-	struct lm3532_data *driver_data = i2c_get_clientdata(client);
 	int reg_count = sizeof(lm3532_regs) / sizeof(lm3532_regs[0]);
     int i, n = 0;
     uint8_t value;
 
-	if (atomic_read(&driver_data->suspended)) {
-		printk(KERN_INFO "%s: can't read: driver suspended\n",
-			__func__);
+	printk (KERN_INFO "%s: reading registers\n", __func__);
+	for (i = 0, n = 0; i < reg_count; i++) {
+		lm3532_read_reg(client, lm3532_regs[i].reg, &value);
 		n += scnprintf(buf + n, PAGE_SIZE - n,
-			"Unable to read LM3532 registers: driver suspended\n");
-	} else {
-		printk (KERN_INFO "%s: reading registers\n", __func__);
-		for (i = 0, n = 0; i < reg_count; i++) {
-			lm3532_read_reg(client, lm3532_regs[i].reg, &value);
-			n += scnprintf(buf + n, PAGE_SIZE - n,
-				"%-20s (0x%x) = 0x%02X\n",
-				lm3532_regs[i].name, lm3532_regs[i].reg, value);
-		}
+			"%-20s (0x%x) = 0x%02X\n",
+			lm3532_regs[i].name, lm3532_regs[i].reg, value);
 	}
 
 	return n;
@@ -519,24 +507,12 @@ static ssize_t lm3532_registers_store (struct device *dev,
 {
 	struct i2c_client *client = container_of(dev->parent, struct i2c_client,
 						 dev);
-	struct lm3532_data *driver_data = i2c_get_clientdata(client);
 	unsigned reg;
-	unsigned value;
+	uint8_t value;
 
-	if (atomic_read(&driver_data->suspended)) {
-		printk(KERN_INFO "%s: can't write: driver suspended\n",
-			__func__);
-		return -ENODEV;
-	}
-	sscanf(buf, "%x %x", &reg, &value);
-	if (value > 0xFF)
-		return -EINVAL;
+	sscanf(buf, "%x %x", &reg, (unsigned int *)&value);
 	printk(KERN_INFO "%s: writing reg 0x%x = 0x%x\n", __func__, reg, value);
-    mutex_lock(&lm3532_mutex);
-	lm3532_write_reg(client, reg, (uint8_t)value, __func__);
-	if (reg == LM3532_CTRL_A_FS_CURR_REG)
-		driver_data->pdata->ctrl_a_fs_current = (uint8_t)value;
-    mutex_unlock(&lm3532_mutex);
+	lm3532_write_reg(client, reg, value, __func__);
 
     return size;
 }
@@ -547,16 +523,10 @@ static ssize_t lm3532_pwm_show (struct device *dev,
 {
 	struct i2c_client *client = container_of(dev->parent,
 		struct i2c_client, dev);
-	struct lm3532_data *driver_data = i2c_get_clientdata(client);
     uint8_t value;
 	uint8_t pwm_mask = 0x4;
 	int ret;
 
-	if (atomic_read(&driver_data->suspended)) {
-		printk(KERN_INFO "%s: unable to read pwm: driver suspended\n",
-			__func__);
-		return -ENODEV;
-	}
     mutex_lock(&lm3532_mutex);
     ret = lm3532_read_reg(client, LM3532_CTRL_A_PWM_REG, &value);
 	mutex_unlock(&lm3532_mutex);
@@ -575,17 +545,11 @@ static ssize_t lm3532_pwm_store (struct device *dev,
 {
 	struct i2c_client *client = container_of(dev->parent, struct i2c_client,
 						 dev);
-	struct lm3532_data *driver_data = i2c_get_clientdata(client);
 	unsigned pwm_value;
 	uint8_t value;
 	uint8_t pwm_mask = 0x4;
 	int ret;
 
-	if (atomic_read(&driver_data->suspended)) {
-		printk(KERN_INFO "%s: unable to write pwm: driver suspended\n",
-			__func__);
-		return -ENODEV;
-	}
 	sscanf(buf, "%d", &pwm_value);
 	if (pwm_value != 0 && pwm_value != 1) {
 		printk(KERN_ERR "%s: invalid value %d, should be 0 or 1\n",
@@ -645,7 +609,6 @@ static int lm3532_suspend (struct i2c_client *client, pm_message_t mesg)
     printk_suspend ("%s: called with pm message %d\n",
         __func__, mesg.event);
 
-	atomic_set(&driver_data->suspended, 1);
     led_classdev_suspend (&driver_data->led_dev);
     if (driver_data->pdata->flags & LM3532_HAS_WEBTOP)
 		led_classdev_suspend (&driver_data->webtop_led);
@@ -694,6 +657,10 @@ static int lm3532_configure (struct lm3532_data *driver_data)
         LM3532_R0_29mA_FS_CURRENT,      /* 0x11110 */
         LM3532_R0_29mA_FS_CURRENT,      /* 0x11111 */
     };
+    if (driver_data->pdata->ctrl_a_fs_current > 0x1F)
+        driver_data->pdata->ctrl_a_fs_current = 0x1F;
+    if (driver_data->pdata->ctrl_b_fs_current > 0x1F)
+        driver_data->pdata->ctrl_b_fs_current = 0x1F;
     if (driver_data->revision == 0xF6) {
         /* Revision 0 */
         uint8_t ctrl_a_fs_current =
@@ -782,8 +749,6 @@ static int lm3532_resume (struct i2c_client *client)
     lm3532_configure (driver_data);
     lm3532_enable (driver_data);
     mutex_unlock (&lm3532_mutex);
-	atomic_set(&driver_data->suspended, 0);
-	trace_request_initial = LM3532_INIT_REQUESTS;
     led_classdev_resume (&driver_data->led_dev);
     if (driver_data->pdata->flags & LM3532_HAS_WEBTOP)
 		led_classdev_resume (&driver_data->webtop_led);
@@ -872,10 +837,6 @@ static int lm3532_probe (struct i2c_client *client,
 
     driver_data->client = client;
     driver_data->pdata = pdata;
-    if (driver_data->pdata->ctrl_a_fs_current > 0xFF)
-        driver_data->pdata->ctrl_a_fs_current = 0xFF;
-    if (driver_data->pdata->ctrl_b_fs_current > 0xFF)
-        driver_data->pdata->ctrl_b_fs_current = 0xFF;
 
     i2c_set_clientdata (client, driver_data);
 
@@ -958,7 +919,6 @@ static int lm3532_probe (struct i2c_client *client,
     }
 
     atomic_set (&driver_data->in_suspend, 0);
-    atomic_set (&driver_data->suspended, 0);
     ret = device_create_file(driver_data->led_dev.dev, &dev_attr_suspend);
     if (ret) {
       printk (KERN_ERR "%s: unable to create suspend device file for %s: %d\n",

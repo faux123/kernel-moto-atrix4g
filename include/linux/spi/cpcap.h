@@ -70,11 +70,6 @@
 #define CPCAP_WHISPER_MODE_PU 			0x00000001
 #define CPCAP_WHISPER_ENABLE_UART		0x00000002
 
-/* When set in the regulator mode, the regulator assignment will be changed
-   to secondary when the regulator is disabled.  The mode will be set back to
-   primary when the regulator is turned on. */
-#define CPCAP_REG_OFF_MODE_SEC			((unsigned short)(0x8000))
-
 enum cpcap_regulator_id {
 	CPCAP_SW1,
 	CPCAP_SW2,
@@ -565,6 +560,34 @@ struct cpcap_display_led {
 	unsigned int zone4;
 };
 
+struct cpcap_button_led {
+	unsigned int button_reg;
+	unsigned int button_mask;
+	unsigned int button_on;
+	unsigned int button_off;
+};
+
+struct cpcap_kpad_led {
+	unsigned int kpad_reg;
+	unsigned int kpad_mask;
+	unsigned int kpad_on;
+	unsigned int kpad_off;
+};
+
+struct cpcap_rgb_led {
+	unsigned int rgb_reg;
+	unsigned int rgb_mask;
+	unsigned int rgb_on;
+	unsigned int rgb_off;
+};
+
+struct cpcap_leds {
+	struct cpcap_display_led display_led;
+	struct cpcap_button_led button_led;
+	struct cpcap_kpad_led kpad_led;
+	struct cpcap_rgb_led rgb_led;
+};
+
 struct cpcap_batt_data {
 	int status;
 	int health;
@@ -595,35 +618,6 @@ struct cpcap_rtc_time_cnt {
 struct cpcap_device;
 
 #ifdef __KERNEL__
-struct cpcap_button_led {
-	unsigned int button_reg;
-	unsigned int button_mask;
-	unsigned int button_on;
-	unsigned int button_off;
-};
-
-struct cpcap_kpad_led {
-	unsigned int kpad_reg;
-	unsigned int kpad_mask;
-	unsigned int kpad_on;
-	unsigned int kpad_off;
-};
-
-struct cpcap_rgb_led {
-	unsigned int rgb_reg;
-	unsigned int rgb_mask;
-	unsigned int rgb_on;
-	unsigned int rgb_off;
-	bool regulator_macro_controlled;
-};
-
-struct cpcap_leds {
-	struct cpcap_display_led display_led;
-	struct cpcap_button_led button_led;
-	struct cpcap_kpad_led kpad_led;
-	struct cpcap_rgb_led rgb_led;
-};
-
 struct cpcap_platform_data {
 	struct cpcap_spi_init_data *init;
 	int init_len;
@@ -639,7 +633,6 @@ struct cpcap_platform_data {
 	void (*usb_changed)(struct power_supply *,
 			    struct cpcap_batt_usb_data *);
 	unsigned short wdt_disable;
-	bool (*is_cpcap_wake_reason)(void);
 	u16 hwcfg[CPCAP_HWCFG_NUM];
 };
 

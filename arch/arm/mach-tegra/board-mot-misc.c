@@ -10,7 +10,6 @@
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/setup.h>
-#include <asm/bootinfo.h>
 
 #include <mach/iomap.h>
 #include <mach/mdm_ctrl.h>
@@ -193,8 +192,6 @@ unsigned short bootloader_ver_minor = 0;
 unsigned short uboot_ver_major = 0;
 unsigned short uboot_ver_minor = 0;
 
-unsigned char lpddr2_mr[12];
-
 int MotorolaBootFBArgGet(unsigned int *arg)
 {
     *arg = s_MotorolaFBInfo;
@@ -219,7 +216,6 @@ int MotorolaBootDispArgGet(unsigned int *arg)
 static int __init parse_tag_motorola(const struct tag *tag)
 {
     const struct tag_motorola *moto_tag = &tag->u.motorola;
-    int i = 0;
 
     s_MotorolaDispInfo = moto_tag->panel_size;
     s_MotorolaFBInfo = moto_tag->allow_fb_open;
@@ -230,24 +226,10 @@ static int __init parse_tag_motorola(const struct tag *tag)
     bootloader_ver_minor = moto_tag->bl_ver_minor;
     uboot_ver_major = moto_tag->uboot_ver_major;
     uboot_ver_minor = moto_tag->uboot_ver_minor;
-	bi_set_cid_recover_boot(moto_tag->cid_suspend_boot);
 
     pr_info("%s: panel_size: %x\n", __func__, s_MotorolaDispInfo);
     pr_info("%s: allow_fb_open: %x\n", __func__, s_MotorolaFBInfo);
     pr_info("%s: factory: %d\n", __func__, mot_sec_platform_data.fl_factory);
-    pr_info("%s: cid_suspend_boot: %u\n", __func__,
-				(unsigned)moto_tag->cid_suspend_boot);
-
-    /*
-     *	Dump memory information
-     */
-     /* FIXME:  Add eMMC support */
-	for (i = 0; i < 12; i++) {
-		lpddr2_mr[i] = moto_tag->at_lpddr2_mr[i];
-		pr_info("%s: LPDDR2 MR%d:     0x%04X (0x%04X)\n", __func__, i,
-			lpddr2_mr[i],
-			moto_tag->at_lpddr2_mr[i]);
-	}
 
     return 0;
 }

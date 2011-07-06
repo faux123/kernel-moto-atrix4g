@@ -35,10 +35,6 @@
 
 #include <linux/hidraw.h>
 
-#if defined(CONFIG_TEGRA_ODM_OLYMPUS)
-#include "hid-ids.h"
-#endif
-
 static int hidraw_major;
 static struct cdev hidraw_cdev;
 static struct class *hidraw_class;
@@ -381,32 +377,9 @@ int hidraw_connect(struct hid_device *hid)
 
 	mutex_lock(&minors_lock);
 
-#if defined(CONFIG_TEGRA_ODM_OLYMPUS)
-	/* FIXME : minor 0 is reserved */
-	for (minor = 1; minor < HIDRAW_MAX_DEVICES; minor++) {
-		if ((hid->vendor == USB_VENDOR_ID_MOTOROLA) &&
-			(hid->product == USB_DEVICE_ID_HD_DOCK))
-		{
-			minor = 0;
-		}
-#else
 	for (minor = 0; minor < HIDRAW_MAX_DEVICES; minor++) {
-#endif
 		if (hidraw_table[minor])
-#if defined(CONFIG_TEGRA_ODM_OLYMPUS)
-		{
-			if (minor == 0)
-			{
-				/* This shouldn't happen */
-				printk(KERN_ERR "hidraw device with minor 0 already exists\n");
-				result = -EEXIST;
-				break;
-			}
 			continue;
-		}
-#else
-			continue;
-#endif
 		hidraw_table[minor] = dev;
 		result = 0;
 		break;

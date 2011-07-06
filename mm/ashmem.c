@@ -119,7 +119,7 @@ static inline void lru_del(struct ashmem_range *range)
  *
  * 'asma' - associated ashmem_area
  * 'prev_range' - the previous ashmem_range in the sorted asma->unpinned list
- * 'purged' - initial purge value (ASHMEM_NOT_PURGED or ASHMEM_WAS_PURGED)
+ * 'purged' - initial purge value (ASMEM_NOT_PURGED or ASHMEM_WAS_PURGED)
  * 'start' - starting page, inclusive
  * 'end' - ending page, inclusive
  *
@@ -328,14 +328,6 @@ static int set_prot_mask(struct ashmem_area *asma, unsigned long prot)
 
 	/* the user can only remove, not add, protection bits */
 	if (unlikely((asma->prot_mask & prot) != prot)) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	/* If the user doesn't have write permissions, don't allow them to
-	 * change the permissions at all.
-	 */
-	if (unlikely((asma->prot_mask & PROT_WRITE) == 0)) {
 		ret = -EINVAL;
 		goto out;
 	}

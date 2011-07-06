@@ -12,7 +12,6 @@
 #include "mach/nvrm_linux.h"
 #include "mach/io.h"
 #include "nvrm_spi.h"
-#include "nvrm_power.h"
 #include "nvodm_query.h"
 #include "nvodm_services.h"
 
@@ -63,7 +62,6 @@ module_param(debug_mask, int, S_IRUGO|S_IWUSR);
 
 #define NVODM_PORT(x) ((x) - 'a')
 #define SPI_TRANSACTION_SIZE (16256)
-#define SPI_TRANSACTION_TIMEOUT_MS 300
 //TODO: verify if both working
 #define spi_pad_transaction_size(x)   (((x) > 4) ? ((((x) + 15) / 16) * 16) : (x))
 #define spi_pad_transaction_size_32(x)   (((x) > 4) ? ((((x) + 31) / 32) * 32) : (x))
@@ -84,10 +82,7 @@ struct NvSpiSlave {
 	LOCK_T			lock;
 	struct work_struct	work;
 	struct workqueue_struct	*WorkQueue;
-	NvU32 RmPowerClientId;
 };
-
-extern NvRmFreqKHz NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId ClockId);
 
 /* Only these signaling mode are supported */
 #define NV_SUPPORTED_MODE_BITS (SPI_CPOL | SPI_CPHA)
@@ -194,13 +189,12 @@ static int tegra_spi_slave_transaction(struct NvSpiSlave *pShimSpi, struct spi_s
 			tx_state = 1;
 
 			// start SPI slave transaction
-			ret = NvOdmSpiSlaveStartTransaction(pShimSpi->hOdmSpi,
-								0, 26000,
-								1,
-								t->tx_buf,
-								spi_pad_transaction_size_32
-								(SPI_TRANSACTION_SIZE),
-								32);
+			ret = NvOdmSpiSlaveStartTransaction(pShimSpi->hOdmSpi, 0,
+									26000, 1,
+									t->tx_buf,
+									spi_pad_transaction_size_32
+									(SPI_TRANSACTION_SIZE),
+									32);
 			BUG_ON(tx_state != 1);
 			tx_state = 2;
 			if (ret == NV_FALSE) {
@@ -215,7 +209,7 @@ static int tegra_spi_slave_transaction(struct NvSpiSlave *pShimSpi, struct spi_s
 			ret = NvOdmSpiSlaveGetTransactionData(pShimSpi->hOdmSpi,
 							 t->rx_buf,
 							spi_pad_transaction_size(SPI_TRANSACTION_SIZE),
-							(NvU32*)&actual_length, SPI_TRANSACTION_TIMEOUT_MS);
+							(NvU32*)&actual_length, 2000);
 			BUG_ON(tx_state != 2);
 			tx_state = 0;
 			if (ret != NV_TRUE || actual_length != spi_pad_transaction_size(SPI_TRANSACTION_SIZE)) {
@@ -241,42 +235,9 @@ static void tegra_spi_slave_workerthread(struct work_struct *w)
 	struct NvSpiSlave *pShimSpi;
 	struct spi_slave_message *m;
 	int status = 0;
-	NvRmDfsBusyHint BusyHints[4];
 
 	TEGRA_SPI_SLAVE_INFO("%s\n", __func__);
 	pShimSpi = container_of(w, struct NvSpiSlave, work);
-
-	BusyHints[0].ClockId = NvRmDfsClockId_Emc;
-	BusyHints[0].BoostDurationMs = NV_WAIT_INFINITE;
-	BusyHints[0].BusyAttribute = NV_TRUE;
-	BusyHints[0].BoostKHz = 150000; // Emc
-
-	BusyHints[1].ClockId = NvRmDfsClockId_Ahb;
-	BusyHints[1].BoostDurationMs = NV_WAIT_INFINITE;
-	BusyHints[1].BusyAttribute = NV_TRUE;
-	BusyHints[1].BoostKHz = 150000; // AHB
-
-	BusyHints[2].ClockId = NvRmDfsClockId_Apb;
-	BusyHints[2].BoostDurationMs = NV_WAIT_INFINITE;
-	BusyHints[2].BusyAttribute = NV_TRUE;
-	BusyHints[2].BoostKHz = 150000; // APB
-
-	BusyHints[3].ClockId = NvRmDfsClockId_Cpu;
-	BusyHints[3].BoostDurationMs = NV_WAIT_INFINITE;
-	BusyHints[3].BusyAttribute = NV_TRUE;
-	BusyHints[3].BoostKHz = 600000; // CPU
-
-	NvRmPowerBusyHintMulti(s_hRmGlobal, pShimSpi->RmPowerClientId,
-		BusyHints, 4, NvRmDfsBusyHintSyncMode_Async);
-
-    	if (NvRmDfsRunState_ClosedLoop == NvRmDfsGetState(s_hRmGlobal)) {
-		int wait_count = 500;
-		/* Wait for the clcok to stabilize */
-		while ((NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Emc) < 150000)
-			&& wait_count--)
-			msleep(1);
-		BUG_ON(wait_count == 0);
-	}
 
 	LOCK(pShimSpi->lock);
 
@@ -296,15 +257,6 @@ static void tegra_spi_slave_workerthread(struct work_struct *w)
 	}
 
 	UNLOCK(pShimSpi->lock);
-
-	/* Set the clocks to the low corner */
-	BusyHints[0].BoostKHz = 0; // Emc
-	BusyHints[1].BoostKHz = 0; // Ahb
-	BusyHints[2].BoostKHz = 0; // Apb
-	BusyHints[3].BoostKHz = 0; // Cpu
-
-	NvRmPowerBusyHintMulti(s_hRmGlobal, pShimSpi->RmPowerClientId,
-		BusyHints, 4, NvRmDfsBusyHintSyncMode_Async);
 }
 
 static int  tegra_spi_slave_probe(struct platform_device *pdev)
@@ -355,12 +307,6 @@ static int  tegra_spi_slave_probe(struct platform_device *pdev)
 		goto workQueueCreate_failed;
 	}
 
-	pShimSpi->RmPowerClientId = NVRM_POWER_CLIENT_TAG('S','P','I','S');
-	if (NvRmPowerRegister(s_hRmGlobal, NULL, &pShimSpi->RmPowerClientId)) {
-		dev_err(&pdev->dev, "Failed to create power client ID\n");
-		goto workQueueCreate_failed;
-	}
-
 	INIT_WORK(&pShimSpi->work, tegra_spi_slave_workerthread);
 
 	CREATELOCK(pShimSpi->lock);
@@ -397,7 +343,6 @@ static int __exit tegra_spi_slave_remove(struct platform_device *pdev)
 	pShimSpi = spi_slave_get_devdata(pSpi);
 
 	spi_unregister_slave(pSpi);
-	NvRmPowerUnRegister(s_hRmGlobal, pShimSpi->RmPowerClientId);
 	NvOdmSpiClose(pShimSpi->hOdmSpi);
 	destroy_workqueue(pShimSpi->WorkQueue);
 

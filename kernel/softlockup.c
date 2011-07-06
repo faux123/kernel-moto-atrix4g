@@ -17,7 +17,6 @@
 #include <linux/notifier.h>
 #include <linux/module.h>
 #include <linux/sysctl.h>
-#include <linux/irq.h>
 
 #include <asm/irq_regs.h>
 
@@ -154,7 +153,6 @@ void softlockup_tick(void)
 	printk(KERN_ERR "BUG: soft lockup - CPU#%d stuck for %lus! [%s:%d]\n",
 			this_cpu, now - touch_timestamp,
 			current->comm, task_pid_nr(current));
-	dump_irq_history();
 	print_modules();
 	print_irqtrace_events(current);
 	if (regs)

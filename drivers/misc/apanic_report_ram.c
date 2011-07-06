@@ -45,7 +45,7 @@
 #include <linux/workqueue.h>
 #include <asm/io.h>
 
-#include <linux/apanic.h>
+#include "apanic.h"
 
 
 #define PROC_APANIC_CONSOLE 1

@@ -29,8 +29,7 @@
 #define LD_MSG_IND_CURRENT          0x2
 #define LD_MSG_IND_LO_CURRENT       0x0
 
-#define LD_MSG_IND_CPCAP_MASK       0x03FF
-#define LD_MSG_IND_CPCAP_BLINK_ON   0x0400
+#define LD_MSG_IND_CPCAP_MASK       0x3FF
 
 #define LD_MSG_IND_LOW              0x20
 #define LD_MSG_IND_LOW_MED          0x20
@@ -41,7 +40,6 @@
 #define LD_LED_RED                  0x01
 #define LD_LED_GREEN                0x02
 #define LD_LED_BLUE                 0x04
-#define LD_LED_BLINK                0x80
 
 #define LD_DISP_BUTTON_ON           0x1
 #define LD_DISP_BUTTON_CURRENT      0xA

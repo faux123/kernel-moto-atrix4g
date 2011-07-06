@@ -972,20 +972,6 @@ config ARM_ERRATA_742231
 	  register of the Cortex-A9 which reduces the linefill issuing
 	  capabilities of the processor.
 
-config ARM_ERRATA_751472
-	bool "ARM errata: An interrupted ICIALLUIS operation may prevent the completion of a following broadcated operation"
-	depends on CPU_V7 && SMP
-	help
-		This option enables the workaround for the 751472 Cortex-A9 (r0/r1/r2)
-		erratum. In an MPCore configuration with 2 processors or more working in
-		SMP mode with maintenance operation broadcast enabled, if a processor is
-		interrupted while executing an ICIALLUIS operation, and performs another
-		broadcasted maintenance operation during its Interrupt Service Routine,
-		then this second operation may not be executed on the other processors in
-		the cluster. This workaround sets bit[11] in the undocumented Diagnostic
-		Control register, which prevents maintenance operations from being
-		interrupted.
-
 config PL310_ERRATA_588369
 	bool "Clean & Invalidate maintenance operations do not invalidate clean lines"
 	depends on CACHE_L2X0 && ARCH_OMAP4
