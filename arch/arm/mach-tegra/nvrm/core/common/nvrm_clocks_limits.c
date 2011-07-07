@@ -108,15 +108,15 @@ NvRmScaledClkLimits FakepScaledCpuLimits = {
 };
 
 #else	// STOCK_VOLTAGE_VALUES
-#define MAX_OVERCLOCK (1200000)
+#define MAX_OVERCLOCK (1100000)
 
 NvU32 FakeShmooVoltages[] = {
     770,
     800,
+    850,
     900,
     1000,
     1100,
-    1200,
 };
 
 NvRmScaledClkLimits FakepScaledCpuLimits = {
@@ -127,10 +127,10 @@ NvRmScaledClkLimits FakepScaledCpuLimits = {
     {
 	300000,
     	500000,
+    	750000,
     	900000,
     	1000000,
 	1100000,
-	1200000,
     }
 };
 
