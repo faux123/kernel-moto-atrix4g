@@ -36,9 +36,11 @@
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
+#include <linux/switch.h>
 
 
 struct usb_configuration;
+struct usb_composite_dev;
 
 /**
  * struct usb_function - describes one function of a configuration
@@ -137,6 +139,9 @@ int usb_function_deactivate(struct usb_function *);
 int usb_function_activate(struct usb_function *);
 
 int usb_interface_id(struct usb_configuration *, struct usb_function *);
+
+void usb_function_set_enabled(struct usb_function *, int);
+void usb_composite_force_reset(struct usb_composite_dev *);
 
 /**
  * ep_choose - select descriptor endpoint at current device speed
@@ -344,6 +349,11 @@ struct usb_composite_dev {
 
 	/* protects at least deactivation count */
 	spinlock_t			lock;
+
+	struct switch_dev sdev;
+	/* used by usb_composite_force_reset to avoid signalling switch changes */
+	bool                            mute_switch;
+	struct work_struct switch_work;
 };
 
 extern int usb_string_id(struct usb_composite_dev *c);

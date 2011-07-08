@@ -162,6 +162,10 @@ extern unsigned char sdio_f0_readb(struct sdio_func *func,
 	unsigned int addr, int *err_ret);
 extern void sdio_f0_writeb(struct sdio_func *func, unsigned char b,
 	unsigned int addr, int *err_ret);
-
+#ifdef CONFIG_MOT_WIMAX
+extern int bcm_sdio_cmd53(struct sdio_func *func, int write,
+	unsigned addr, int incr_addr, u8 *buf,
+	unsigned size, int fn0_block_size);
+#endif /* CONFIG_MOT_WIMAX */
 #endif
 

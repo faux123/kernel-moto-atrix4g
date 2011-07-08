@@ -24,7 +24,6 @@
 #include <linux/dma-mapping.h>
 #include <linux/pda_power.h>
 #include <linux/io.h>
-#include <linux/usb/android_composite.h>
 #include <linux/spi/cpcap.h>
 #include <linux/spi/spi.h>
 #include <linux/i2c.h>
@@ -68,58 +67,74 @@
 #include "nvrm_power.h"
 
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static char *usb_functions_ums[] = {
-	"usb_mass_storage",
+static char arowana_unused_pins_p1a[] = {
+        TEGRA_GPIO_PO1,
+        TEGRA_GPIO_PO2,
+        TEGRA_GPIO_PO3,
+        TEGRA_GPIO_PO4,
+        TEGRA_GPIO_PO5,
+        TEGRA_GPIO_PO6,
+        TEGRA_GPIO_PO7,
+        TEGRA_GPIO_PO0,
+        TEGRA_GPIO_PY0,
+        TEGRA_GPIO_PY1,
+        TEGRA_GPIO_PY2,
+        TEGRA_GPIO_PY3,
+        TEGRA_GPIO_PC1,
+        TEGRA_GPIO_PN5,
+        TEGRA_GPIO_PW1,
+        TEGRA_GPIO_PB3,
+        TEGRA_GPIO_PE5,
+        TEGRA_GPIO_PE6,
+        TEGRA_GPIO_PF0,
+        TEGRA_GPIO_PM6,
+        TEGRA_GPIO_PM7,
+        TEGRA_GPIO_PT4,
+        TEGRA_GPIO_PL5,
+        TEGRA_GPIO_PL7,
+        TEGRA_GPIO_PT2,
+        TEGRA_GPIO_PD6,
+        TEGRA_GPIO_PD7,
+        TEGRA_GPIO_PR3,
+        TEGRA_GPIO_PR4,
+        TEGRA_GPIO_PR5,
+        TEGRA_GPIO_PR6,
+        TEGRA_GPIO_PR7,
+        TEGRA_GPIO_PS0,
+        TEGRA_GPIO_PS2,
+        TEGRA_GPIO_PQ3,
+        TEGRA_GPIO_PQ4,
+        TEGRA_GPIO_PQ5,
+        TEGRA_GPIO_PBB0,
+        TEGRA_GPIO_PZ5,
+        TEGRA_GPIO_PK5,
+        TEGRA_GPIO_PK6,
+        TEGRA_GPIO_PW5,
+        TEGRA_GPIO_PI7,
+        TEGRA_GPIO_PJ0,
+        TEGRA_GPIO_PJ2,
+        TEGRA_GPIO_PK3,
+        TEGRA_GPIO_PK4,
+        TEGRA_GPIO_PK2,
+        TEGRA_GPIO_PG0,
+        TEGRA_GPIO_PG1,
+        TEGRA_GPIO_PG2,
+        TEGRA_GPIO_PG3,
+        TEGRA_GPIO_PG4,
+        TEGRA_GPIO_PG5,
+        TEGRA_GPIO_PG6,
+        TEGRA_GPIO_PG7,
+        TEGRA_GPIO_PH0,
+        TEGRA_GPIO_PH1,
+        TEGRA_GPIO_PH2,
+        TEGRA_GPIO_PH3,
+        TEGRA_GPIO_PI0,
+        TEGRA_GPIO_PI4,
+        TEGRA_GPIO_PT5,
+        TEGRA_GPIO_PT6,
+        TEGRA_GPIO_PC7,
 };
 
-static char *usb_functions_ums_adb[] = {
-	"usb_mass_storage",
-	"adb",
-};
-
-static char *usb_functions_all[] = {
-	"acm0",
-	"acm1",
-	"usbnet",
-	"mtp",
-#ifdef CONFIG_USB_ANDROID_RNDIS
-	"rndis",
-#endif
-	"usb_mass_storage",
-	"adb",
-};
-
-static char *usb_functions_phone_portal[] = {
-	"acm",
-	"usbnet",
-	"mtp",
-};
-
-static char *usb_functions_phone_portal_adb[] = {
-	"acm",
-	"usbnet",
-	"mtp",
-	"adb",
-};
-
-static char *usb_functions_mtp[] = {
-	"mtp",
-};
-
-static char *usb_functions_mtp_adb[] = {
-	"mtp",
-	"adb",
-};
-
-static char *usb_functions_rndis[] = {
-	"rndis",
-};
-
-static char *usb_functions_rndis_adb[] = {
-	"rndis",
-	"adb",
-};
 
 static char oly_unused_pins_p3[] = {
         TEGRA_GPIO_PO1,
@@ -336,120 +351,190 @@ static char oly_unused_pins_p1[] = {
         TEGRA_GPIO_PV7,
         TEGRA_GPIO_PD1,
 };
-static struct android_usb_product usb_products[] = {
-	{
-		.product_id     = 0x708a,
-		.num_functions  = ARRAY_SIZE(usb_functions_phone_portal),
-		.functions      = usb_functions_phone_portal,
-	},
-	{
-		.product_id     = 0x708b,
-		.num_functions  = ARRAY_SIZE(usb_functions_phone_portal_adb),
-		.functions      = usb_functions_phone_portal_adb,
-	},
-	{
-		.product_id     = 0x7088,
-		.num_functions  = ARRAY_SIZE(usb_functions_mtp),
-		.functions      = usb_functions_mtp,
-	},
-	{
-		.product_id     = 0x7089,
-		.num_functions  = ARRAY_SIZE(usb_functions_mtp_adb),
-		.functions      = usb_functions_mtp_adb,
-	},
-	{
-		.product_id	= 0x7086,
-		.num_functions	= ARRAY_SIZE(usb_functions_ums),
-		.functions	= usb_functions_ums,
-	},
-	{
-		.product_id	= 0x7087,
-		.num_functions	= ARRAY_SIZE(usb_functions_ums_adb),
-		.functions	= usb_functions_ums_adb,
-	},
-#ifdef CONFIG_USB_ANDROID_RNDIS
-	{
-		.product_id	= 0x7091,
-		.num_functions	= ARRAY_SIZE(usb_functions_rndis),
-		.functions	= usb_functions_rndis,
-	},
-	{
-		.product_id	= 0x7092,
-		.num_functions	= ARRAY_SIZE(usb_functions_rndis_adb),
-		.functions	= usb_functions_rndis_adb,
-	},
-#endif
+
+static char daytona_unused_pins_p1[] = {
+        TEGRA_GPIO_PN5,
+        TEGRA_GPIO_PN4,
+        TEGRA_GPIO_PN6,
+        TEGRA_GPIO_PW1,
+        TEGRA_GPIO_PO1,
+        TEGRA_GPIO_PO2,
+        TEGRA_GPIO_PO3,
+        TEGRA_GPIO_PO4,
+        TEGRA_GPIO_PO5,
+        TEGRA_GPIO_PO6,
+        TEGRA_GPIO_PO7,
+        TEGRA_GPIO_PO0,
+        TEGRA_GPIO_PY0,
+        TEGRA_GPIO_PY1,
+        TEGRA_GPIO_PY2,
+        TEGRA_GPIO_PY3,
+        TEGRA_GPIO_PB2,
+        TEGRA_GPIO_PC1,
+        TEGRA_GPIO_PC6,
+        TEGRA_GPIO_PZ4,
+        TEGRA_GPIO_PW0,
+        TEGRA_GPIO_PZ3,
+        TEGRA_GPIO_PB3,
+        TEGRA_GPIO_PJ3,
+        TEGRA_GPIO_PE6,
+        TEGRA_GPIO_PE7,
+        TEGRA_GPIO_PF0,
+        TEGRA_GPIO_PM2,
+        TEGRA_GPIO_PM3,
+        TEGRA_GPIO_PM5,
+        TEGRA_GPIO_PM6,
+        TEGRA_GPIO_PM7,
+        TEGRA_GPIO_PT4,
+        TEGRA_GPIO_PL2,
+        TEGRA_GPIO_PL4,
+        TEGRA_GPIO_PL5,
+        TEGRA_GPIO_PL6,
+        TEGRA_GPIO_PL7,
+        TEGRA_GPIO_PT2,
+        TEGRA_GPIO_PD6,
+        TEGRA_GPIO_PD7,
+        TEGRA_GPIO_PBB5,
+        TEGRA_GPIO_PR4,
+        TEGRA_GPIO_PR5,
+        TEGRA_GPIO_PR6,
+        TEGRA_GPIO_PR7,
+        TEGRA_GPIO_PS1,
+        TEGRA_GPIO_PQ3,
+        TEGRA_GPIO_PQ4,
+        TEGRA_GPIO_PQ5,
+        TEGRA_GPIO_PBB0,
+        TEGRA_GPIO_PZ5,
+        TEGRA_GPIO_PK5,
+        TEGRA_GPIO_PK6,
+        TEGRA_GPIO_PW5,
+	TEGRA_GPIO_PW3,
+        TEGRA_GPIO_PD3,
+        TEGRA_GPIO_PI7,
+        TEGRA_GPIO_PJ0,
+        TEGRA_GPIO_PJ2,
+        TEGRA_GPIO_PK3,
+        TEGRA_GPIO_PK4,
+        TEGRA_GPIO_PK2,
+        TEGRA_GPIO_PG0,
+        TEGRA_GPIO_PG1,
+        TEGRA_GPIO_PG2,
+        TEGRA_GPIO_PG3,
+        TEGRA_GPIO_PG4,
+        TEGRA_GPIO_PG5,
+        TEGRA_GPIO_PG6,
+        TEGRA_GPIO_PG7,
+        TEGRA_GPIO_PH0,
+        TEGRA_GPIO_PH1,
+        TEGRA_GPIO_PH2,
+        TEGRA_GPIO_PH3,
+        TEGRA_GPIO_PI0,
+        TEGRA_GPIO_PI4,
+        TEGRA_GPIO_PT5,
+        TEGRA_GPIO_PT6,
+        TEGRA_GPIO_PC7,
 };
 
-static struct android_usb_platform_data andusb_plat = {
-	.vendor_id = 0x22b8,
-	.product_id = 0x7081,
-	.manufacturer_name = "Motorola",
-	.num_products = ARRAY_SIZE(usb_products),
-	.products = usb_products,
-	.num_functions = ARRAY_SIZE(usb_functions_all),
-	.functions = usb_functions_all,
+static char etna_unused_pins_p2a[] = {
+	TEGRA_GPIO_PN5,
+	TEGRA_GPIO_PN4,
+	TEGRA_GPIO_PN6,
+	TEGRA_GPIO_PZ4,
+	TEGRA_GPIO_PV7,
+	TEGRA_GPIO_PW1,
+	TEGRA_GPIO_PB3,
+	TEGRA_GPIO_PJ3,
+	TEGRA_GPIO_PE4,
+	TEGRA_GPIO_PF2,
+	TEGRA_GPIO_PM4,
+	TEGRA_GPIO_PM6,
+	TEGRA_GPIO_PM7,
+	TEGRA_GPIO_PL3,
+	TEGRA_GPIO_PD7,
+	TEGRA_GPIO_PR2,
+	TEGRA_GPIO_PR3,
+	TEGRA_GPIO_PR4,
+	TEGRA_GPIO_PR5,
+	TEGRA_GPIO_PR6,
+	TEGRA_GPIO_PR7,
+	TEGRA_GPIO_PS1,
+	TEGRA_GPIO_PQ2,
+	TEGRA_GPIO_PQ3,
+	TEGRA_GPIO_PQ4,
+	TEGRA_GPIO_PQ5,
+	TEGRA_GPIO_PBB0,
+	TEGRA_GPIO_PZ5,
+	TEGRA_GPIO_PK5,
+	TEGRA_GPIO_PK6,
+	TEGRA_GPIO_PX4,
+	TEGRA_GPIO_PX5,
+	TEGRA_GPIO_PX6,
+	TEGRA_GPIO_PX7,
+	TEGRA_GPIO_PW3,
+	TEGRA_GPIO_PD1,
+	TEGRA_GPIO_PD3,
+	TEGRA_GPIO_PI7,
+	TEGRA_GPIO_PJ2,
+	TEGRA_GPIO_PK3,
+	TEGRA_GPIO_PK4,
+	TEGRA_GPIO_PK2,
+	TEGRA_GPIO_PG3,
+	TEGRA_GPIO_PG4,
+	TEGRA_GPIO_PG5,
+	TEGRA_GPIO_PG6,
+	TEGRA_GPIO_PG7,
+	TEGRA_GPIO_PH0,
+	TEGRA_GPIO_PH1,
+	TEGRA_GPIO_PI4,
+	TEGRA_GPIO_PT5,
+	TEGRA_GPIO_PT6,
 };
 
-
-static struct platform_device tegra_android_device = {
-	.name = "android_usb",
-	.id = -1,
-	.dev = {
-		.platform_data = &andusb_plat,
-	},
-};
-
-static struct usb_mass_storage_platform_data tegra_usb_fsg_platform = {
-	.vendor = "Motorola",
-	.product = "Mass Storage",
-#if defined(CONFIG_USB_MOT_MSC_CDROM)
-	.nluns = 3, /* one for cdrom, one for external sd and one for eMMC */
-#else
-	.nluns = 2,   /* one for external sd and one for eMMC */
-#endif
-	.bulk_size = 16384,
-};
-static struct platform_device tegra_usb_fsg_device = {
-	.name = "usb_mass_storage",
-	.id = -1,
-	.dev = {
-		.platform_data = &tegra_usb_fsg_platform,
-	},
-};
-
-#ifdef CONFIG_USB_ANDROID_RNDIS
-static struct usb_ether_platform_data rndis_pdata = {
-	/* ethaddr is filled by board_serialno_setup */
-	.vendorID	= 0x22b8,
-	.vendorDescr	= "Motorola",
-};
-
-static struct platform_device rndis_device = {
-	.name	= "rndis",
-	.id	= -1,
-	.dev	= {
-		.platform_data = &rndis_pdata,
-	},
-};
-#endif
-
-static char *usb_serial_num;
-
-static char *olympus_dev = "MB860";
-static char *etna_dev = "Etna";
-static char *sunfire_dev = "Sunfire";
-static char *default_dev = "Motorola AP20";
-#endif  /* CONFIG_USB_MOT_ANDROID */
-
-static struct platform_device *platform_devices[] = {
-#ifdef CONFIG_USB_MOT_ANDROID
-	&tegra_usb_fsg_device,
-	&tegra_android_device,
-#endif
-#ifdef CONFIG_USB_ANDROID_RNDIS
-        &rndis_device,
-#endif
+static char etna_unused_pins_p2c[] = {
+        TEGRA_GPIO_PN5,
+        TEGRA_GPIO_PN4,
+        TEGRA_GPIO_PN6,
+        TEGRA_GPIO_PV7,
+        TEGRA_GPIO_PW1,
+        TEGRA_GPIO_PB3,
+        TEGRA_GPIO_PJ4,
+        TEGRA_GPIO_PE5,
+        TEGRA_GPIO_PE7,
+        TEGRA_GPIO_PM4,
+        TEGRA_GPIO_PD7,
+        TEGRA_GPIO_PR2,
+        TEGRA_GPIO_PR3,
+        TEGRA_GPIO_PR4,
+        TEGRA_GPIO_PR5,
+        TEGRA_GPIO_PR6,
+        TEGRA_GPIO_PR7,
+        TEGRA_GPIO_PS1,
+        TEGRA_GPIO_PS2,
+        TEGRA_GPIO_PQ2,
+        TEGRA_GPIO_PQ3,
+        TEGRA_GPIO_PQ4,
+        TEGRA_GPIO_PQ5,
+        TEGRA_GPIO_PBB0,
+        TEGRA_GPIO_PZ5,
+        TEGRA_GPIO_PK5,
+        TEGRA_GPIO_PK6,
+        TEGRA_GPIO_PD3,
+        TEGRA_GPIO_PI7,
+        TEGRA_GPIO_PJ2,
+        TEGRA_GPIO_PK3,
+        TEGRA_GPIO_PK4,
+        TEGRA_GPIO_PG3,
+        TEGRA_GPIO_PG4,
+        TEGRA_GPIO_PG5,
+        TEGRA_GPIO_PG6,
+        TEGRA_GPIO_PG7,
+        TEGRA_GPIO_PH0,
+        TEGRA_GPIO_PH1,
+        TEGRA_GPIO_PH2,
+        TEGRA_GPIO_PH3,
+        TEGRA_GPIO_PI4,
+        TEGRA_GPIO_PT5,
+        TEGRA_GPIO_PT6,
 };
 
 extern void __init tegra_setup_nvodm(bool standard_i2c, bool standard_spi);
@@ -507,6 +592,14 @@ static struct i2c_board_info tegra_i2c_bus3_board_info[] = {
 		.irq = 180,
 	},
 #endif
+#if defined(CONFIG_TEGRA_ODM_DAYTONA)
+	{
+		/*  ISL 29030 (prox/ALS) driver */
+		I2C_BOARD_INFO(LD_ISL29030_NAME, 0x44),
+		.platform_data = &isl29030_als_ir_data_Daytona,
+		.irq = 180,
+	},
+#endif
 #if defined(CONFIG_TEGRA_ODM_SUNFIRE)
 	{
 		/*  ISL 29030 (prox/ALS) driver */
@@ -515,6 +608,18 @@ static struct i2c_board_info tegra_i2c_bus3_board_info[] = {
 		.irq = 180,
 	},
 #endif
+#if defined(CONFIG_TEGRA_ODM_AROWANA)
+	{
+		/*  ISL 29030 (prox/ALS) driver */
+		I2C_BOARD_INFO(LD_ISL29030_NAME, 0x44),
+		.platform_data = &isl29030_als_ir_data_Arowana,
+		.irq = 180,
+	},
+#endif
+
+
+
+
 };
 
 #if 1
@@ -568,16 +673,6 @@ fail:
 static inline void tegra_setup_bluesleep(void) { }
 #endif
 
-
-
-static int __init mot_usb_serial_num_setup(char *options)
-{
-    usb_serial_num = options;
-    pr_info("%s: usb_serial_num: %s\n", __func__, usb_serial_num);
-    return 0;
-}
-__setup("androidboot.serialno=", mot_usb_serial_num_setup);
-
 #ifdef NEED_FACT_BUSY_HINT
 static void FactoryBusyHint(void)
 {
@@ -629,35 +724,61 @@ static int config_unused_pins(char *pins, int num)
         return ret;
 }
 
-void tegra_get_serial_number(void)
+
+/*   GPS Chip BCM4750 Power Management */
+#ifdef CONFIG_GPS_BCM4750
+    #ifndef AGPS_RESET_N
+    #define AGPS_RESET_N TEGRA_GPIO_PM6
+    #endif
+
+    #ifndef AGPS_POWER_EN
+    #define AGPS_POWER_EN TEGRA_GPIO_PL5
+    #endif
+
+struct gps_platform_data{
+	int reset_pin;
+	int power_pin;
+};
+
+static struct gps_platform_data gps_platform_data = {
+    .reset_pin = AGPS_RESET_N,
+    .power_pin = AGPS_POWER_EN,
+};
+static struct platform_device gps_bcm4750_device = {
+     .name = "bcm4750",
+     .id = -1,
+     .dev = {
+		 .platform_data = &gps_platform_data,
+	 },
+};
+
+static void __init gps_bcm4750_init(void)
 {
-#ifdef CONFIG_USB_ANDROID_RNDIS
-	unsigned int chip_id[2];
-	char serial[17];
-	int i;
-	char *src;
+	printk(KERN_INFO "===<*GPS*>=== [%s:%s:%d] GPS pins init here\n",\
+			__FILE__, __func__, __LINE__);
+	gpio_request(AGPS_POWER_EN, NULL);
+	gpio_direction_output(AGPS_POWER_EN, 0);
+    gpio_request(AGPS_RESET_N, NULL);
+    gpio_direction_output(AGPS_RESET_N, 0);
 
-	NvRmQueryChipUniqueId(s_hRmGlobal, sizeof(chip_id), (void*)chip_id);
-	snprintf(serial, sizeof(serial), "%08x%08x", chip_id[1], chip_id[0]);
+    gpio_set_value(AGPS_RESET_N, 1);
+    gpio_set_value(AGPS_RESET_N, 0);
+    gpio_set_value(AGPS_RESET_N, 1);
 
-	/* create a fake MAC address from our serial number.
-	 * first byte is 0x02 to signify locally administered.
-	 */
-	rndis_pdata.ethaddr[0] = 0x02;
-	src = serial;
-	for (i = 0; *src; i++) {
-		/* XOR the USB serial across the remaining bytes */
-		rndis_pdata.ethaddr[i % (ETH_ALEN - 1) + 1] ^= *src++;
-	}
+    platform_device_register(&gps_bcm4750_device);
+ }
+
+#else
+     static inline void gps_bcm4750_init(void) {}
 #endif
-}
+
 
 static void __init tegra_mot_init(void)
 {
-	unsigned int chip_id[2];
-	char serial[17];
-
 	tegra_common_init();
+#ifdef CONFIG_TEGRA_ODM_AROWANA
+	mot_modem_init();
+#endif
 	tegra_setup_nvodm(true, true);
 	tegra_register_socdev();
 
@@ -667,37 +788,25 @@ static void __init tegra_mot_init(void)
 #ifdef CONFIG_APANIC_MMC
 	apanic_mmc_init();
 #endif
-
+	mot_panic_notifier_init();
 	mot_setup_power();
 	mot_setup_lights(&tegra_i2c_bus0_board_info[BACKLIGHT_DEV]);
 	mot_setup_touch(&tegra_i2c_bus0_board_info[TOUCHSCREEN_DEV]);
 
 	mot_sec_init();
+	mot_tcmd_init();
 
-	NvRmQueryChipUniqueId(s_hRmGlobal, sizeof(chip_id), (void*)chip_id);
-	snprintf(serial, sizeof(serial), "%08x%08x", chip_id[1], chip_id[0]);
-
-        tegra_get_serial_number();
-
-#ifdef CONFIG_USB_MOT_ANDROID
-	if (usb_serial_num)
-		andusb_plat.serial_number = kstrdup(usb_serial_num, GFP_KERNEL);
-	else
-		andusb_plat.serial_number = kstrdup(serial, GFP_KERNEL);
+	mot_setup_gadget();
 
 	if(machine_is_olympus()) {
-		andusb_plat.product_name = olympus_dev;
-		tegra_usb_fsg_platform.product = olympus_dev;
-
 		tegra_uart_platform[UART_IPC_OLYMPUS].uart_ipc = 1;
 		tegra_uart_platform[UART_IPC_OLYMPUS].uart_wake_host = TEGRA_GPIO_PA0;
 		tegra_uart_platform[UART_IPC_OLYMPUS].uart_wake_request = TEGRA_GPIO_PF1;
+#ifdef CONFIG_MDM_CTRL
 		tegra_uart_platform[UART_IPC_OLYMPUS].peer_register = mot_mdm_ctrl_peer_register;
+#endif
 	}
-	else if(machine_is_etna() || machine_is_tegra_daytona()) {
-		andusb_plat.product_name = etna_dev;
-		tegra_usb_fsg_platform.product = etna_dev;
-		
+	else if(machine_is_etna()) {
 		if (HWREV_TYPE_IS_BRASSBOARD(system_rev)) {
 			/* The modem is dead on S2, which makes the UART angry. */
 			tegra_uart_platform[UART_IPC_ETNA].uart_ipc = 0;
@@ -706,22 +815,33 @@ static void __init tegra_mot_init(void)
 			tegra_uart_platform[UART_IPC_ETNA].uart_ipc = 1;
 			tegra_uart_platform[UART_IPC_ETNA].uart_wake_host = TEGRA_GPIO_PA0;
 			tegra_uart_platform[UART_IPC_ETNA].uart_wake_request = TEGRA_GPIO_PF1;
+#ifdef CONFIG_MDM_CTRL
 			tegra_uart_platform[UART_IPC_ETNA].peer_register = mot_mdm_ctrl_peer_register;
+#endif
 		}
 	}
+	else if(machine_is_tegra_daytona()) {
+		tegra_uart_platform[UART_IPC_DAYTONA].uart_ipc = 1;
+		tegra_uart_platform[UART_IPC_DAYTONA].uart_wake_host = TEGRA_GPIO_PA0;
+		tegra_uart_platform[UART_IPC_DAYTONA].uart_wake_request = TEGRA_GPIO_PF1;
+#ifdef CONFIG_MDM_CTRL
+		tegra_uart_platform[UART_IPC_DAYTONA].peer_register = mot_mdm_ctrl_peer_register;
+#endif
+	}
 	else if(machine_is_sunfire()) {
-		andusb_plat.product_name = sunfire_dev;
-		tegra_usb_fsg_platform.product = sunfire_dev;
-		
 		tegra_uart_platform[UART_IPC_SUNFIRE].uart_ipc = 1;
 		tegra_uart_platform[UART_IPC_SUNFIRE].uart_wake_host = TEGRA_GPIO_PA0;
 		tegra_uart_platform[UART_IPC_SUNFIRE].uart_wake_request = TEGRA_GPIO_PF1;
+#ifdef CONFIG_MDM_CTRL
 		tegra_uart_platform[UART_IPC_SUNFIRE].peer_register = mot_mdm_ctrl_peer_register;
+#endif
 	}
-	else {
-		andusb_plat.product_name = default_dev;
-		tegra_usb_fsg_platform.product = default_dev;
-	}
+	//Fix me: IPC code need review, first align with olympus
+	else if(machine_is_arowana()) {
+		tegra_uart_platform[UART_IPC_AROWANA].uart_ipc = 1;
+		tegra_uart_platform[UART_IPC_AROWANA].uart_wake_host = TEGRA_GPIO_PA0;
+		tegra_uart_platform[UART_IPC_AROWANA].uart_wake_request = TEGRA_GPIO_PF1;
+	 }
 
 	if( (bi_powerup_reason() & PWRUP_FACTORY_CABLE) &&
 	    (bi_powerup_reason() != PWRUP_INVALID) ){
@@ -729,14 +849,20 @@ static void __init tegra_mot_init(void)
 		FactoryBusyHint(); //factory workaround no longer needed
 #endif
 	}
-#endif
 
-	mot_mdm_ctrl_init();
+#ifndef CONFIG_TEGRA_ODM_AROWANA
+	mot_modem_init();
+#endif
 
 	(void) platform_driver_register(&cpcap_usb_connected_driver);
 
-	mot_wlan_gpio_init();
+#ifdef CONFIG_MOT_WIMAX
+	mot_wimax_gpio_init();
+#endif
+	mot_wlan_init();
 	mot_sensors_init();
+
+	mot_nvodmcam_init();
 
 	printk("%s: registering i2c devices...\n", __func__);
 
@@ -754,8 +880,8 @@ static void __init tegra_mot_init(void)
 	i2c_register_board_info(3, tegra_i2c_bus3_board_info, 
 							ARRAY_SIZE(tegra_i2c_bus3_board_info));
 
-	if (machine_is_olympus()){
-		/* console UART can be routed to headset jack by setting HSJ mux to 0*/
+	if (machine_is_olympus() || machine_is_arowana()){
+		/* console UART can be routed to 'headset jack by setting HSJ mux to 0*/
 		short hsj_mux_gpio=1;
 
 		if ( HWREV_TYPE_IS_DEBUG(system_rev) ){
@@ -765,12 +891,23 @@ static void __init tegra_mot_init(void)
 		mot_set_hsj_mux( hsj_mux_gpio );
 	}
 
-	if (machine_is_olympus())
-		mot_setup_spi_ipc();
+#ifdef CONFIG_GPS_BCM4750
+    gps_bcm4750_init();
+    printk(KERN_INFO "\n<#GPS#>%s: init gps chip bcm4750\n", __func__);
+#endif
 
-	platform_add_devices(platform_devices, ARRAY_SIZE(platform_devices));
+	
 	pm_power_off = mot_system_power_off;
 	tegra_setup_bluesleep();
+
+	/* Configure SPDIF_OUT as GPIO by default, it can be later controlled
+	   as needed. When SPDIF_OUT is enabled and if HDMI is connected, it
+	   can interefere with CPCAP ID pin, as SPDIF_OUT and ID are coupled.
+	*/
+	tegra_gpio_enable(TEGRA_GPIO_PD4);
+	gpio_request(TEGRA_GPIO_PD4, "spdif_enable");
+	gpio_direction_output(TEGRA_GPIO_PD4, 0);
+	gpio_export(TEGRA_GPIO_PD4, false);
 
 	if (machine_is_olympus() && (HWREV_TYPE_IS_PORTABLE(system_rev) || HWREV_TYPE_IS_FINAL(system_rev)))
 	{
@@ -790,7 +927,28 @@ static void __init tegra_mot_init(void)
 			config_unused_pins(oly_unused_pins_p3, ARRAY_SIZE(oly_unused_pins_p3));
 		}
 	}
-	if (machine_is_etna() || machine_is_tegra_daytona() || machine_is_sunfire())
+
+	if (machine_is_etna())
+	{
+		if (HWREV_TYPE_IS_PORTABLE(system_rev) && (HWREV_REV(system_rev) >= HWREV_REV_2) && (HWREV_REV(system_rev) < HWREV_REV_2C))
+		{
+			config_unused_pins(etna_unused_pins_p2a, ARRAY_SIZE(etna_unused_pins_p2a));
+		}
+		else if ((HWREV_TYPE_IS_PORTABLE(system_rev) && HWREV_REV(system_rev) >= HWREV_REV_2C) ||
+			(HWREV_TYPE_IS_MORTABLE(system_rev) && HWREV_REV(system_rev) >= HWREV_REV_3) ||
+ 			HWREV_TYPE_IS_FINAL(system_rev))
+		{
+			config_unused_pins(etna_unused_pins_p2c, ARRAY_SIZE(etna_unused_pins_p2c));
+		}
+	}
+        if (machine_is_arowana() ){
+ 		config_unused_pins(arowana_unused_pins_p1a, ARRAY_SIZE(arowana_unused_pins_p1a));
+	}
+        if (machine_is_tegra_daytona())
+                config_unused_pins(daytona_unused_pins_p1, ARRAY_SIZE(daytona_unused_pins_p1));
+
+
+	if (machine_is_etna() || machine_is_tegra_daytona() || machine_is_sunfire() ||  machine_is_arowana())
 		// UTS tool support
 		mot_keymap_update_init();
 }
@@ -847,6 +1005,18 @@ MACHINE_START(OLYMPUS, "Olympus")
 
 MACHINE_END
 
+MACHINE_START(AROWANA, "Arowana")
+
+    .boot_params  = 0x00000100,
+    .fixup        = mot_fixup,
+    .map_io       = tegra_map_common_io,
+    .init_irq     = tegra_init_irq,
+    .init_machine = tegra_mot_init,
+    .timer        = &tegra_timer,
+
+MACHINE_END
+
+
 MACHINE_START(ETNA, "Etna")
 
     .boot_params  = 0x00000100,
@@ -858,7 +1028,7 @@ MACHINE_START(ETNA, "Etna")
 
 MACHINE_END
 
-MACHINE_START(SUNFIRE, "sunfire")
+MACHINE_START(SUNFIRE, "Sunfire")
 
     .boot_params  = 0x00000100,
     .fixup        = mot_fixup,

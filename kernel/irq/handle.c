@@ -367,10 +367,38 @@ static void warn_no_thread(unsigned int irq, struct irqaction *action)
  *
  * Handles the action chain of an irq event
  */
+#define IRQ_HIST_NUM 100
+static unsigned int irq_history_int[IRQ_HIST_NUM];
+static __kernel_suseconds_t irq_history_us[IRQ_HIST_NUM];
+static void* irq_history_fp[IRQ_HIST_NUM];
+static int irq_history_idx = 0;
+
+void dump_irq_history(void)
+{
+	int i;
+	struct timeval tv;
+
+	do_gettimeofday(&tv);
+	printk("Current time: %ld\n", tv.tv_usec);
+	printk(KERN_ERR "IDX : <irq> <function> <timestamp>\n");
+	for (i=(irq_history_idx+1)%IRQ_HIST_NUM; i!=irq_history_idx;
+		i=(i+1)%IRQ_HIST_NUM)
+		printk(KERN_ERR "[%d]: %4u   %p   %ld\n", i, irq_history_int[i],
+			irq_history_fp[i], irq_history_us[i]);
+}
+
 irqreturn_t handle_IRQ_event(unsigned int irq, struct irqaction *action)
 {
 	irqreturn_t ret, retval = IRQ_NONE;
 	unsigned int status = 0;
+
+	struct timeval tv;
+
+	do_gettimeofday(&tv);
+	irq_history_int[irq_history_idx] = irq;
+	irq_history_fp[irq_history_idx] = action->handler;
+	irq_history_us[irq_history_idx] = tv.tv_usec;
+	irq_history_idx = (irq_history_idx+1) % IRQ_HIST_NUM;
 
 	if (!(action->flags & IRQF_DISABLED))
 		local_irq_enable_in_hardirq();

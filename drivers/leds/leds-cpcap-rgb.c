@@ -24,6 +24,7 @@
 #include <linux/spi/cpcap.h>
 #include <linux/spi/cpcap-regbits.h>
 #include <linux/spi/spi.h>
+#include <linux/delay.h>
 
 #ifdef CONFIG_ARM_OF
 #include <mach/dt_path.h>
@@ -35,7 +36,7 @@
 /* Number of initial requests logged */
 static unsigned trace_request_initial = 10;
 
-static unsigned trace_request = 0;
+static unsigned trace_request = 1;
 static unsigned trace_cpcap_access = 0;
 module_param(trace_request, uint, 0644);
 module_param(trace_request_initial, uint, 0444);
@@ -52,6 +53,7 @@ struct msg_ind_led_data {
 	struct led_classdev msg_ind_blue_class_dev;
 	struct led_classdev msg_ind_white_class_dev;
 	struct cpcap_device *cpcap;
+	struct cpcap_leds *cpcap_leds;
 	struct regulator *regulator;
 	int regulator_state;
 }; 
@@ -67,7 +69,87 @@ static int msg_ind_reg_write (struct cpcap_device *cpcap, unsigned reg,
     return cpcap_status;
 }
 
-void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
+static void msg_ind_set_regulator(struct msg_ind_led_data *msg_ind_data,
+	bool enable, bool blinking)
+{
+	static bool msg_ind_reg_enabled = false;
+
+	if (msg_ind_data->regulator) {
+		if (enable && !msg_ind_reg_enabled) {
+			if (!((msg_ind_data->cpcap_leds->rgb_led.regulator_macro_controlled) &&
+				  (blinking))) {
+				regulator_enable(msg_ind_data->regulator);
+				msg_ind_reg_enabled = true;
+			}
+			return;
+		}
+
+		if (!enable && msg_ind_reg_enabled) {
+			regulator_disable(msg_ind_data->regulator);
+			msg_ind_reg_enabled = false;
+			return;
+		}
+	}
+}
+
+static void msg_ind_set_blink(struct msg_ind_led_data *msg_ind_data, bool enable)
+{
+	unsigned short led_reg;
+	unsigned int i;
+
+	if (enable) {
+		if (!(msg_ind_data->regulator_state&LD_LED_BLINK)) {
+			cpcap_uc_start(msg_ind_data->cpcap, CPCAP_BANK_PRIMARY, CPCAP_MACRO_6);
+			printk_cpcap("%s: cpcap_uc_start(CPCAP_MACRO_6)\n", __func__);
+			if (msg_ind_data->cpcap_leds->rgb_led.regulator_macro_controlled) {
+				/* Wait for the macro to start. */
+				cpcap_regacc_read(msg_ind_data->cpcap, CPCAP_REG_REDC, &led_reg);
+				i = 21;
+				while ((!(led_reg & LD_MSG_IND_CPCAP_BLINK_ON)) &&
+					   (--i > 0)) {
+					cpcap_uc_start(msg_ind_data->cpcap, CPCAP_BANK_PRIMARY,
+								   CPCAP_MACRO_6);
+					msleep(10);
+					cpcap_regacc_read(msg_ind_data->cpcap, CPCAP_REG_REDC, &led_reg);
+				}
+				if (i == 0)
+					printk(KERN_ERR "%s: Unable to sync CPCAP blink on macro.\n", __func__);
+				printk_cpcap("%s: Blink macro started.\n", __func__);
+				/* Shutdown the regulator since the macro handles the regulator. */
+				msg_ind_set_regulator(msg_ind_data, false, true);
+			}
+			msg_ind_data->regulator_state |= LD_LED_BLINK;
+		}
+	}
+	else {
+		if (msg_ind_data->regulator_state&LD_LED_BLINK) {
+			cpcap_uc_stop(msg_ind_data->cpcap, CPCAP_BANK_PRIMARY,
+						  CPCAP_MACRO_6);
+			printk_cpcap("%s: cpcap_uc_stop(CPCAP_MACRO_6)\n", __func__);
+			if (msg_ind_data->cpcap_leds->rgb_led.regulator_macro_controlled) {
+				/* Wait for the macro to be stopped before moving on. */
+				cpcap_regacc_read(msg_ind_data->cpcap, CPCAP_REG_REDC, &led_reg);
+				i = 21;
+				while ((led_reg & LD_MSG_IND_CPCAP_BLINK_ON) &&
+					   (--i > 0)) {
+					cpcap_uc_stop(msg_ind_data->cpcap, CPCAP_BANK_PRIMARY,
+								  CPCAP_MACRO_6);
+					msleep(10);
+					cpcap_regacc_read(msg_ind_data->cpcap, CPCAP_REG_REDC, &led_reg);
+				}
+				if (i == 0)
+					printk(KERN_ERR "%s: Unable to sync CPCAP blink off macro.\n", __func__);
+				printk_cpcap("%s: Blink macro stopped.\n", __func__);
+				/* If any LED's are on re-enable the regulator. */
+				if (msg_ind_data->regulator_state&(LD_LED_RED|LD_LED_GREEN|LD_LED_BLUE))
+					msg_ind_set_regulator(msg_ind_data, true, false);
+			}
+			msg_ind_data->regulator_state &= ~LD_LED_BLINK;
+		}
+	}
+}
+
+static void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 				int color, enum led_brightness value)
 {
 #ifdef CONFIG_LEDS_SHOLEST
@@ -99,14 +181,8 @@ void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 	}
 
 #ifdef CONFIG_MACH_TEGRA_GENERIC
-    else {
-        struct spi_device *spi = msg_ind_data->cpcap->spi;
-        struct cpcap_platform_data *data = (struct cpcap_platform_data *)spi->controller_data;
-        struct cpcap_leds *leds = data->leds;
-
-
-        brightness = leds->rgb_led.rgb_on;
-    }
+	else
+		brightness = msg_ind_data->cpcap_leds->rgb_led.rgb_on;
 #else
 #ifdef CONFIG_LEDS_SHOLEST
 	else if (value <= 51)
@@ -148,23 +224,19 @@ void msg_ind_set_rgb_brightness(struct msg_ind_led_data *msg_ind_data,
 
 	if (value > LED_OFF) {
 		if (!(msg_ind_data->regulator_state & color)) {
-			if (msg_ind_data->regulator) {
-				regulator_enable(msg_ind_data->regulator);
-				msg_ind_data->regulator_state |= color;
-			}
+			msg_ind_set_regulator(msg_ind_data, true,
+								  ((msg_ind_data->regulator_state&LD_LED_BLINK) == LD_LED_BLINK));
+			msg_ind_data->regulator_state |= color;
 		}
 	} else {
 		if (msg_ind_data->regulator_state & color) {
-			if (msg_ind_data->regulator) {
-				regulator_disable(msg_ind_data->regulator);
-				msg_ind_data->regulator_state &= ~color;
-			}
+			msg_ind_set_regulator(msg_ind_data, false,
+								  ((msg_ind_data->regulator_state&LD_LED_BLINK) == LD_LED_BLINK));;
+			msg_ind_data->regulator_state &= ~color;
 		}
         /* If the LED is totally off turn off blinking as well */
         if (msg_ind_data->regulator_state == 0) {
-            cpcap_uc_stop(msg_ind_data->cpcap, CPCAP_BANK_PRIMARY, 
-                CPCAP_MACRO_6);
-            printk_cpcap("%s: cpcap_uc_stop(CPCAP_MACRO_6)\n", __func__);
+			msg_ind_set_blink(msg_ind_data, false);
         }
 	}
 
@@ -239,13 +311,14 @@ msg_ind_blink(struct device *dev, struct device_attribute *attr,
 		return -1;
 	}
     mutex_lock(&msg_ind_mutex);
-    printk_request ("%s: %ld\n", __func__, led_blink);
+    printk_request ("%s: %ld, brightness(rgb)=(%ld/%ld/%ld).\n", __func__, led_blink,
+	msg_ind_data->msg_ind_red_class_dev.brightness,
+	msg_ind_data->msg_ind_green_class_dev.brightness,
+	msg_ind_data->msg_ind_blue_class_dev.brightness);
 	if (led_blink > LED_OFF) {
-		cpcap_uc_start(msg_ind_data->cpcap, CPCAP_BANK_PRIMARY, CPCAP_MACRO_6);
-        printk_cpcap("%s: cpcap_uc_start(CPCAP_MACRO_6)\n", __func__);
+		msg_ind_set_blink(msg_ind_data, true);
     } else {
-		cpcap_uc_stop(msg_ind_data->cpcap, CPCAP_BANK_PRIMARY, CPCAP_MACRO_6);
-        printk_cpcap("%s: cpcap_uc_stop(CPCAP_MACRO_6)\n", __func__);
+		msg_ind_set_blink(msg_ind_data, false);
         if (msg_ind_data->regulator_state & LD_LED_RED)
             msg_ind_set_rgb_brightness(msg_ind_data, LD_LED_RED, 
                 msg_ind_data->msg_ind_red_class_dev.brightness);
@@ -271,20 +344,27 @@ static int msg_ind_rgb_probe(struct platform_device *pdev)
 	if (pdev == NULL) {
 		pr_err("%s: platform data required\n", __func__);
 		return -ENODEV;
-
 	}
 	info = kzalloc(sizeof(struct msg_ind_led_data), GFP_KERNEL);
 	if (info == NULL)
 		return -ENOMEM;
 
 	info->cpcap = pdev->dev.platform_data;
+	info->cpcap_leds = ((struct cpcap_platform_data *)info->cpcap->spi->controller_data)->leds;
+	printk_cpcap("%s: rgb_on: %04x regulator_macro_controlled: %d.\n",
+				 __func__, info->cpcap_leds->rgb_led.rgb_on,
+				 info->cpcap_leds->rgb_led.regulator_macro_controlled);
 	platform_set_drvdata(pdev, info);
 
-	info->regulator = regulator_get(&pdev->dev, LD_SUPPLY);
-	if (IS_ERR(info->regulator)) {
-		pr_err("%s: Cannot get %s regulator\n", __func__, LD_SUPPLY);
-		ret = PTR_ERR(info->regulator);
-		goto exit_request_reg_failed;
+	if (info->cpcap_leds->rgb_led.regulator){
+		info->regulator = regulator_get(&pdev->dev, info->cpcap_leds->rgb_led.regulator);
+		if (IS_ERR(info->regulator)) {
+			pr_err("%s: Cannot get %s regulator\n", __func__, info->cpcap_leds->rgb_led.regulator);
+			ret = PTR_ERR(info->regulator);
+			goto exit_request_reg_failed;
+		}
+	} else {
+		info->regulator = NULL;
 	}
 
 	info->regulator_state = 0;

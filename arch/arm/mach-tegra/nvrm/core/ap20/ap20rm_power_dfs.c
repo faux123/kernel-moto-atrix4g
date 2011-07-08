@@ -295,7 +295,14 @@ NvRmPrivAp20GetPmRequest(
         (0 != NV_DRF_VAL(CLK_RST_CONTROLLER, RST_CPU_CMPLX_SET, SET_CPURESET1,
                          NV_REGR(hRmDevice, NvRmPrivModuleID_ClockAndReset, 0,
                                  CLK_RST_CONTROLLER_RST_CPU_CMPLX_SET_0)));
-    NvRmFreqKHz CpuLoadGaugeKHz = *pCpuKHz;
+    NvRmFreqKHz CpuLoadGaugeKHz;
+
+    // Use clocks for load when no busy hint, otherwise use activity metrics
+    if (NvRmPrivDfsGetBusyHintActive(NvRmDfsClockId_Cpu)) {
+        CpuLoadGaugeKHz = pCpuSampler->AverageKHz;
+    } else {
+        CpuLoadGaugeKHz = *pCpuKHz;
+    }
 
     // Slave CPU1 power management policy thresholds:
     // - use fixed values if they are defined explicitly, otherwise

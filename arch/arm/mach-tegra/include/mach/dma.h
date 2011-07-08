@@ -145,6 +145,7 @@ int tegra_dma_dequeue_req(struct tegra_dma_channel *ch,
 	struct tegra_dma_req *req);
 void tegra_dma_dequeue(struct tegra_dma_channel *ch);
 void tegra_dma_flush(struct tegra_dma_channel *ch);
+int tegra_dma_cancel(struct tegra_dma_channel *ch);
 
 unsigned int tegra_dma_transferred_req(struct tegra_dma_channel *ch,
 	struct tegra_dma_req *req);
@@ -158,7 +159,8 @@ bool tegra_dma_is_req_inflight(struct tegra_dma_channel *ch,
 	struct tegra_dma_req *req);
 bool tegra_dma_is_empty(struct tegra_dma_channel *ch);
 
-struct tegra_dma_channel *tegra_dma_allocate_channel(int mode);
+struct tegra_dma_channel *tegra_dma_allocate_channel(int mode,
+	const char namefmt[], ...);
 void tegra_dma_free_channel(struct tegra_dma_channel *ch);
 
 int __init tegra_dma_init(void);

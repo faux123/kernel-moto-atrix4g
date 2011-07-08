@@ -236,6 +236,10 @@ typedef struct
     /// The value is in terms of the clock tick where the clock freq is
     /// the interface frequency.
     NvU32 CsHoldTimeInClock;
+
+    /// Upper layers will take care of settng the system clocks if the variable
+    /// is set to true.
+    NvBool bIgnoreClockBoost;
 } NvOdmQuerySpiDeviceInfo;
 
 /**
@@ -1071,6 +1075,9 @@ typedef struct NvOdmUsbPropertyRec
     /// Specifies the USB trimmer values. The default value will be used if all values are zeros.
     /// @see NvOdmUsbTrimmerCtrl
     NvOdmUsbTrimmerCtrl TrimmerCtrl;
+
+    /// Specifies regulator required for supplying VBUS to connected device
+    char *vbus_regulator;
 } NvOdmUsbProperty;
 
 /** Defines wakeup sources. */

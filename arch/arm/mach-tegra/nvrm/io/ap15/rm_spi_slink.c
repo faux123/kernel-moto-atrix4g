@@ -63,6 +63,13 @@
 #include <linux/io.h>
 #include <mach/iomap.h>
 
+
+static unsigned int enable_synch_boost = 0;
+
+module_param(enable_synch_boost, uint, 0644);
+
+#define DEBUG_SHOW_CLK_BOOST 0
+
 // Combined maximum spi/slink controllers
 #define MAX_SPI_SLINK_INSTANCE (MAX_SLINK_CONTROLLERS + MAX_SPI_CONTROLLERS)
 
@@ -74,6 +81,8 @@
 #define MAXIMUM_SLAVE_TRANSFER_WORD (1 << (16-2))
 
 #define MAX_TIME_IN_MS 0xFFFFFFFF
+
+#define MAX_TRANSFER_TIMEOUTS 3
 
 // The maximum request size for one transaction using the dma
 enum {DEFAULT_DMA_BUFFER_SIZE = (0x4000)}; // 16KB
@@ -234,7 +243,7 @@ typedef struct NvRmSpiRec
     NvBool IsChipSelConfigured;
 
     NvBool IsCurrentlySwBasedChipSel;
-    
+
     HwInterfaceHandle hHwInterface;
 
     NvU32 RmPowerClientId;
@@ -260,6 +269,9 @@ typedef struct NvRmSpiRec
     NvBool IsFreqBoosted;
 
     NvBool IsIntDoneDue;
+
+    NvU32 CompletedTransferTimeouts;
+    NvBool UseFallbackPolling;
 } NvRmSpi;
 
 /**
@@ -324,6 +336,12 @@ static void dump_address(unsigned int Add, unsigned int data_size)
 
 static void debug_registers(void)
 {
+    NvOsDebugPrintf(" NvRm Reports: EMC(%lu)  AHB(%lu)  APB(%lu)  CPU(%lu) \n",
+                                               NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Emc),
+                                               NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Ahb),
+                                               NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Apb),
+                                               NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Cpu));
+
     dump_address(0x6000a000, 0x50);
     dump_address(0x6000b000, 0x180);
     dump_address(0x60006000, 0x300);
@@ -358,6 +376,7 @@ SpiSlinkGetDeviceInfo(
         pDeviceInfo->CanUseHwBasedCs = NV_FALSE;
         pDeviceInfo->CsHoldTimeInClock = 0;
         pDeviceInfo->CsSetupTimeInClock = 0;
+        pDeviceInfo->bIgnoreClockBoost = 0;
         return NV_FALSE;
     }
     pDeviceInfo->SignalMode = pSpiDevInfo->SignalMode;
@@ -365,12 +384,13 @@ SpiSlinkGetDeviceInfo(
     pDeviceInfo->CanUseHwBasedCs = pSpiDevInfo->CanUseHwBasedCs;
     pDeviceInfo->CsHoldTimeInClock = pSpiDevInfo->CsHoldTimeInClock;
     pDeviceInfo->CsSetupTimeInClock = pSpiDevInfo->CsSetupTimeInClock;
+    pDeviceInfo->bIgnoreClockBoost = pSpiDevInfo->bIgnoreClockBoost;
     return NV_TRUE;
 }
 
 /**
  * Find whether this interface is the pmu interface or not.
- * Returns TRUE if the given spi channel is the pmu interface else return 
+ * Returns TRUE if the given spi channel is the pmu interface else return
  * FALSE.
  */
 static NvBool
@@ -548,10 +568,13 @@ static NvError AllocateDmas(NvRmSpiHandle hRmSpiSlink)
     hRmSpiSlink->hRxDma = NULL;
     hRmSpiSlink->hTxDma = NULL;
 
-    hRmSpiSlink->hRxDma = tegra_dma_allocate_channel(TEGRA_DMA_MODE_ONESHOT);
+    hRmSpiSlink->hRxDma = tegra_dma_allocate_channel(TEGRA_DMA_MODE_ONESHOT,
+        "spi_rx_%d", hRmSpiSlink->InstanceId);
     if (!IS_ERR_OR_NULL(hRmSpiSlink->hRxDma))
     {
-        hRmSpiSlink->hTxDma = tegra_dma_allocate_channel(TEGRA_DMA_MODE_ONESHOT);
+        hRmSpiSlink->hTxDma =
+            tegra_dma_allocate_channel(TEGRA_DMA_MODE_ONESHOT,
+            "spi_tx_%d", hRmSpiSlink->InstanceId);
         if (IS_ERR_OR_NULL(hRmSpiSlink->hTxDma))
         {
             tegra_dma_free_channel(hRmSpiSlink->hRxDma);
@@ -740,7 +763,7 @@ WaitForTransferCompletion(
     NvU32 *pUpdatedRxBuffer = NULL;
     HwInterfaceHandle hHwInt = hRmSpiSlink->hHwInterface;
 
-    if (IsPoll)
+    if (IsPoll || hRmSpiSlink->UseFallbackPolling)
     {
         StartTime = NvOsGetTimeMS();
         while (IsWait)
@@ -748,6 +771,9 @@ WaitForTransferCompletion(
             IsReady = hHwInt->HwIsTransferCompletedFxn(&hRmSpiSlink->HwRegs);
             if (IsReady)
             {
+                if (hRmSpiSlink->UseFallbackPolling)
+                    break;  // take the error path to check the counts
+
                 IsTransferComplete = HandleTransferCompletion(hRmSpiSlink);
                 if(IsTransferComplete)
                     break;
@@ -769,13 +795,13 @@ WaitForTransferCompletion(
     }
 
     if ((Error != NvSuccess) && (Error != NvError_Timeout))
-            pr_err("%s(): The sema wait return unexpected error 0x%x\n",__func__,Error);
+        pr_err("%s(): The sema wait return unexpected error 0x%08X\n", __func__, Error);
 
     // If non success happen then stop all transfer and exit.
     if (Error != NvSuccess)
     {
         // Return timeout only.
-	Error = NvError_Timeout;
+        Error = NvError_Timeout;
 
         // Disable the data flow first.
         hHwInt->HwSetDataFlowFxn(&hRmSpiSlink->HwRegs,
@@ -786,6 +812,7 @@ WaitForTransferCompletion(
         {
             if (hRmSpiSlink->CurrentDirection & SerialHwDataFlow_Rx)
             {
+                tegra_dma_cancel(hRmSpiSlink->hRxDma);
                 AbortDma(hRmSpiSlink->hRxDma);
                 ResetSemaphoreCount(hRmSpiSlink->hSynchRxDmaSema);
                 DmaRxTransferCountBytes = hRmSpiSlink->RxDmaReq.bytes_transferred;
@@ -815,6 +842,29 @@ WaitForTransferCompletion(
         if (IsReady)
         {
             // All requested transfer has been done.
+            hRmSpiSlink->CompletedTransferTimeouts++;
+
+            if (hRmSpiSlink->CompletedTransferTimeouts < MAX_TRANSFER_TIMEOUTS)
+            {
+                pr_err("%s(): transfer completed, but with no interrupt (%u)\n",
+                       __func__, hRmSpiSlink->CompletedTransferTimeouts);
+            }
+            else if (hRmSpiSlink->CompletedTransferTimeouts == MAX_TRANSFER_TIMEOUTS)
+            {
+                pr_err("%s(): too many stuck transfers (%u)\n", __func__,
+                       hRmSpiSlink->CompletedTransferTimeouts);
+                pr_err("%s(): boost freq: CPU(%u) AHB(%u) APB(%u) EMC(%u)\n",
+                       __func__,
+                       NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Cpu),
+                       NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Ahb),
+                       NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Apb),
+                       NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Emc));
+                debug_registers();
+                pr_warning("%s(): SPI IRQ seems to be broken; switching to "
+                           "simple polling mode\n", __func__);
+                hRmSpiSlink->UseFallbackPolling = NV_TRUE;
+            }
+
             CurrentSlinkPacketTransfer = hRmSpiSlink->CurrTransInfo.CurrPacketCount;
             Error = NvSuccess;
         }
@@ -886,6 +936,11 @@ WaitForTransferCompletion(
         return Error;
     }
 
+    /*
+     * We're interested in multiple timeouts in a row, not spurious ones.
+     */
+    hRmSpiSlink->CompletedTransferTimeouts = 0;
+
     /* If non dma based transfer then return as the slink status has already
      * been handled.
      */
@@ -901,7 +956,13 @@ WaitForTransferCompletion(
             hHwInt->HwGetTransferStatusFxn(&hRmSpiSlink->HwRegs, SerialHwDataFlow_Rx);
         if (hRmSpiSlink->RxTransferStatus)
         {
-            pr_err("Spi: RxTransfer Error\n");
+            pr_err("%s(): RxTransfer Error: 0x%08X\n", __func__, hRmSpiSlink->RxTransferStatus);
+            pr_err("%s(): Boost Freq: CPU(%u)  AHB(%u)  APB(%u)  EMC(%u) \n", __func__,
+                                                NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Cpu),
+                                                NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Ahb),
+                                                NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Apb),
+                                                NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Emc));
+            debug_registers();
             AbortDma(hRmSpiSlink->hRxDma);
             ResetSemaphoreCount(hRmSpiSlink->hSynchRxDmaSema);
         }
@@ -963,6 +1024,36 @@ WaitForTransferCompletion(
     return Error;
 }
 
+
+// return TRUE if the clocks are right = no boost requested, OR 
+//                 the requested boost is implemented  OR
+//                 dfs is not running closed loop
+//     cannot check all clocks, since computed busy hints may be out of system range
+//     so just check EMC for now.
+//
+//
+static NvBool IsRequestedBoostInEffect(NvRmSpiHandle hRmSpiSlink)
+{
+    int i;
+    NvRmDfsRunState DfsState=NvRmDfsGetState(hRmSpiSlink->hDevice); 
+
+    if((DfsState!=NvRmDfsRunState_ClosedLoop) ||
+       (hRmSpiSlink->IsFreqBoosted == NV_FALSE))
+        return NV_TRUE;
+
+    for(i=0;i<sizeof(hRmSpiSlink->BusyHints)/sizeof(hRmSpiSlink->BusyHints[0]);i++)
+    {
+         if(hRmSpiSlink->BusyHints[i].ClockId!=NvRmDfsClockId_Emc)
+            continue;
+
+         if( (hRmSpiSlink->BusyHints[i].BusyAttribute == NV_TRUE) &&
+             (NvRmPrivDfsGetCurrentKHz(hRmSpiSlink->BusyHints[i].ClockId) < hRmSpiSlink->BusyHints[i].BoostKHz) )
+            return(NV_FALSE); 
+    }
+
+    return(NV_TRUE);
+}
+
 /**
  * Register the spi interrupt.
  * Thread safety: Caller responsibity.
@@ -985,30 +1076,97 @@ RegisterSpiSlinkInterrupt(
             &hIntHandlers, hRmSpiSlink, &hRmSpiSlink->SpiInterruptHandle, NV_TRUE));
 }
 // Boosting the Emc/Ahb/Apb/Cpu frequency
-static void BoostFrequency(NvRmSpiHandle hRmSpiSlink, NvBool IsBoost, NvU32 TransactionSize, NvU32 ClockSpeedInKHz)
+static void
+BoostFrequency(
+    NvRmSpiHandle hRmSpiSlink,
+    NvU32 ChipSelectId,
+    NvBool IsBoost,
+    NvU32 TransactionSize,
+    NvU32 ClockSpeedInKHz)
 {
+
+    if (hRmSpiSlink->DeviceInfo[ChipSelectId].bIgnoreClockBoost == NV_TRUE)
+         return;
+
     if (IsBoost)
     {
         if (TransactionSize > hRmSpiSlink->HwRegs.MaxWordTransfer)
         {
             if (!(hRmSpiSlink->IsPmuInterface))
             {
+                NvU32 Timeout = 10;
+
                 hRmSpiSlink->BusyHints[0].BoostKHz = 150000; // Emc
                 hRmSpiSlink->BusyHints[0].BoostDurationMs
-                    = 10 + ((4 * (TransactionSize * 8))) / ClockSpeedInKHz;
+                    = Timeout + ((4 * (TransactionSize * 8))) / ClockSpeedInKHz;
                 hRmSpiSlink->BusyHints[1].BoostKHz = 150000; // Ahb
                 hRmSpiSlink->BusyHints[1].BoostDurationMs
-                    = 10 + ((4 * (TransactionSize * 8))) / ClockSpeedInKHz;
+                    = Timeout + ((4 * (TransactionSize * 8))) / ClockSpeedInKHz;
                 hRmSpiSlink->BusyHints[2].BoostKHz = 150000; // Apb
                 hRmSpiSlink->BusyHints[2].BoostDurationMs
-                    = 10 + ((4 * (TransactionSize * 8))) / ClockSpeedInKHz;
+                    = Timeout + ((4 * (TransactionSize * 8))) / ClockSpeedInKHz;
                 hRmSpiSlink->BusyHints[3].BoostKHz = 600000; // Cpu
                 hRmSpiSlink->BusyHints[3].BoostDurationMs
-                    = 10 + ((4 * (TransactionSize * 8))) / ClockSpeedInKHz;
+                    = Timeout + ((4 * (TransactionSize * 8))) / ClockSpeedInKHz;
+
+#if DEBUG_SHOW_CLK_BOOST
+                pr_info("Boost size=%lu EMC(%lu, %lu, %lu) AHB(%lu, %lu, %lu) APB(%lu, %lu, %lu) CPU(%lu, %lu %lu) \n",
+                                   TransactionSize,
+                                   hRmSpiSlink->BusyHints[0].BoostDurationMs,   // EMC
+                                   NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Emc),
+                                   hRmSpiSlink->BusyHints[0].BoostKHz,
+
+                                   hRmSpiSlink->BusyHints[1].BoostDurationMs,   // AHB
+                                   NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Ahb),
+                                   hRmSpiSlink->BusyHints[1].BoostKHz,
+
+                                   hRmSpiSlink->BusyHints[2].BoostDurationMs,   // APB
+                                   NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Apb),
+                                   hRmSpiSlink->BusyHints[2].BoostKHz,
+
+                                   hRmSpiSlink->BusyHints[3].BoostDurationMs,   // CPU
+                                   NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Cpu),
+                                   hRmSpiSlink->BusyHints[3].BoostKHz
+                               );
+#endif
+
                 NvRmPowerBusyHintMulti(hRmSpiSlink->hDevice, hRmSpiSlink->RmPowerClientId,
                                        hRmSpiSlink->BusyHints, 4,
                                        NvRmDfsBusyHintSyncMode_Async);
                 hRmSpiSlink->IsFreqBoosted = NV_TRUE;
+
+                if( enable_synch_boost )
+                {
+                   // now, block waiting for the clocks to come up
+                   int wait_count = 500;
+#if DEBUG_SHOW_CLK_BOOST
+                   static NvU32 tMax=0;
+                   NvU64 tNow,tStart;
+                   tStart=NvOsGetTimeUS();
+#endif
+
+                   while((IsRequestedBoostInEffect(hRmSpiSlink)==NV_FALSE) && wait_count--)
+                   {
+                        msleep(1);
+                   }
+
+#if DEBUG_SHOW_CLK_BOOST
+                   if(!wait_count)
+                      NvOsDebugPrintf(" Hint Wait Timeout: NvRm Reports: EMC(%lu)  AHB(%lu)  APB(%lu)  CPU(%lu) \n",
+                                               NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Emc),
+                                               NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Ahb),
+                                               NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Apb),
+                                               NvRmPrivDfsGetCurrentKHz(NvRmDfsClockId_Cpu));
+
+                    // show the time spent waiting for the EMC clock to come up, and the max wait time
+                    // note that the overall boost time does not need to be increased for the wait time
+                    // since the expiry of the boost time will not start until the hint is processed
+                    tNow=NvOsGetTimeUS();
+                    tMax=NV_MAX((NvU32)(tNow-tStart), tMax);
+                    NvOsDebugPrintf(" %s Hint Wait Time tMax=%lu  tElapsed=%lu\n", __func__,
+                                                                    tMax,(NvU32)(tNow-tStart));
+#endif
+                 }
             }
         }
     }
@@ -1215,6 +1373,8 @@ static NvError CreateSpiSlinkChannelHandle(
     hRmSpiSlink->IsFreqBoosted = NV_FALSE;
     hRmSpiSlink->IsPmuInterface = NV_FALSE;
     hRmSpiSlink->PmuChipSelectId = 0xFF;
+    hRmSpiSlink->CompletedTransferTimeouts = 0;
+    hRmSpiSlink->UseFallbackPolling = NV_FALSE;
 
     ModuleId = NVRM_MODULE_ID(hRmSpiSlink->RmModuleId, InstanceId);
 
@@ -1229,7 +1389,7 @@ static NvError CreateSpiSlinkChannelHandle(
                                     &hRmSpiSlink->DeviceInfo[ChipSelIndex]);
 
     // Findout whether this spi instance is used for the pmu interface or not.
-    hRmSpiSlink->IsPmuInterface = SpiSlinkIsPmuInterface(IsSpiChannel, 
+    hRmSpiSlink->IsPmuInterface = SpiSlinkIsPmuInterface(IsSpiChannel,
                                                 InstanceId,
                                                 &hRmSpiSlink->PmuChipSelectId);
 
@@ -1974,7 +2134,7 @@ MasterModeReadWriteCpu(
         }
         if (!hRmSpiSlink->IsChipSelConfigured)
         {
-            hRmSpiSlink->IsCurrentlySwBasedChipSel = 
+            hRmSpiSlink->IsCurrentlySwBasedChipSel =
                 hRmSpiSlink->hHwInterface->HwSetChipSelectLevelBasedOnPacketFxn(
                     &hRmSpiSlink->HwRegs, hRmSpiSlink->CurrTransferChipSelId,
                     !hRmSpiSlink->DeviceInfo[hRmSpiSlink->CurrTransferChipSelId].ChipSelectActiveLow,
@@ -1987,7 +2147,7 @@ MasterModeReadWriteCpu(
 
             hRmSpiSlink->IsChipSelConfigured = NV_TRUE;
         }
-        
+
         hRmSpiSlink->hHwInterface->HwSetDmaTransferSizeFxn(&hRmSpiSlink->HwRegs,
                                     hRmSpiSlink->CurrTransInfo.CurrPacketCount);
         hRmSpiSlink->IsIntDoneDue = NV_FALSE;
@@ -2098,7 +2258,7 @@ static NvError MasterModeReadWriteDma(
         if (!hRmSpiSlink->IsChipSelConfigured)
         {
             IsOnlyUseSWCS = (CurrentTransPacket == PacketsRequested)? NV_FALSE: NV_TRUE;
-            hRmSpiSlink->IsCurrentlySwBasedChipSel = 
+            hRmSpiSlink->IsCurrentlySwBasedChipSel =
                 hRmSpiSlink->hHwInterface->HwSetChipSelectLevelBasedOnPacketFxn(
                     &hRmSpiSlink->HwRegs, hRmSpiSlink->CurrTransferChipSelId,
                     !hRmSpiSlink->DeviceInfo[hRmSpiSlink->CurrTransferChipSelId].ChipSelectActiveLow,
@@ -2751,7 +2911,7 @@ void NvRmSpiMultipleTransactions(
     NvOsMutexLock(hRmSpi->hChannelAccessMutex);
 
     hRmSpi->CurrTransferChipSelId = ChipSelectId;
-    
+
     // Enable Power/Clock.
     Error = SetPowerControl(hRmSpi, NV_TRUE);
     if (Error != NvSuccess)
@@ -2765,7 +2925,7 @@ void NvRmSpiMultipleTransactions(
         TotalTransByte += pTrans->len;
     }
 
-    BoostFrequency(hRmSpi, NV_TRUE, TotalTransByte, ClockSpeedInKHz);
+    BoostFrequency(hRmSpi, ChipSelectId, NV_TRUE, TotalTransByte, ClockSpeedInKHz);
 
     hRmSpi->CurrTransInfo.PacketsPerWord = PacketsPerWord;
     if (SpiPinMap)
@@ -2936,7 +3096,7 @@ void NvRmSpiTransaction(
     Error = SetPowerControl(hRmSpi, NV_TRUE);
     if (Error != NvSuccess)
         goto cleanup;
-    BoostFrequency(hRmSpi, NV_TRUE, BytesRequested, ClockSpeedInKHz);
+    BoostFrequency(hRmSpi, ChipSelectId, NV_TRUE, BytesRequested, ClockSpeedInKHz);
 
     hRmSpi->CurrTransInfo.PacketsPerWord = PacketsPerWord;
 
@@ -3127,7 +3287,7 @@ NvError NvRmSpiStartTransaction(
     // Enable Power/Clock.
     Error = SetPowerControl(hRmSpi, NV_TRUE);
     if (!Error)
-        BoostFrequency(hRmSpi, NV_TRUE, BytesRequested, ClockSpeedInKHz);
+        BoostFrequency(hRmSpi, ChipSelectId, NV_TRUE, BytesRequested, ClockSpeedInKHz);
 
     if (!Error)
         Error = SetChipSelectSignalLevel(hRmSpi, ChipSelectId, ClockSpeedInKHz,

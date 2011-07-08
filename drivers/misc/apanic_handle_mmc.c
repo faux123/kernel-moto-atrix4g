@@ -35,6 +35,7 @@
 #include <linux/device.h>
 #include <linux/types.h>
 #include <linux/sched.h>
+#include <linux/nmi.h>
 #include <linux/wait.h>
 #include <linux/platform_device.h>
 #include <linux/notifier.h>
@@ -44,12 +45,14 @@
 #include <linux/console.h>
 #include <linux/preempt.h>
 #include <linux/mmc/mmc_simple.h>
+#include <linux/apanic.h>
 
 #include <mach/apanic.h>
-#include "apanic.h"
 
 
 #define DRVNAME "apanic_handle_mmc: "
+
+#define THREADS_PER_PASS 20	/* threads to dump to log_buf at a time */
 
 
 struct apanic_data {
@@ -92,7 +95,7 @@ static int apanic_write_console_mmc(unsigned int offset)
 		if (log_len <= 0)
 			break;
 		if (log_len != PAGE_SIZE)
-			memset(ctx->bounce + log_len, 0, PAGE_SIZE - log_len);
+			memset(ctx->bounce + log_len, ' ', PAGE_SIZE - log_len);
 
 		write_len = mmc_simple_write(ctx->bounce, log_len, offset);
 		if (write_len <= 0) {
@@ -117,6 +120,7 @@ static int apanic_mmc(struct notifier_block *this, unsigned long event,
 	struct panic_header *hdr;
 	int console_offset = 0;
 	int console_len = 0;
+	int threads = 0;
 	int threads_offset = 0;
 	int threads_len = 0;
 	int rc;
@@ -124,6 +128,7 @@ static int apanic_mmc(struct notifier_block *this, unsigned long event,
 	struct timespec uptime;
 	struct rtc_time rtc_timestamp;
 	struct console *con;
+	struct task_struct *g, *p;
 
 	if (in_panic)
 		return NOTIFY_DONE;
@@ -200,21 +205,49 @@ static int apanic_mmc(struct notifier_block *this, unsigned long event,
 	 * Write out all threads
 	 */
 	threads_offset = ALIGN(console_offset + console_len,
-			       ctx->dev->sector_size);
+					ctx->dev->sector_size);
+	read_lock(&tasklist_lock);
+	do_each_thread(g, p) {
+		touch_nmi_watchdog();
+		sched_show_task(p);
+		threads++;
+		if (threads % THREADS_PER_PASS == 0) {
+			rc = apanic_write_console_mmc(threads_offset +
+								threads_len);
+			if (rc < 0) {
+				printk(KERN_EMERG DRVNAME "failed while "
+					"writing threads to panic log (%d)\n",
+					threads_len);
+				read_unlock(&tasklist_lock);
+				goto header;	/* cannot use break */
+			}
+			/*
+			 * Force alignment to work around mmc_simple
+			 * limitations.  Padding will be white space.
+			 */
+			threads_len = ALIGN(threads_len + rc,
+						ctx->dev->sector_size);
+			log_buf_clear();
+		}
+	} while_each_thread(g, p);
+	read_unlock(&tasklist_lock);
 
-	show_state_filter(0);
-	threads_len = apanic_write_console_mmc(threads_offset);
-	if (threads_len < 0) {
+	/* Trick to call sysrq_sched_debug_show() */
+	show_state_filter(0x80000000);
+
+	rc = apanic_write_console_mmc(threads_offset + threads_len);
+	if (rc < 0) {
 		printk(KERN_EMERG DRVNAME "failed while writing threads "
 		       "to panic log (%d)\n", threads_len);
-		threads_len = 0;
+		rc = 0;
 	}
-
-	log_buf_clear();
+	threads_len += rc;
 
 	/*
 	 * Finally write the panic header
 	 */
+header:
+	log_buf_clear();
 	memset(ctx->bounce, 0, PAGE_SIZE);
 
 	hdr->magic = PANIC_MAGIC;
@@ -237,7 +270,7 @@ static int apanic_mmc(struct notifier_block *this, unsigned long event,
 	for (con = console_drivers; con; con = con->next)
 		con->flags |= CON_ENABLED;
 
-	printk(KERN_EMERG DRVNAME "successfully wrote %d bytes to MMC\n",
+	printk(KERN_EMERG DRVNAME "wrote %d bytes to MMC\n",
 	       ctx->dev->sector_size + console_len + threads_len);
 
 out:
@@ -250,8 +283,7 @@ out:
 	return NOTIFY_DONE;
 }
 
-static int apanic_annotate(struct file *file, const char __user *annotation,
-                           unsigned long count, void *data)
+int apanic_annotate(const char *annotation)
 {
 	struct apanic_data *ctx = &drv_ctx;
 	char *buffer;
@@ -281,6 +313,14 @@ static int apanic_annotate(struct file *file, const char __user *annotation,
 	ctx->annotation = buffer;
 
 	return 0;
+}
+EXPORT_SYMBOL(apanic_annotate);
+
+static int apanic_proc_annotate(struct file *file,
+				const char __user *annotation,
+				unsigned long count, void *data)
+{
+	return apanic_annotate(annotation);
 }
 
 static struct notifier_block panic_blk = {
@@ -329,7 +369,7 @@ static int apanic_handle_mmc_probe(struct platform_device *pdev)
 			   __func__);
 	else {
 		drv_ctx.proc_annotate->read_proc = NULL;
-		drv_ctx.proc_annotate->write_proc = apanic_annotate;
+		drv_ctx.proc_annotate->write_proc = apanic_proc_annotate;
 		drv_ctx.proc_annotate->size = 1;
 		drv_ctx.proc_annotate->data = NULL;
 	}

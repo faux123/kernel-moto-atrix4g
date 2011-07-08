@@ -350,6 +350,12 @@ static int cpcap_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	struct cpcap_time cpcap_tm;
 	int ret;
 
+#ifdef CONFIG_SUPPORT_ALARM_POWERON
+	printk(KERN_INFO "alarm enabled......=%d\n", alrm->enabled);
+	if (!(alrm->enabled == POWEROFF_WAKEUP_DISABLE || alrm->enabled == POWEROFF_WAKEUP_ENABLE))
+		return 0;
+#endif
+
 	rtc = dev_get_drvdata(dev);
 
 	rtc2cpcap_time(&cpcap_tm, &alrm->time);
@@ -385,6 +391,7 @@ static void cpcap_rtc_irq(enum cpcap_irqs irq, void *data)
 	switch (irq) {
 	case CPCAP_IRQ_TODA:
 		rtc_update_irq(rtc->rtc_dev, 1, RTC_AF | RTC_IRQF);
+		printk(KERN_INFO "alarm CPCAP_IRQ_TODA trigger\n");
 		break;
 	case CPCAP_IRQ_1HZ:
 		rtc_update_irq(rtc->rtc_dev, 1, RTC_UF | RTC_IRQF);
@@ -428,8 +435,13 @@ static int __devinit cpcap_rtc_probe(struct platform_device *pdev)
 	init_waitqueue_head(&rtc->wait);
 	rtc_ptr = rtc;
 #endif
+#ifdef CONFIG_SUPPORT_ALARM_POWERON
+	cpcap_irq_clear(rtc->cpcap, CPCAP_IRQ_TODA);
+#endif
 	cpcap_irq_register(rtc->cpcap, CPCAP_IRQ_TODA, cpcap_rtc_irq, rtc);
+#ifndef CONFIG_SUPPORT_ALARM_POWERON
 	cpcap_irq_mask(rtc->cpcap, CPCAP_IRQ_TODA);
+#endif
 
 	cpcap_irq_clear(rtc->cpcap, CPCAP_IRQ_1HZ);
 	cpcap_irq_register(rtc->cpcap, CPCAP_IRQ_1HZ, cpcap_rtc_irq, rtc);

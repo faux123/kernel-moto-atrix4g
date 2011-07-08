@@ -162,6 +162,34 @@ typedef enum
      */
     NvDdkUsbPhyIoctlType_UsbBusyHintsOnOff,
 
+    /**
+     * The required action taken before port resume. This is only valid for host mode.
+     *
+     * @par Inputs:
+     * ::NvDdkUsbPhyIoctlType_Presume.
+     *
+     * @par Outputs:
+     * None.
+     *
+     * @retval NvError_Success
+     * @retval NvError_BadParameter Input Argument is invalid.
+     */
+    NvDdkUsbPhyIoctlType_Preresume,
+
+    /**
+     * The required action taken after port resume. This is only valid for host mode.
+     *
+     * @par Inputs:
+     * ::NvDdkUsbPhyIoctlType_Postresume.
+     *
+     * @par Outputs:
+     * None.
+     *
+     * @retval NvError_Success
+     * @retval NvError_BadParameter Input Argument is invalid.
+     */
+    NvDdkUsbPhyIoctlType_Postresume,
+
     NvDdkUsbPhyIoctlType_Num,
     /**
      * Ignore -- Forces compilers to make 32-bit enums.

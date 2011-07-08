@@ -151,6 +151,19 @@ typedef enum
 extern NvRmLp2Policy g_Lp2Policy;
 
 /**
+ * Gets lowest power state, taking into the account run-time core lock.
+ */
+extern bool core_lock_on;
+static inline NvOdmSocPowerState NvRmPowerLowestStateGet(void)
+{
+    NvOdmSocPowerState state =
+        NvOdmQueryLowestSocPowerState()->LowestPowerState;
+    if ((state == NvOdmSocPowerState_DeepSleep) && core_lock_on)
+        state = NvOdmSocPowerState_Suspend;
+    return state;
+}
+
+/**
  * NVRM PM function called within OS shim high priority thread
  */
 NvRmPmRequest NvRmPrivPmThread(void);
@@ -496,6 +509,15 @@ NvRmPrivAp20PowerPcieXclkControl(
  * @retval NV_FALSE if domain is not starving
  */
 NvBool NvRmPrivDfsIsStarving(NvRmDfsClockId ClockId);
+
+/**
+ * Gets current state of busy boost for the clock domain.
+ *
+ * @param ClockId The DFS ID of the targeted clock domain.
+ * @retval NV_TRUE if domain has a finite duration active boost
+ * @retval NV_FALSE if domain does not have a finite duration active boost
+ */
+NvBool NvRmPrivDfsGetBusyHintActive(NvRmDfsClockId ClockId);
 
 /**
  * Gets current busy boost frequency and pulse mode requested for the

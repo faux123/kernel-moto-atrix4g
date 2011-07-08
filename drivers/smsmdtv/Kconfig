@@ -1,0 +1,22 @@
+#
+# Siano Mobile Silicon Digital TV device configuration
+#
+
+menu "Sms2186 Driver"
+
+comment "SMSx186 Drivers"
+
+config SIANO_MDTV
+	tristate "Siano SMSx186 based Mobile TV receiver"
+	depends on TEGRA_ODM_AROWANA
+	default y
+	---help---
+	  Choose Y or M here if you have MDTV receiver with a Siano chipset.
+
+	  To compile this driver as a module, choose M here
+	  (The module will be called smsmdtv).
+
+	  Further documentation on this driver can be found on the WWW
+	  at http://www.siano-ms.com/
+
+endmenu

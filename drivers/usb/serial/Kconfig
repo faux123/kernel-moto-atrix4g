@@ -466,6 +466,14 @@ config USB_MDM6600_CDMA_MODEM
 	  To compile this driver as a module, choose M here: the
 	  module will be called moto_cdma_modem.  If unsure, choose N.
 
+config USB_PNX6718_MODEM
+       bool "USB Motorola Arowana TD Phone modem driver"
+       depends on USB_SERIAL=y
+       default n
+       ---help---
+         Say Y here if you want to enable the AP/BP USB IPC link
+         driver for TD Phone with PNX6718 modem.
+
 config USB_SERIAL_MOTO_FLASH_MODEM
 	tristate "USB Motorola modem flash driver"
 	---help---

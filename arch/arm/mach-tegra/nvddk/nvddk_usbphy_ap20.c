@@ -48,6 +48,13 @@
 #include "nvodm_query.h"
 #include "ap20/arahb_arbc.h"
 #include "ap20/arclk_rst.h"
+#include "ap20/arfuse.h"
+
+#include "mach/fuse.h"
+#include "mach/iomap.h"
+#include <linux/io.h>
+#include <linux/kernel.h>
+
 
 /* Defines for USB register read and writes */
 #define USB_REG_RD(reg)\
@@ -176,6 +183,13 @@
 #define USB_MISC_REGW(pUsbPhy, offset, value) \
     NV_WRITE32(pUsbPhy->MiscVirAdr + offset/4, value)
 
+#define FUSE_VISIBILITY_REG_OFFSET             0x48
+#define FUSE_VISIBILITY_BIT_POS                  28
+#define FUSE_SETUP_SEL_BIT_POS                    3
+#define USB_UTMIP_XCVR_SETUP_MASK               0xF
+#define USB_UTMIP_XCVR_SETUP_MAX_VAL            0xF
+#define USB_UTMIP_XCVR_SETUP_DEFAULT_VALUE      0x9
+
 /**
  * Structure defining the fields for USB UTMI clocks delay Parameters.
  */
@@ -274,7 +288,7 @@ static const NvU8 s_UtmipIdleWaitDelay    = 17;
 //UTMIP Elastic limit
 static const NvU8 s_UtmipElasticLimit     = 16;
 //UTMIP High Speed Sync Start Delay
-static const NvU8 s_UtmipHsSyncStartDelay = 0;
+static const NvU8 s_UtmipHsSyncStartDelay = 9;
 
 static void
 Ap20UsbPhyConfigUsbClockOverOn(
@@ -318,8 +332,8 @@ Ap20UsbPhyWaitForInValidPhyClock(
     do {
         if (!USB_IF_REG_READ_VAL(SUSP_CTRL, USB_PHY_CLK_VALID))
             return NvSuccess;
-        NvOsWaitUS(1);
-        TimeOut--;
+        NvOsWaitUS(10);
+        TimeOut -= 10;
     } while (TimeOut);
 
     NvOsDebugPrintf("Phy Clock is not stopped and timed out\n");
@@ -354,8 +368,8 @@ Ap20UsbPhyUlpiViewPortProgramData(
             NvOsDebugPrintf(" !!!Error in accessing ULPI !!! \n");
             return;
         }
-        NvOsWaitUS(1);
-        TimeOut--;
+        NvOsWaitUS(10);
+        TimeOut -= 10;
     } while (USB_DRF_VAL(ULPI_VIEWPORT, ULPI_RUN, RegVal));
 }
 
@@ -368,7 +382,7 @@ Ap20UsbPhySuspendPort(
 
     // Set the SUSP bit (7:7) in the PORTSC1 reg to suspend the port.
     //This bit is RW in host mode only.
-    if (pUsbPhy->pProperty->UsbMode != NvOdmUsbModeType_Host)
+    if (!pUsbPhy->IsHostMode)
     {
         return NvError_NotSupported;
     }
@@ -396,8 +410,8 @@ Ap20UsbPhySuspendPort(
             return NvSuccess;
         }
 
-        NvOsWaitUS(1);
-        TimeOut--;
+        NvOsWaitUS(10);
+        TimeOut -= 10;
     } while (TimeOut);
 
     return NvError_Timeout;
@@ -445,6 +459,8 @@ Ap20UsbPhyUtmiConfigure(
         USB1_IF_REG_WR(USB1_LEGACY_CTRL, RegVal);
     }
 
+    USB_UTMIP_REG_UPDATE_NUM(TX_CFG0, UTMIP_FS_PREAMBLE_J, 0x1);
+
     // Configure the UTMIP_IDLE_WAIT and UTMIP_ELASTIC_LIMIT
     // Setting these fields, together with default values of the other
     // fields, results in programming the registers below as follows:
@@ -488,12 +504,38 @@ Ap20UsbPhyUtmiConfigure(
     return NvSuccess;
 }
 
+NvU32 Ap20UsbPhySetXcvrSetupValue(NvU32 CalibOffset)
+{
+    // Extract fuse FUSE_USB_CALIB_0 value
+    NvU32 old_value, new_value, size;
+
+    old_value = tegra_usb_calib_cache_get(&size);
+
+    // Updating the old value based upon calib offset value
+    if (CalibOffset <= 2 && size)
+    {
+        new_value = (old_value & USB_UTMIP_XCVR_SETUP_MASK) + CalibOffset;
+        if (new_value > USB_UTMIP_XCVR_SETUP_MAX_VAL)
+        {
+            new_value = USB_UTMIP_XCVR_SETUP_MAX_VAL;
+        }
+    }
+    else
+    {
+        new_value =  USB_UTMIP_XCVR_SETUP_DEFAULT_VALUE;
+        NvOsDebugPrintf("Setting USB calib offset to default value %d\n",new_value);
+    }
+    return new_value;
+}
+
 static void
 Ap20UsbPhyUtmiPowerControl(
     NvDdkUsbPhy *pUsbPhy,
     NvBool Enable)
 {
     NvU32 RegVal = 0;
+    void __iomem *usb = IO_ADDRESS(TEGRA_USB_BASE);
+    u32 fuse_setup_sel = readl(usb + USB1_UTMIP_SPARE_CFG0_0);
 
     /* UTMIP_XCVR_SETUP setting of 0x9, in conjunction with
        UTMIP_XCVR_TERM_RANGE_ADJ of 0x6, gives the maximum guard band around
@@ -535,20 +577,22 @@ Ap20UsbPhyUtmiPowerControl(
                     XCVR_CFG0, UTMIP_FORCE_PD_POWERDOWN, 0, RegVal);
         RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
                     XCVR_CFG0, UTMIP_XCVR_SETUP, XcvrSetupValue, RegVal);
-        if (pUsbPhy->pProperty->UsbMode == NvOdmUsbModeType_Host)
-        {
-            // To slow rise/ fall times in low-speed eye diagrams in host mode
-            RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
-                        XCVR_CFG0, UTMIP_XCVR_LSFSLEW, 2, RegVal);
-            RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
-                        XCVR_CFG0, UTMIP_XCVR_LSRSLEW, 2, RegVal);
-        }
-        else
-        {
-            RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
-                        XCVR_CFG0, UTMIP_XCVR_HSSLEW_MSB, 0, RegVal);
-        }
 
+        /* Override fuse setting and use XVCR SETUP register instead.
+         * FUSE_SETUP:
+         *     UTMIP_SPARE_CFG0[3] = 0 --> use XVCR SETUP register
+         *     UTMIP_SPARE_CFG0[3] = 1 --> use USB_CALIB fuse value
+         */
+        fuse_setup_sel &= ~(1 << FUSE_SETUP_SEL_BIT_POS);
+        writel(fuse_setup_sel, (usb + USB1_UTMIP_SPARE_CFG0_0));
+
+        // To slow rise/ fall times in low-speed eye diagrams
+        RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
+                    XCVR_CFG0, UTMIP_XCVR_LSFSLEW, 2, RegVal);
+        RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
+                    XCVR_CFG0, UTMIP_XCVR_LSRSLEW, 2, RegVal);
+        RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
+                    XCVR_CFG0, UTMIP_XCVR_HSSLEW_MSB, 0, RegVal);
         USB_UTMIP_REG_WR(XCVR_CFG0, RegVal);
 
         RegVal = USB_UTMIP_REG_RD(XCVR_CFG1);
@@ -596,6 +640,9 @@ Ap20UsbPhyUtmiPowerControl(
     }
     else
     {
+        // Suspend port before suspending the phy
+        Ap20UsbPhySuspendPort(pUsbPhy);
+
         // Put the Phy in the suspend mode
         if (pUsbPhy->Instance == 0)
         {
@@ -607,8 +654,6 @@ Ap20UsbPhyUtmiPowerControl(
         // Put the Phy in the suspend mode
         if (pUsbPhy->Instance == 2)
         {
-            // Suspend port before setting PHCD bit
-            Ap20UsbPhySuspendPort(pUsbPhy);
             RegVal = USB_REG_RD(PORTSC1);
             RegVal = USB_FLD_SET_DRF_DEF(PORTSC1, PHCD, ENABLE, RegVal); 
             USB_REG_WR(PORTSC1, RegVal);
@@ -852,8 +897,8 @@ Ap20UsbPhyUlpiLinkModeConfigure(
                 NvOsDebugPrintf("Error accessing ULPI view port\n");
                 break;
             }
-            NvOsWaitUS(1);
-            TimeOut--;
+            NvOsWaitUS(10);
+            TimeOut -= 10;
         } while (USB_DRF_VAL(ULPI_VIEWPORT, ULPI_WAKEUP, RegVal));
 
         // fix VbusValid for Harmony due to floating VBUS
@@ -1221,8 +1266,34 @@ Ap20UsbPhyIoctlDedicatedChargerStatus(
     return NvSuccess;
 }
 
+static NvError
+Ap20UsbPhyIoctlPreresume(
+    NvDdkUsbPhy *pUsbPhy)
+{
+    if (pUsbPhy->Instance != 1 && pUsbPhy->pProperty->UsbMode == NvOdmUsbModeType_Host)
+    {
+        // Disable disconnection detection during port resume
+        USB_UTMIP_REG_UPDATE_NUM(TX_CFG0, UTMIP_HS_DISCON_DISABLE, 1);
+    }
 
-static NvError 
+    return NvSuccess;
+}
+
+static NvError
+Ap20UsbPhyIoctlPostresume(
+    NvDdkUsbPhy *pUsbPhy)
+{
+    if (pUsbPhy->Instance != 1 && pUsbPhy->pProperty->UsbMode == NvOdmUsbModeType_Host)
+    {
+        // Disable disconnection detection during port resume
+        USB_UTMIP_REG_UPDATE_NUM(TX_CFG0, UTMIP_HS_DISCON_DISABLE, 0);
+    }
+
+    return NvSuccess;
+}
+
+
+static NvError
 Ap20UsbPhyIoctl(
     NvDdkUsbPhy *pUsbPhy,
     NvDdkUsbPhyIoctlType IoctlType,
@@ -1251,6 +1322,12 @@ Ap20UsbPhyIoctl(
         case NvDdkUsbPhyIoctlType_DedicatedChargerDetection:
             ErrStatus = Ap20UsbPhyIoctlDedicatedChargerDetection(pUsbPhy, pInputArgs);
             break;
+        case NvDdkUsbPhyIoctlType_Preresume:
+            ErrStatus = Ap20UsbPhyIoctlPreresume(pUsbPhy);
+            break;
+        case NvDdkUsbPhyIoctlType_Postresume:
+            ErrStatus = Ap20UsbPhyIoctlPostresume(pUsbPhy);
+            break;
         default:
             return NvError_NotSupported;
     }
@@ -1272,8 +1349,8 @@ Ap20UsbPhyWaitForStableClock(
         {
             return NvError_Timeout;
         }
-        NvOsWaitUS(1);
-        TimeOut--;
+        NvOsWaitUS(10);
+        TimeOut -= 10;
     } while (PhyClkValid != USB3_IF_USB_SUSP_CTRL_0_USB_PHY_CLK_VALID_SET);
 
     return NvSuccess;
@@ -1474,16 +1551,40 @@ Ap20PhySaveContext(
     pUsbPhy->Context.IsValid = NV_TRUE;
 }
 
+#define   UTMIP_DPDM_OBSERVE_SEL_FS_J   0xf
+#define   UTMIP_DPDM_OBSERVE_SEL_FS_K   0xe
+#define   UTMIP_DPDM_OBSERVE_SEL_FS_SE1 0xd
+#define   UTMIP_DPDM_OBSERVE_SEL_FS_SE0 0xc
+
 static void
 Ap20PhyRestoreContext(
     NvDdkUsbPhy *pUsbPhy)
 {
     NvU32 RegVal = 0;
     NvU32 TimeOut = USB_PHY_HW_TIMEOUT_US;
+    NvU32 lp0_resume = 0;
     /* If any saved context is present, restore it */
     // In case of no valid context just return
     if (!pUsbPhy->Context.IsValid)
         return;
+
+    // Do this for both UTMIP phy's i.e for instance = 0(USB1_UTMIP)
+    // and instance = 2(USB3_UTMIP)
+    if (pUsbPhy->Instance != 1)
+    {
+        if (pUsbPhy->Context.UsbPortSpeed == NvDdkUsbPhyPortSpeedType_Low)
+            USB_UTMIP_REG_UPDATE_NUM(MISC_CFG0, UTMIP_DPDM_OBSERVE_SEL, UTMIP_DPDM_OBSERVE_SEL_FS_K);
+        else
+            USB_UTMIP_REG_UPDATE_NUM(MISC_CFG0, UTMIP_DPDM_OBSERVE_SEL, UTMIP_DPDM_OBSERVE_SEL_FS_J);
+        NvOsWaitUS(1);
+        USB_UTMIP_REG_UPDATE_NUM(MISC_CFG0, UTMIP_DPDM_OBSERVE, 1);
+        NvOsWaitUS(10);
+    }
+
+    /* Check if the phy resume from LP0. When the phy resume from LP0
+     * USB register will be reset. */
+    if (!USB_REG_RD(ASYNCLISTADDR))
+        lp0_resume = 1;
 
     // Restore register context
     Ap20PhyRestoreRegs(pUsbPhy);
@@ -1492,26 +1593,29 @@ Ap20PhyRestoreContext(
     USB_REG_UPDATE_DEF(PORTSC1, PP, POWERED);
     NvOsWaitUS(10);
 
-    // Program the field PTC in PORTSC based on the saved speed mode
-    RegVal = USB_REG_RD(PORTSC1);
-    if (pUsbPhy->Context.UsbPortSpeed == NvDdkUsbPhyPortSpeedType_High)
+    if (lp0_resume)
     {
-        RegVal = USB_FLD_SET_DRF_NUM(PORTSC1, PTC, 0x05, RegVal);
+        // Program the field PTC in PORTSC based on the saved speed mode
+        RegVal = USB_REG_RD(PORTSC1);
+        if (pUsbPhy->Context.UsbPortSpeed == NvDdkUsbPhyPortSpeedType_High)
+        {
+            RegVal = USB_FLD_SET_DRF_NUM(PORTSC1, PTC, 0x05, RegVal);
+        }
+        else if (pUsbPhy->Context.UsbPortSpeed == NvDdkUsbPhyPortSpeedType_Full)
+        {
+            RegVal = USB_FLD_SET_DRF_NUM(PORTSC1, PTC, 0x06, RegVal);
+        }
+        else if (pUsbPhy->Context.UsbPortSpeed == NvDdkUsbPhyPortSpeedType_Low)
+        {
+            RegVal = USB_FLD_SET_DRF_NUM(PORTSC1, PTC, 0x07, RegVal);
+        }
+        else
+        {
+            NV_ASSERT(!"\n speed is not configureed properly");
+        }
+        USB_REG_WR(PORTSC1, RegVal);
+        NvOsWaitUS(10);
     }
-    else if (pUsbPhy->Context.UsbPortSpeed == NvDdkUsbPhyPortSpeedType_Full)
-    {
-        RegVal = USB_FLD_SET_DRF_NUM(PORTSC1, PTC, 0x06, RegVal);
-    }
-    else if (pUsbPhy->Context.UsbPortSpeed == NvDdkUsbPhyPortSpeedType_Low)
-    {
-        RegVal = USB_FLD_SET_DRF_NUM(PORTSC1, PTC, 0x07, RegVal);
-    }
-    else
-    {
-        NV_ASSERT(!"\n speed is not configureed properly");
-    }
-    USB_REG_WR(PORTSC1, RegVal);
-    NvOsWaitUS(10);
 
     // Disable test mode by setting PTC field to NORMAL_OP
     USB_REG_UPDATE_DEF(PORTSC1, PTC, NORMAL_OP);
@@ -1521,8 +1625,8 @@ Ap20PhyRestoreContext(
         RegVal = USB_REG_RD(PORTSC1);
         if (USB_DRF_VAL(PORTSC1, CCS, RegVal))
             break;
-        NvOsWaitUS(1);
-        TimeOut--;
+        NvOsWaitUS(10);
+        TimeOut -= 10;
     } while (TimeOut);
     // Poll until PE is enabled
     TimeOut = USB_PHY_HW_TIMEOUT_US;
@@ -1531,8 +1635,8 @@ Ap20PhyRestoreContext(
         RegVal = USB_REG_RD(PORTSC1);
         if (USB_DRF_VAL(PORTSC1, PE, RegVal))
             break;
-        NvOsWaitUS(1);
-        TimeOut--;
+        NvOsWaitUS(10);
+        TimeOut -= 10;
     } while (TimeOut);
     // Clear the PCI status, to avoid an interrupt taken upon resume
     USB_REG_UPDATE_DEF(USBSTS, PCI, PORT_CHANGE);
@@ -1542,8 +1646,8 @@ Ap20PhyRestoreContext(
         RegVal = USB_REG_RD(USBSTS);
         if (!(USB_DRF_VAL(USBSTS, PCI, RegVal)))
             break;
-        NvOsWaitUS(1);
-        TimeOut--;
+        NvOsWaitUS(10);
+        TimeOut -= 10;
     } while (TimeOut);
 
     // Put controller in suspend mode by writing 1 to SUSP bit of PORTSC
@@ -1557,6 +1661,14 @@ Ap20PhyRestoreContext(
     // Restore interrupt register
     USB_REG_WR(USBINTR, pUsbPhy->Context.UsbRegs[1]);
     NvOsWaitUS(10);
+
+    // Do this for both UTMIP phy's i.e for instance = 0(USB1_UTMIP)
+    // and instance = 2(USB3_UTMIP)
+    if (pUsbPhy->Instance != 1)
+    {
+        USB_UTMIP_REG_UPDATE_NUM(MISC_CFG0, UTMIP_DPDM_OBSERVE, 0);
+        NvOsWaitUS(10);
+    }
 
     // PrintRegs(pUsbPhy);
 }

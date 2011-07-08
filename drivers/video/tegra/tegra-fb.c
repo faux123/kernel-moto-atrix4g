@@ -139,12 +139,13 @@ int tegra_fb_open(struct fb_info *info, int user)
 {
 #ifdef CONFIG_MACH_MOT
     extern int MotorolaBootFBArgGet(unsigned int *arg);
-    unsigned int allow_open;
+    unsigned int allow_open = 0;
 
     MotorolaBootFBArgGet(&allow_open);
 
     allow_open |= PU_REASON_CHARGER == bi_powerup_reason(); // allow charge-only mode to open
-    if(!allow_open) return -1;
+    if (!allow_open)
+		return -1;
 #endif
 
 	return 0;

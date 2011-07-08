@@ -106,7 +106,7 @@ extern int bus_unregister_notifier(struct bus_type *bus,
 
 /* All 4 notifers below get called with the target struct device *
  * as an argument. Note that those functions are likely to be called
- * with the device semaphore held in the core, so be careful.
+ * with the device lock held in the core, so be careful.
  */
 #define BUS_NOTIFY_ADD_DEVICE		0x00000001 /* device added */
 #define BUS_NOTIFY_DEL_DEVICE		0x00000002 /* device removed */
@@ -470,6 +470,38 @@ static inline void dev_set_uevent_suppress(struct device *dev, int val)
 static inline int device_is_registered(struct device *dev)
 {
 	return dev->kobj.state_in_sysfs;
+}
+
+static inline void device_enable_async_suspend(struct device *dev)
+{
+	if (dev->power.status == DPM_ON)
+		dev->power.async_suspend = true;
+}
+
+static inline void device_disable_async_suspend(struct device *dev)
+{
+	if (dev->power.status == DPM_ON)
+		dev->power.async_suspend = false;
+}
+
+static inline bool device_async_suspend_enabled(struct device *dev)
+{
+	return !!dev->power.async_suspend;
+}
+
+static inline void device_lock(struct device *dev)
+{
+	down(&dev->sem);
+}
+
+static inline int device_trylock(struct device *dev)
+{
+	return down_trylock(&dev->sem);
+}
+
+static inline void device_unlock(struct device *dev)
+{
+	up(&dev->sem);
 }
 
 void driver_init(void);

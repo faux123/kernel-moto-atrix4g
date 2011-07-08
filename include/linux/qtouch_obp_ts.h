@@ -373,6 +373,8 @@ struct qtm_touch_multi_cfg
 	uint8_t			x_edge_dist;
 	uint8_t			y_edge_ctrl;
 	uint8_t			y_edge_dist;
+	uint8_t                 jumplimit;
+	uint8_t                 sec_screen;
 } __attribute__ ((packed));
 
 /* TOUCH_KEYARRAY_T15 */
@@ -698,10 +700,12 @@ struct qtouch_ts_platform_data
 
 /* IOCTL related structures */
 
+#define QTOUCH_IOCTL_CMD		0x51
 enum 
 {
 /* Implemented */
 	QTOUCH_IOCTL_SET_DEBUG		= 0,
+	QTOUCH_IOCTL_GET_DEBUG,
 	QTOUCH_IOCTL_GET_VERSION,
 	QTOUCH_IOCTL_MODE,
 	QTOUCH_IOCTL_CNTRL,
@@ -936,6 +940,7 @@ typedef union
 
 typedef struct qtim_ioctl_data
 {
+	int		cmd;
 	int		type;
 	QTM_ALL_OBJECTS data;
 } IOCTL_DATA;

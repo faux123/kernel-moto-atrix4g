@@ -35,6 +35,7 @@
 #include <linux/mutex.h>
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
+#include <linux/wakelock.h>
 
 #include <asm/io.h>
 #include <linux/scatterlist.h>
@@ -51,6 +52,9 @@ static int nousb;	/* Disable USB when built into kernel image */
 
 /* Workqueue for autosuspend and for remote wakeup of root hubs */
 struct workqueue_struct *ksuspend_usb_wq;
+
+/* Prevent autosuspend in Linux suspend path */
+struct wake_lock usbd_suspend_wl;
 
 #ifdef	CONFIG_USB_SUSPEND
 static int usb_autosuspend_delay = 2;		/* Default delay value,
@@ -236,11 +240,13 @@ static int ksuspend_usb_init(void)
 	ksuspend_usb_wq = create_freezeable_workqueue("ksuspend_usbd");
 	if (!ksuspend_usb_wq)
 		return -ENOMEM;
+	wake_lock_init(&usbd_suspend_wl, WAKE_LOCK_SUSPEND, "usbd_suspend");
 	return 0;
 }
 
 static void ksuspend_usb_cleanup(void)
 {
+	wake_lock_destroy(&usbd_suspend_wl);
 	destroy_workqueue(ksuspend_usb_wq);
 }
 

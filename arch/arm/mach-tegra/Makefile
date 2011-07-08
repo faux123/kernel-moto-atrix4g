@@ -20,8 +20,10 @@ obj-y					+= platsmp.o localtimer.o headsmp.o
 obj-$(CONFIG_ARCH_TEGRA_2x_SOC)		+= headsmp-t2.o
 endif
 obj-$(CONFIG_ARCH_TEGRA_2x_SOC)		+= tegra2_save.o
+obj-$(CONFIG_ARCH_TEGRA_2x_SOC)		+= fuse-cache.o
 obj-$(CONFIG_MACH_TEGRA_GENERIC)	+= board-generic.o
-obj-$(CONFIG_MACH_MOT)				+= board-mot.o board-mot-power.o board-mot-lights.o board-mot-touch.o board-mot-sensors.o board-mot-misc.o board-mot-modem.o board-mot-wlan.o
+obj-$(CONFIG_MACH_MOT)			+= board-mot.o board-mot-power.o board-mot-lights.o board-mot-touch.o board-mot-sensors.o board-mot-misc.o board-mot-modem.o board-mot-wlan.o board-mot-usb.o board-mot-camera.o
+obj-$(CONFIG_MOT_WIMAX)			+= board-mot-wimax.o
 obj-$(CONFIG_CPU_FREQ)			+= cpufreq.o
 obj-$(CONFIG_CPU_IDLE)			+= cpuidle.o
 obj-$(CONFIG_TEGRA_IOVMM)		+= iovmm.o
@@ -56,6 +58,5 @@ obj-$(CONFIG_TEGRA_FUSE)		+= sysfs-fuse.o
 obj-$(CONFIG_TEGRA_ODM_VIBRATE)		+= vibrate.o
 obj-$(CONFIG_TEGRA_AES_USER)		+= nvaes_user.o
 
-obj-m += aev.o
-obj-m += evfwd.o
+obj-$(CONFIG_INPUT_MOT_WEBTOP)          += aev.o evfwd.o
 

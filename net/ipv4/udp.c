@@ -104,6 +104,7 @@
 #include <net/route.h>
 #include <net/checksum.h>
 #include <net/xfrm.h>
+#include <linux/uid_stat.h>
 #include "udp_impl.h"
 
 struct udp_table udp_table;
@@ -769,8 +770,10 @@ out:
 	ip_rt_put(rt);
 	if (free)
 		kfree(ipc.opt);
-	if (!err)
+	if (!err) {
+		update_tcp_snd(current_uid(), len);
 		return len;
+	}
 	/*
 	 * ENOBUFS = no kernel mem, SOCK_NOSPACE = no sndbuf space.  Reporting
 	 * ENOBUFS might not be good (it's not tunable per se), but otherwise
@@ -1000,6 +1003,8 @@ try_again:
 
 out_free:
 	skb_free_datagram_locked(sk, skb);
+	if (err > 0)
+		update_tcp_rcv(current_uid(), err);
 out:
 	return err;
 

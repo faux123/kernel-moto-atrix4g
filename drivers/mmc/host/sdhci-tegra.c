@@ -90,8 +90,17 @@ void sdhci_tegra_wlan_detect(void)
 	} else	
 	       printk("%s WLAN host ptr NOT SAVED\n", __FUNCTION__);
 }
-
 EXPORT_SYMBOL(sdhci_tegra_wlan_detect);
+
+#ifdef CONFIG_MACH_MOT
+void tegra_sdhci_status_notify_cb(void *dev_id)
+{
+	struct sdhci_host *sdhost = dev_id;
+	struct tegra_sdhci *host = sdhci_priv(sdhost);
+	dev_info(&host->pdev->dev, "%s\n", __func__);
+	sdhci_card_detect(sdhost);
+}
+#endif
 
 static irqreturn_t card_detect_isr(int irq, void *dev_id)
 {
@@ -110,6 +119,11 @@ static irqreturn_t card_detect_isr(int irq, void *dev_id)
 static bool tegra_sdhci_card_detect(struct sdhci_host *sdhost)
 {
 	struct tegra_sdhci *host = sdhci_priv(sdhost);
+#ifdef CONFIG_TEGRA_ODM_AROWANA
+	if (host->gpio_cd != -1)
+		host->card_present =
+			(gpio_get_value(host->gpio_cd)==host->gpio_polarity_cd);
+#endif
 	smp_rmb();
 	return host->card_present;
 }
@@ -272,6 +286,7 @@ int __init tegra_sdhci_probe(struct platform_device *pdev)
 			host->gpio_cd = -1;
 			goto skip_gpio_cd;
 		}
+#ifndef CONFIG_TEGRA_ODM_AROWANA
 		ret = request_irq(host->irq_cd, card_detect_isr,
 			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 			mmc_hostname(sdhost->mmc), sdhost);
@@ -282,6 +297,7 @@ int __init tegra_sdhci_probe(struct platform_device *pdev)
 			host->irq_cd = -1;
 			goto skip_gpio_cd;
 		}
+#endif
 		host->card_present =
 			(gpio_get_value(host->gpio_cd)==host->gpio_polarity_cd);
 	}
@@ -337,6 +353,15 @@ skip_gpio_wp:
 	if (!plat->is_removable)
 		host->card_present = true;
 
+#ifdef CONFIG_MACH_MOT
+	if (plat->ocr_mask)
+		sdhost->mmc->ocr_avail = plat->ocr_mask;
+
+	if (plat->register_status_notify)
+		plat->register_status_notify(tegra_sdhci_status_notify_cb,
+									sdhost);
+#endif
+
 	sdhost->data_width = plat->bus_width;
 	sdhost->dma_mask = DMA_BIT_MASK(32);
 	if (plat->regulator_str != NULL) {
@@ -347,6 +372,8 @@ skip_gpio_wp:
 			sdhost->regulator = NULL;
 		}
 	}
+
+	sdhost->max_power_class = plat->max_power_class;
 
 	ret = sdhci_add_host(sdhost);
 	if (ret)

@@ -38,12 +38,18 @@ struct tegra_sdhci_platform_data {
 	int is_removable;	/* card can be removed */
 	unsigned int debounce;	/* debounce time in milliseconds */
 	unsigned long max_clk;	/* maximum card clock */
+	unsigned int max_power_class;
 	int is_always_on;	/* card is not powered down in suspend */
 #ifdef CONFIG_EMBEDDED_MMC_START_OFFSET
 	unsigned long offset;	/* offset in blocks to MBR */
 #endif
 	char *regulator_str;	/* Voltage regulator used to control the
 							   the card. */
+#ifdef CONFIG_MACH_MOT
+	unsigned int ocr_mask;	/* available voltages */
+	int (*register_status_notify)\
+		(void (*callback)(void *dev_id), void *dev_id);
+#endif
 };
 
 

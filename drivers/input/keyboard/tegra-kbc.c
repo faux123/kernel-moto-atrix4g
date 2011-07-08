@@ -47,6 +47,17 @@
 
 #define res_size(res)	((res)->end - (res)->start + 1)
 
+#ifdef CONFIG_MOT_FEAT_TD_KEY_PROVE_SYSTEM_ALIVE
+
+#define VIBRATE_COUNT_10_S	10 	//10s
+#define VIBRATE_MAX_TIMEOUT	15000	//15s
+
+extern void vibrator_haptic_fire(int value);
+static unsigned long vibrate_count=0;
+static unsigned int key_prove_system_alive_vibrating=0;
+
+#endif
+
 struct tegra_kbc {
 	void __iomem *mmio;
 	struct input_dev *idev;
@@ -75,6 +86,7 @@ static int tegra_kbc_keycode(const struct tegra_kbc *kbc, int r, int c) {
 static int tegra_kbc_open(struct input_dev *dev);
 static void tegra_kbc_close(struct input_dev *dev);
 static void tegra_kbc_setup_wakekeys(struct tegra_kbc *kbc, bool filter);
+extern bool core_lock_on;
 
 static int tegra_kbc_suspend(struct platform_device *pdev, pm_message_t state)
 {
@@ -82,6 +94,15 @@ static int tegra_kbc_suspend(struct platform_device *pdev, pm_message_t state)
 
 	unsigned long flags;
 	unsigned long val;
+	
+	if ( core_lock_on == 1 ) //LP1
+	{
+	  device_init_wakeup( &pdev->dev , 1 );
+	}
+	else
+	{
+	  device_init_wakeup( &pdev->dev , 0 );
+	}
 
 	if (device_may_wakeup(&pdev->dev) && kbc->pdata->wake_cnt) {
 	 spin_lock_irqsave(&kbc->lock, flags);
@@ -119,6 +140,7 @@ static int tegra_kbc_resume(struct platform_device *pdev)
      		 printk("tegra_kbc : reopen kbc in resume");
        		tegra_kbc_open(kbc->idev);
         }
+	device_init_wakeup( &pdev->dev , 0 );
 	return 0;
 }
 #endif
@@ -196,6 +218,35 @@ static void tegra_kbc_key_repeat(struct work_struct *work)
 	for (i=0; i<ARRAY_SIZE(fifo); i++) fifo[i] = -1;
 
 	while (1) {
+
+#ifdef CONFIG_MOT_FEAT_TD_KEY_PROVE_SYSTEM_ALIVE
+		int j;
+		bool flag_vup=0, flag_vdown=0;
+
+		for (j=0; j<ARRAY_SIZE(fifo); j++) if (KEY_VOLUMEUP == fifo[j]) {flag_vup=1;break;}
+		for (j=0; j<ARRAY_SIZE(fifo); j++) if (KEY_VOLUMEDOWN == fifo[j]) {flag_vdown=1;break;}
+
+		if( flag_vup && flag_vdown ){
+
+			struct timespec ts;
+			ktime_get_ts(&ts);
+
+			if(vibrate_count == 0){
+				vibrate_count = ts.tv_sec;
+				key_prove_system_alive_vibrating = 1;
+				vibrator_haptic_fire(VIBRATE_MAX_TIMEOUT);
+			}
+			if((ts.tv_sec-vibrate_count) >= VIBRATE_COUNT_10_S) {
+				printk(KERN_EMERG "AP Logger forcing debug panic! VOLUMEUP + VOLUMEDOWN + 10s = force_panic.\n");
+				do { *(int *)0 = 0; } while (1);
+			}
+		}else if(key_prove_system_alive_vibrating == 1){
+			vibrator_haptic_fire(0);
+			key_prove_system_alive_vibrating = 0;
+			vibrate_count = 0;
+		}
+#endif
+
 		val = (readl(kbc->mmio + KBC_INT_0) >> 4) & 0xf;
 		if (!val) {
 			/* release any pressed keys and exit the loop */

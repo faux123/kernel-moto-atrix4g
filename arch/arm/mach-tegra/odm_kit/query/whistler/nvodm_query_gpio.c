@@ -24,6 +24,8 @@
 #include "tegra_devkit_custopt.h"
 #include "nvodm_keylist_reserved.h"
 #include "nvrm_drf.h"
+#include <linux/interrupt.h>
+#include "../../../board.h"
 
 #define NVODM_ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define NVODM_PORT(x) ((x) - 'a')
@@ -87,6 +89,10 @@ static const NvOdmGpioPinInfo s_Sdio2[] = {
     {NVODM_PORT('i'), 5, NvOdmGpioPinActiveState_Low},    // Card Detect for SDIO instance 2
     /* High for WP and low for read/write */
     {NVODM_PORT('v'), 5, NvOdmGpioPinActiveState_High},    // Write Protect for SDIO instance 2 
+};
+
+static const NvOdmGpioPinInfo s_Sdio2_a03p[] = {
+    {NVODM_PORT('i'), 5, NvOdmGpioPinActiveState_Low},    // Card Detect for SDIO instance 2
 };
 
 static const NvOdmGpioPinInfo s_NandFlash[] = {
@@ -153,8 +159,16 @@ const NvOdmGpioPinInfo *NvOdmQueryGpioPinMap(NvOdmGpioPinGroup Group,
         case NvOdmGpioPinGroup_Sdio:
             if (Instance == 2)
             {
-                *pCount = NVODM_ARRAY_SIZE(s_Sdio2);
-                return s_Sdio2;
+                if (tegra_is_ap20_a03p())
+                {
+                    *pCount = NVODM_ARRAY_SIZE(s_Sdio2_a03p);
+                    return s_Sdio2_a03p;
+                }
+                else
+                {
+                    *pCount = NVODM_ARRAY_SIZE(s_Sdio2);
+                    return s_Sdio2;
+                }
             }
             else
             {

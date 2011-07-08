@@ -46,7 +46,7 @@
 #define NUM_SECURITY_EPROM            8
 
 #define UID_SIZE                      8
-#define EEPROM_SIZE                   128
+#define EEPROM_SIZE                   192
 #define EEPROM_PAGE_SIZE              0x20
 
 
@@ -201,13 +201,16 @@ static enum w1_ds2502_state w1_ds2502_rx_data(struct w1_slave *sl,
 		for (count = 0; count < (EEPROM_PAGE_SIZE+1); count++)
 			rx_data[rx_data_index + count] = w1_read_8(sl->master);
 
-		computed_crc = w1_calc_crc8(&rx_data[rx_data_index],
-					    EEPROM_PAGE_SIZE);
-		if (computed_crc == rx_data[rx_data_index + EEPROM_PAGE_SIZE])
-			crc_success = 1;
-		else {
-			crc_success = 0;
-			break;
+		if (rx_data_index < (EEPROM_PAGE_SIZE * 4)) {
+			computed_crc = w1_calc_crc8(&rx_data[rx_data_index],
+						    EEPROM_PAGE_SIZE);
+			if (computed_crc ==
+			    rx_data[rx_data_index + EEPROM_PAGE_SIZE])
+				crc_success = 1;
+			else {
+				crc_success = 0;
+				break;
+			}
 		}
 		rx_data_index += EEPROM_PAGE_SIZE;
 	}

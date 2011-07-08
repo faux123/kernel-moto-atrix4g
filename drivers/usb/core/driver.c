@@ -26,9 +26,17 @@
 #include <linux/usb.h>
 #include <linux/usb/quirks.h>
 #include <linux/workqueue.h>
+#include <linux/wakelock.h>
 #include "hcd.h"
 #include "usb.h"
 
+#ifndef CONFIG_USB_PNX6718_MODEM
+extern struct wake_lock usbd_suspend_wl;
+
+static int autosuspend_during_lpm_entry = 1;
+module_param_named(lpm_autosuspend, autosuspend_during_lpm_entry, int, 0644);
+MODULE_PARM_DESC(lpm_autosuspend, "prevent autosuspend in Linux suspend path");
+#endif
 
 #ifdef CONFIG_HOTPLUG
 
@@ -404,10 +412,10 @@ void usb_driver_release_interface(struct usb_driver *driver,
 	if (device_is_registered(dev)) {
 		device_release_driver(dev);
 	} else {
-		down(&dev->sem);
+		device_lock(dev);
 		usb_unbind_interface(dev);
 		dev->driver = NULL;
-		up(&dev->sem);
+		device_unlock(dev);
 	}
 }
 EXPORT_SYMBOL_GPL(usb_driver_release_interface);
@@ -1114,6 +1122,11 @@ static int autosuspend_check(struct usb_device *udev, int reschedule)
 		suspend_time = j + HZ;
 	if (reschedule) {
 		if (!timer_pending(&udev->autosuspend.timer)) {
+#ifndef CONFIG_USB_PNX6718_MODEM
+			if (!autosuspend_during_lpm_entry)
+				wake_lock_timeout(&usbd_suspend_wl,
+				round_jiffies_up_relative(suspend_time - j));
+#endif
 			queue_delayed_work(ksuspend_usb_wq, &udev->autosuspend,
 				round_jiffies_up_relative(suspend_time - j));
 		}

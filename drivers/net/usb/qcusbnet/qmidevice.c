@@ -55,6 +55,7 @@ struct qmihandle {
 };
 
 extern int debug;
+extern int debug_level;
 static int qcusbnet2k_fwdelay = 0;
 
 static bool device_valid(struct qcusbnet *dev);
@@ -76,10 +77,12 @@ static ssize_t devqmi_read(struct file *file, char __user *buf, size_t size,
 static ssize_t devqmi_write(struct file *file, const char __user *buf,
                             size_t size, loff_t *pos);
 
+#ifdef QMUX_IN_DRIVER
 static bool qmi_ready(struct qcusbnet *dev, u16 timeout);
 static void wds_callback(struct qcusbnet *dev, u16 cid, void *data);
 static int setup_wds_callback(struct qcusbnet *dev);
 static int qmidms_getmeid(struct qcusbnet *dev);
+#endif
 
 #define IOCTL_QMI_GET_SERVICE_FILE 0x8BE0 + 1
 #define IOCTL_QMI_GET_DEVICE_VIDPID 0x8BE0 + 2
@@ -123,7 +126,7 @@ void printhex(const void *data, size_t size)
 
 	buf = kmalloc(size * 3 + 1, GFP_ATOMIC);
 	if (!buf) {
-		DBG("Unable to allocate buffer\n");
+		VDBG("Unable to allocate buffer\n");
 		return;
 	}
 
@@ -133,7 +136,7 @@ void printhex(const void *data, size_t size)
 		snprintf(buf + (pos * 3), 4, "%02X ", cdata[pos]);
 	}
 
-	DBG( "   : %s\n", buf);
+	VDBG("   : %s\n", buf);
 
 	kfree(buf);
 }
@@ -159,7 +162,6 @@ bool qc_isdown(struct qcusbnet *dev, u8 reason)
 static void read_callback(struct urb *urb)
 {
 	struct list_head *node;
-	int result;
 	u16 cid;
 	struct client *client;
 	void *data;
@@ -168,6 +170,9 @@ static void read_callback(struct urb *urb)
 	struct qcusbnet *dev;
 	unsigned long flags;
 	u16 tid;
+#ifdef QMUX_IN_DRIVER
+	int result;
+#endif
 
 	if (!urb) {
 		DBG("bad read URB\n");
@@ -185,13 +190,14 @@ static void read_callback(struct urb *urb)
 		return;
 	}
 
-	DBG("Read %d bytes\n", urb->actual_length);
+	VDBG("Read %d bytes\n", urb->actual_length);
 
 	data = urb->transfer_buffer;
 	size = urb->actual_length;
 
 	printhex(data, size);
 
+#ifdef QMUX_IN_DRIVER
 	result = qmux_parse(&cid, data, size);
 	if (result < 0) {
 		DBG("Read error parsing QMUX %d\n", result);
@@ -207,12 +213,21 @@ static void read_callback(struct urb *urb)
 		tid = *(u8*)(data + result + 1);
 	else
 		tid = *(u16*)(data + result + 1);
+#else
+	tid = 0;
+	cid = dev->qmi.qmiidx;
+#endif
 	spin_lock_irqsave(&dev->qmi.clients_lock, flags);
 
 	list_for_each(node, &dev->qmi.clients) {
 		client = list_entry(node, struct client, node);
 		if (client->cid == cid || (client->cid | 0xff00) == cid) {
 			copy = kmalloc(size, GFP_ATOMIC);
+			if (!copy) {
+				DBG("%s malloc failed\n", __func__);
+				spin_unlock_irqrestore(&dev->qmi.clients_lock, flags);
+				return;
+			}
 			memcpy(copy, data, size);
 			if (!client_addread(dev, client->cid, tid, copy, size)) {
 				DBG("Error allocating pReadMemListEntry "
@@ -222,7 +237,7 @@ static void read_callback(struct urb *urb)
 				return;
 			}
 
-			DBG("Creating new readListEntry for client 0x%04X, TID %x\n",
+			VDBG("Creating new readListEntry for client 0x%04X, TID %x\n",
 			    cid, tid);
 
 			client_notify(dev, client->cid, tid);
@@ -247,7 +262,7 @@ static void int_callback(struct urb *urb)
 	}
 
 	if (urb->status) {
-		DBG("Int status = %d\n", urb->status);
+		VDBG("Int status = %d\n", urb->status);
 		if (urb->status != -EOVERFLOW)
 			return;
 	} else {
@@ -354,7 +369,7 @@ int qc_startread(struct qcusbnet *dev)
 	dev->qmi.readsetup->value = 0;
 	dev->qmi.readsetup->index = dev->iface->cur_altsetting->desc.bInterfaceNumber;
 	dev->qmi.readsetup->len = DEFAULT_READ_URB_LENGTH;
-	DBG("interface number is %d\n", dev->qmi.readsetup->index);
+	VDBG("interface number is %d\n", dev->qmi.readsetup->index);
 
 	interval = (dev->usbnet->udev->speed == USB_SPEED_HIGH) ? 7 : 3;
 	
@@ -368,7 +383,7 @@ int qc_startread(struct qcusbnet *dev)
 		
 		if (usb_endpoint_dir_in(&endpoint->desc)
 		  && usb_endpoint_xfer_int(&endpoint->desc)) {
-			DBG("Interrupt endpoint is %x\n", endpoint->desc.bEndpointAddress);
+			VDBG("Interrupt endpoint is %x\n", endpoint->desc.bEndpointAddress);
 			break;
 		}
 	}
@@ -384,12 +399,12 @@ int qc_startread(struct qcusbnet *dev)
 void qc_stopread(struct qcusbnet * dev)
 {
 	if (dev->qmi.readurb) {
-		DBG("Killing read URB\n");
+		VDBG("Killing read URB\n");
 		usb_kill_urb(dev->qmi.readurb);
 	}
 
 	if (dev->qmi.inturb) {
-		DBG("Killing int URB\n");
+		VDBG("Killing int URB\n");
 		usb_kill_urb(dev->qmi.inturb);
 	}
 
@@ -406,6 +421,7 @@ void qc_stopread(struct qcusbnet * dev)
 	dev->qmi.inturb = NULL;
 }
 
+#ifdef QMUX_IN_DRIVER
 static int read_async(struct qcusbnet *dev, u16 cid, u16 tid,
                       void (*hook)(struct qcusbnet*, u16, void *), void *data)
 {
@@ -444,10 +460,11 @@ static int read_async(struct qcusbnet *dev, u16 cid, u16 tid,
 	spin_unlock_irqrestore(&dev->qmi.clients_lock, flags);
 	return 0;
 }
+#endif
 
 static void upsem(struct qcusbnet *dev, u16 cid, void *data) 
 {
-	DBG("0x%04X\n", cid);
+	VDBG("0x%04X\n", cid);
 	up((struct semaphore *)data);
 }
 
@@ -523,7 +540,7 @@ static void write_callback(struct urb *urb)
 		return;
 	}
 
-	DBG("Write status/size %d/%d\n", urb->status, urb->actual_length);
+	VDBG("Write status/size %d/%d\n", urb->status, urb->actual_length);
 	up((struct semaphore *)urb->context);
 }
 
@@ -546,12 +563,13 @@ static int write_sync(struct qcusbnet *dev, char *buf, int size, u16 cid)
 		return -ENOMEM;
 	}
 
+#ifdef QMUX_IN_DRIVER
 	result = qmux_fill(cid, buf, size);
 	if (result < 0) {
 		usb_free_urb(urb);
 		return result;
 	}
-
+#endif
 	/* CDC Send Encapsulated Request packet */
 	setup.type = 0x21;
 	setup.code = 0;
@@ -565,7 +583,7 @@ static int write_sync(struct qcusbnet *dev, char *buf, int size, u16 cid)
 	                     (unsigned char *)&setup, (void*)buf, size,
 	                     NULL, dev);
 
-	DBG("Actual Write:\n");
+	VDBG("Actual Write:\n");
 	printhex(buf, size);
 
 	sema_init(&sem, 0);
@@ -643,19 +661,22 @@ static int client_alloc(struct qcusbnet *dev, u8 type)
 {
 	u16 cid;
 	struct client *client;
+	unsigned long flags;
+#ifdef QMUX_IN_DRIVER
 	int result;
 	void * wbuf;
 	size_t wbufsize;
 	void * rbuf;
 	u16 rbufsize;
-	unsigned long flags;
 	u8 tid;
+#endif
 
 	if (!device_valid(dev)) {
 		DBG("Invalid device!\n");
 		return -ENXIO;
 	}
 
+#ifdef QMUX_IN_DRIVER
 	if (type) {
 		tid = atomic_add_return(1, &dev->qmi.qmitid);
 		if (!tid)
@@ -684,6 +705,9 @@ static int client_alloc(struct qcusbnet *dev, u8 type)
 	} else {
 		cid = 0;
 	}
+#else
+	cid = type;
+#endif
 
 	spin_lock_irqsave(&dev->qmi.clients_lock, flags);
 	if (client_bycid(dev, cid)) {
@@ -711,25 +735,28 @@ static int client_alloc(struct qcusbnet *dev, u8 type)
 static void client_free(struct qcusbnet *dev, u16 cid)
 {
 	struct list_head *node, *tmp;
-	int result;
 	struct client *client;
 	struct urb * urb;
 	void * data;
 	u16 size;
+	unsigned long flags;
+#ifdef QMUX_IN_DRIVER
+	int result;
 	void * wbuf;
 	size_t wbufsize;
 	void * rbuf;
 	u16 rbufsize;
-	unsigned long flags;
 	u8 tid;
+#endif
 
 	if (!device_valid(dev)) {
 		DBG("invalid device\n");
 		return;
 	}
 
-	DBG("releasing 0x%04X\n", cid);
+	VDBG("releasing 0x%04X\n", cid);
 
+#ifdef QMUX_IN_DRIVER
 	if (cid != QMICTL)
 	{
 		tid = atomic_add_return(1, &dev->qmi.qmitid);
@@ -758,6 +785,7 @@ static void client_free(struct qcusbnet *dev, u16 cid)
 			}
 		}
 	}
+#endif
 
 	spin_lock_irqsave(&dev->qmi.clients_lock, flags);
 	list_for_each_safe(node, tmp, &dev->qmi.clients) {
@@ -801,7 +829,7 @@ struct client *client_bycid(struct qcusbnet *dev, u16 cid)
 			return client;
 	}
 
-	DBG("Could not find client mem 0x%04X\n", cid);
+	VDBG("Could not find client mem 0x%04X\n", cid);
 	return NULL;
 }
 
@@ -859,10 +887,10 @@ static bool client_delread(struct qcusbnet *dev, u16 cid, u16 tid, void **data,
 			return true;
 		}
 
-		DBG("skipping 0x%04X data TID = %x\n", cid, req->tid);
+		VDBG("skipping 0x%04X data TID = %x\n", cid, req->tid);
 	}
 
-	DBG("No read memory to pop, Client 0x%04X, TID = %x\n", cid, tid);
+	VDBG("No read memory to pop, Client 0x%04X, TID = %x\n", cid, tid);
 	return false;
 }
 
@@ -918,7 +946,7 @@ static bool client_notify(struct qcusbnet *dev, u16 cid, u16 tid)
 			break;
 		}
 
-		DBG("skipping data TID = %x\n", notify->tid);
+		VDBG("skipping data TID = %x\n", notify->tid);
 	}
 
 	if (delnotify) {
@@ -932,7 +960,7 @@ static bool client_notify(struct qcusbnet *dev, u16 cid, u16 tid)
 		return true;
 	}
 
-	DBG("no one to notify for TID %x\n", tid);
+	VDBG("no one to notify for TID %x\n", tid);
 	return false;
 }
 
@@ -1005,7 +1033,12 @@ static int devqmi_open(struct inode *inode, struct file *file)
 	}
 
 	handle = (struct qmihandle *)file->private_data;
+#ifdef QMUX_IN_DRIVER
 	handle->cid = (u16)-1;
+#else
+	handle->cid = qmidev->qmiidx;
+
+#endif /* QMUX_IN_DRIVER */
 	handle->dev = dev;
 
 	return 0;
@@ -1032,7 +1065,7 @@ static long devqmi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 		case IOCTL_QMI_GET_SERVICE_FILE:
 
-			DBG("Setting up QMI for service %lu\n", arg);
+			VDBG("Setting up QMI for service %lu\n", arg);
 			if (!(u8)arg) {
 				DBG("Cannot use QMICTL from userspace\n");
 				return -EINVAL;
@@ -1144,12 +1177,15 @@ static int devqmi_close(struct file *file, fl_owner_t ftable)
 		return -ENXIO;
 	}
 
-	DBG("0x%04X\n", handle->cid);
+	VDBG("0x%04X\n", handle->cid);
 
 	file->private_data = NULL;
-
+#ifdef QMUX_IN_DRIVER
 	if (handle->cid != (u16)-1)
 		client_free(handle->dev, handle->cid);
+#else
+	handle->cid = -1;
+#endif
 
 	kfree(handle);
 	return 0;
@@ -1184,8 +1220,12 @@ static ssize_t devqmi_read(struct file *file, char __user *buf, size_t size,
 	if (result <= 0)
 		return result;
 	
+#ifdef QMUX_IN_DRIVER
 	result -= qmux_size;
 	smalldata = data + qmux_size;
+#else
+	smalldata = data;
+#endif
 
 	if (result > size) {
 		DBG("Read data is too large for amount user has requested\n");
@@ -1226,21 +1266,36 @@ static ssize_t devqmi_write (struct file *file, const char __user * buf,
 		return -EBADR;
 	}
 
+#ifdef QMUX_IN_DRIVER
 	wbuf = kmalloc(size + qmux_size, GFP_KERNEL);
+#else
+	wbuf = kmalloc(size, GFP_KERNEL);
+#endif
 	if (!wbuf)
 		return -ENOMEM;
+#ifdef QMUX_IN_DRIVER
 	status = copy_from_user(wbuf + qmux_size, buf, size);
+#else
+	status = copy_from_user(wbuf, buf, size);
+#endif
+
 	if (status) {
 		DBG("Unable to copy data from userspace %d\n", status);
 		kfree(wbuf);
 		return status;
 	}
 
-	status = write_sync(handle->dev, wbuf, size + qmux_size,
-	                    handle->cid);
-
+#ifdef QMUX_IN_DRIVER
+	status = write_sync(handle->dev, wbuf, size + qmux_size, handle->cid);
+#else
+	status = write_sync(handle->dev, wbuf, size, handle->cid);
+#endif
 	kfree(wbuf);
+#ifdef QMUX_IN_DRIVER
 	if (status == size + qmux_size)
+#else
+	if (status == size)
+#endif
 		return size;
 	return status;
 }
@@ -1253,12 +1308,14 @@ int qc_register(struct qcusbnet *dev)
 	char * name;
 
 	dev->valid = true;
+#ifdef QMUX_IN_DRIVER
 	result = client_alloc(dev, QMICTL);
 	if (result) {
 		dev->valid = false;
 		return result;
 	}
 	atomic_set(&dev->qmi.qmitid, 1);
+#endif
 
 	result = qc_startread(dev);
 	if (result) {
@@ -1266,6 +1323,7 @@ int qc_register(struct qcusbnet *dev)
 		return result;
 	}
 
+#ifdef QMUX_IN_DRIVER
 	if (!qmi_ready(dev, 30000)) {
 		DBG("Device unresponsive to QMI\n");
 		return -ETIMEDOUT;
@@ -1282,6 +1340,10 @@ int qc_register(struct qcusbnet *dev)
 		dev->valid = false;
 		return result;
 	}
+#else /* QMUX_IN_DRIVER */
+	DBG("Initial Net device link is connected\n");
+	qc_cleardown(dev, DOWN_NO_NDIS_CONNECTION);
+#endif /* QMUX_IN_DRIVER */
 
 	result = alloc_chrdev_region(&devno, 0, 1, "motqmi");
 	if (result < 0)
@@ -1313,12 +1375,19 @@ int qc_register(struct qcusbnet *dev)
 	device_create(dev->qmi.devclass, NULL, devno, NULL, "motqmi%d", qmiidx);
 
 	dev->qmi.devnum = devno;
+#ifndef QMUX_IN_DRIVER
+	dev->qmi.qmiidx = qmiidx;
+	client_alloc(dev, qmiidx);
+#endif
 	return 0;
 }
 
 void qc_deregister(struct qcusbnet *dev)
 {
 	struct list_head *node;
+#ifndef QMUX_IN_DRIVER
+	struct list_head *tmp;
+#endif
 	struct client *client;
 	struct inode * inode;
 	struct list_head * inodes;
@@ -1329,18 +1398,18 @@ void qc_deregister(struct qcusbnet *dev)
 	unsigned long flags;
 	int count = 0;
 
-	/* TODO: Fix panic during deregistration. */
-	DBG("%s: did not deregister\n", __func__);
-	return;
-
 	if (!device_valid(dev)) {
 		DBG("wrong device\n");
 		return;
 	}
 
+#ifdef QMUX_IN_DRIVER
 	list_for_each(node, &dev->qmi.clients) {
+#else
+	list_for_each_safe(node, tmp, &dev->qmi.clients) {
+#endif
 		client = list_entry(node, struct client, node);
-		DBG("release 0x%04X\n", client->cid);
+		VDBG("release 0x%04X\n", client->cid);
 		client_free(dev, client->cid);
 	}
 
@@ -1378,6 +1447,7 @@ void qc_deregister(struct qcusbnet *dev)
 	unregister_chrdev_region(dev->qmi.devnum, 1);
 }
 
+#ifdef QMUX_IN_DRIVER
 static bool qmi_ready(struct qcusbnet *dev, u16 timeout)
 {
 	int result;
@@ -1437,7 +1507,7 @@ static bool qmi_ready(struct qcusbnet *dev, u16 timeout)
 	if (now >= timeout)
 		return false;
 
-	DBG("QMI Ready after %u milliseconds\n", now);
+	VDBG("QMI Ready after %u milliseconds\n", now);
 
 	/* 3580 and newer doesn't need a delay; older needs 5000ms */
 	if (qcusbnet2k_fwdelay)
@@ -1635,6 +1705,7 @@ static int qmidms_getmeid(struct qcusbnet * dev)
 	client_free(dev, cid);
 	return 0;
 }
+#endif
 
 module_param(qcusbnet2k_fwdelay, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(qcusbnet2k_fwdelay, "Delay for old firmware");

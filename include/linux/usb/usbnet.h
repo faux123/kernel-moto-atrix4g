@@ -55,6 +55,7 @@ struct usbnet {
 	struct sk_buff_head	done;
 	struct sk_buff_head	rxq_pause;
 	struct urb		*interrupt;
+	struct usb_anchor	deferred;
 	struct tasklet_struct	bh;
 
 	struct work_struct	kevent;
@@ -65,6 +66,8 @@ struct usbnet {
 #		define EVENT_STS_SPLIT	3
 #		define EVENT_LINK_RESET	4
 #		define EVENT_RX_PAUSED	5
+#		define EVENT_DEV_WAKING 6
+#		define EVENT_DEV_ASLEEP 7
 };
 
 static inline struct usb_driver *driver_of(struct usb_interface *intf)
@@ -85,6 +88,7 @@ struct driver_info {
 
 #define FLAG_NO_SETINT	0x0010		/* device can't set_interface() */
 #define FLAG_ETHER	0x0020		/* maybe use "eth%d" names */
+#define FLAG_USBETHER   0x8000		/* flag for usb ehternet dongle */
 
 #define FLAG_FRAMING_AX 0x0040		/* AX88772/178 packets */
 #define FLAG_WLAN	0x0080		/* use "wlan%d" names */
@@ -106,6 +110,9 @@ struct driver_info {
 
 	/* see if peer is connected ... can sleep */
 	int	(*check_connect)(struct usbnet *);
+
+	/* (dis)activate runtime power management */
+	int	(*manage_power)(struct usbnet *, int);
 
 	/* for status polling */
 	void	(*status)(struct usbnet *, struct urb *);

@@ -60,7 +60,12 @@ struct alarm_queue {
 	ktime_t stopped_time;
 };
 
+#ifndef CONFIG_SUPPORT_ALARM_POWERON
 static struct rtc_device *alarm_rtc_dev;
+#else
+struct rtc_device *alarm_rtc_dev;
+#endif
+
 static DEFINE_SPINLOCK(alarm_slock);
 static DEFINE_MUTEX(alarm_setrtc_mutex);
 static struct wake_lock alarm_rtc_wake_lock;
@@ -68,11 +73,21 @@ static struct platform_device *alarm_platform_dev;
 struct alarm_queue alarms[ANDROID_ALARM_TYPE_COUNT];
 static bool suspended;
 
+#ifdef	CONFIG_SUPPORT_ALARM_POWERON
+unsigned int alarm_wakeup_timer_seconds;
+unsigned int alarm_wakeup_timer_nseconds;
+/* Tegra interal RTC timer no this limitation, just keep code align*/
+/* 32K timer max val is 131071S,999ms ,969us, 482ns, or 0x07CFFFFF ms*/
+#define ALARM_MAX_SLEEP_SECONDS     131071
+#endif
+
+
 static void update_timer_locked(struct alarm_queue *base, bool head_removed)
 {
 	struct alarm *alarm;
 	bool is_wakeup = base == &alarms[ANDROID_ALARM_RTC_WAKEUP] ||
-			base == &alarms[ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP];
+			base == &alarms[ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP] ||
+			base == &alarms[ANDROID_ALARM_POWEROFF_WAKEUP];
 
 	if (base->stopped) {
 		pr_alarm(FLOW, "changed alarm while setting the wall time\n");
@@ -365,6 +380,89 @@ static void alarm_triggered_func(void *p)
 	wake_lock_timeout(&alarm_rtc_wake_lock, 1 * HZ);
 }
 
+#ifdef CONFIG_SUPPORT_ALARM_POWERON
+
+#include <linux/io.h>
+#include <mach/iomap.h>
+static void __iomem *rtc_base = IO_ADDRESS(TEGRA_RTC_BASE);
+#define RTC_TEGRA_REG_BUSY			0x004
+#define RTC_TEGRA_REG_SECONDS_CDN_ALARM0	0x020
+#define RTC_TEGRA_REG_INTR_MASK			0x028
+/* a write to this register performs a clear. reg=reg&(~x) */
+#define RTC_TEGRA_REG_INTR_STATUS		0x02c
+#define RTC_TEGRA_INTR_MASK_SEC_CDN_ALARM (1<<3)
+/* bits in INTR_STATUS */
+#define RTC_TEGRA_INTR_STATUS_SEC_CDN_ALARM (1<<3)
+#define RTC_TEGRA_REG_CDN_START_BIT             0x80000000
+
+#define tegra_rtc_read(ofs)		readl(rtc_base + (ofs))
+#define tegra_rtc_write(ofs, val)	writel((val), rtc_base + (ofs))
+#define TEGRA_RTC_TIMER_IRQ_ENABLE  1
+#define TEGRA_RTC_TIMER_IRQ_DISABLE 0
+
+void tegra_rtc_write_reg(unsigned offset, u32 value)
+{
+	while (readl(rtc_base + RTC_TEGRA_REG_BUSY)) {
+		pr_alarm(FLOW, "tegra rtc write reg %x busy \n", offset);
+		cpu_relax();
+	}
+	tegra_rtc_write(offset, value);
+}
+
+void tegra_pm_rtc_timer_irq_set(int enable)
+{
+	u32 val;
+
+	val = tegra_rtc_read(RTC_TEGRA_REG_INTR_MASK);
+	if (enable) {
+		val |= RTC_TEGRA_INTR_MASK_SEC_CDN_ALARM;
+		tegra_rtc_write_reg(RTC_TEGRA_REG_INTR_MASK, val);
+	} else {
+		val &= ~RTC_TEGRA_INTR_MASK_SEC_CDN_ALARM;
+		tegra_rtc_write_reg(RTC_TEGRA_REG_INTR_MASK, val);
+	}
+	pr_alarm(FLOW, "int mask=0x%x \n", val);
+}
+
+void tegra_pm_rtc_timer_irq_flag_clear(void)
+{
+	if (tegra_rtc_read(RTC_TEGRA_REG_INTR_STATUS))
+		tegra_rtc_write_reg(RTC_TEGRA_REG_INTR_STATUS, -1);
+}
+
+void tegra_pm_rtc_timer_start(u32 seconds, u32 nseconds)
+{
+	if (seconds != 0) {
+		tegra_pm_rtc_timer_irq_flag_clear();
+
+		/* enable countdown, disable repeat, auto disabled after happen*/
+		seconds |= RTC_TEGRA_REG_CDN_START_BIT;
+		tegra_rtc_write_reg(RTC_TEGRA_REG_SECONDS_CDN_ALARM0, seconds);
+		pr_alarm(FLOW, "seconds=0x%x \n", seconds);
+
+		tegra_pm_rtc_timer_irq_set(TEGRA_RTC_TIMER_IRQ_ENABLE);
+	}
+}
+
+void tegra_pm_rtc_timer_stop(void)
+{
+	u32 val;
+
+	pr_alarm(FLOW, "reg value=0x%x \n", tegra_rtc_read(RTC_TEGRA_REG_SECONDS_CDN_ALARM0));
+
+	tegra_pm_rtc_timer_irq_set(TEGRA_RTC_TIMER_IRQ_DISABLE);
+
+	/* stop timer */
+	val = tegra_rtc_read(RTC_TEGRA_REG_SECONDS_CDN_ALARM0);
+	val &= ~RTC_TEGRA_REG_CDN_START_BIT;
+	tegra_rtc_write_reg(RTC_TEGRA_REG_SECONDS_CDN_ALARM0, val);
+	pr_alarm(FLOW, " %s:%d reg value=0x%x \n",  __func__, __LINE__, val);
+
+	tegra_pm_rtc_timer_irq_flag_clear();
+}
+
+#endif
+
 static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	int                 err = 0;
@@ -387,6 +485,7 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 	hrtimer_cancel(&alarms[ANDROID_ALARM_RTC_WAKEUP].timer);
 	hrtimer_cancel(&alarms[
 			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP_MASK].timer);
+	hrtimer_cancel(&alarms[ANDROID_ALARM_POWEROFF_WAKEUP].timer);
 
 	tmp_queue = &alarms[ANDROID_ALARM_RTC_WAKEUP];
 	if (tmp_queue->first)
@@ -406,10 +505,11 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 		rtc_alarm_time = timespec_sub(ktime_to_timespec(
 			hrtimer_get_expires(&wakeup_queue->timer)),
 			rtc_delta).tv_sec;
-
+#ifndef	CONFIG_SUPPORT_ALARM_POWERON
 		rtc_time_to_tm(rtc_alarm_time, &rtc_alarm.time);
 		rtc_alarm.enabled = 1;
 		rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
+#endif
 		rtc_read_time(alarm_rtc_dev, &rtc_current_rtc_time);
 		rtc_tm_to_time(&rtc_current_rtc_time, &rtc_current_time);
 		pr_alarm(SUSPEND,
@@ -418,10 +518,14 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 			rtc_delta.tv_sec, rtc_delta.tv_nsec);
 		if (rtc_current_time + 1 >= rtc_alarm_time) {
 			pr_alarm(SUSPEND, "alarm about to go off\n");
+#ifndef	CONFIG_SUPPORT_ALARM_POWERON
 			memset(&rtc_alarm, 0, sizeof(rtc_alarm));
 			rtc_alarm.enabled = 0;
 			rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
-
+#else
+			alarm_wakeup_timer_seconds = 0;
+			alarm_wakeup_timer_nseconds = 0;
+#endif
 			spin_lock_irqsave(&alarm_slock, flags);
 			suspended = false;
 			wake_lock_timeout(&alarm_rtc_wake_lock, 2 * HZ);
@@ -432,26 +536,52 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 			err = -EBUSY;
 			spin_unlock_irqrestore(&alarm_slock, flags);
 		}
+#ifdef	CONFIG_SUPPORT_ALARM_POWERON
+		else if ((rtc_alarm_time - rtc_current_time) < ALARM_MAX_SLEEP_SECONDS) {
+			alarm_wakeup_timer_seconds = rtc_alarm_time - rtc_current_time;
+			alarm_wakeup_timer_nseconds = 0;
+			pr_alarm(FLOW, "set alarm_wakeup_timer: %d.%d \n",
+				alarm_wakeup_timer_seconds, alarm_wakeup_timer_nseconds);
+			pr_alarm(FLOW, "alarm_wakeup_timer_seconds=%d\n", alarm_wakeup_timer_seconds);
+			spin_lock_irqsave(&alarm_slock, flags);
+			tegra_pm_rtc_timer_start(alarm_wakeup_timer_seconds, alarm_wakeup_timer_nseconds);
+			spin_unlock_irqrestore(&alarm_slock, flags);
+		} else {
+			alarm_wakeup_timer_seconds = 0;
+			alarm_wakeup_timer_nseconds = 0;
+			pr_alarm(FLOW, "set alarm_wakeup_timer out of rang: %d.%d \n",
+				alarm_wakeup_timer_seconds, alarm_wakeup_timer_nseconds);
+		}
+#endif
 	}
 	return err;
 }
 
 static int alarm_resume(struct platform_device *pdev)
 {
+#ifndef	CONFIG_SUPPORT_ALARM_POWERON
 	struct rtc_wkalrm alarm;
+#endif
 	unsigned long       flags;
 
 	pr_alarm(SUSPEND, "alarm_resume(%p)\n", pdev);
-
+#ifndef	CONFIG_SUPPORT_ALARM_POWERON
 	memset(&alarm, 0, sizeof(alarm));
 	alarm.enabled = 0;
 	rtc_set_alarm(alarm_rtc_dev, &alarm);
-
+#else
+	alarm_wakeup_timer_seconds = 0;
+	alarm_wakeup_timer_nseconds = 0;
+	spin_lock_irqsave(&alarm_slock, flags);
+	tegra_pm_rtc_timer_stop();
+	spin_unlock_irqrestore(&alarm_slock, flags);
+#endif
 	spin_lock_irqsave(&alarm_slock, flags);
 	suspended = false;
 	update_timer_locked(&alarms[ANDROID_ALARM_RTC_WAKEUP], false);
 	update_timer_locked(&alarms[ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP],
 									false);
+	update_timer_locked(&alarms[ANDROID_ALARM_POWEROFF_WAKEUP], false);							
 	spin_unlock_irqrestore(&alarm_slock, flags);
 
 	return 0;

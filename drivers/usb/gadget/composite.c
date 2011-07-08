@@ -93,12 +93,44 @@ static ssize_t enable_store(
 	if (driver->enable_function)
 		driver->enable_function(f, value);
 	else
-		f->hidden = !value;
+		usb_function_set_enabled(f, value);
 
 	return size;
 }
 
 static DEVICE_ATTR(enable, S_IRUGO | S_IWUSR, enable_show, enable_store);
+
+void usb_function_set_enabled(struct usb_function *f, int enabled)
+{
+	f->hidden = !enabled;
+	kobject_uevent(&f->dev->kobj, KOBJ_CHANGE);
+}
+
+void usb_composite_force_reset(struct usb_composite_dev *cdev)
+{
+	unsigned long                   flags;
+
+	spin_lock_irqsave(&cdev->lock, flags);
+	/* force reenumeration */
+	if (cdev && cdev->gadget) {
+		/* avoid sending a disconnect switch event until after we disconnect */
+		cdev->mute_switch = 1;
+		spin_unlock_irqrestore(&cdev->lock, flags);
+
+		/* According to our test, the interval between D+ pullup
+		 * and next pulldown operation shall be bigger than 50ms,
+		 * otherwise there will be enumeration issue.  It shall be
+		 * relevant with USB transceiver on device/host side.
+		 *  Sleep 50ms here to make it smoothly
+		 */
+		usb_gadget_disconnect(cdev->gadget);
+		msleep(100);
+		usb_gadget_connect(cdev->gadget);
+		msleep(100);
+	} else {
+		spin_unlock_irqrestore(&cdev->lock, flags);
+	}
+}
 
 
 /**
@@ -278,6 +310,7 @@ static int config_buf(struct usb_configuration *config,
 {
 	struct usb_config_descriptor	*c = buf;
 	struct usb_interface_descriptor *intf;
+	struct usb_interface_assoc_descriptor *iad = NULL;
 	void				*next = buf + USB_DT_CONFIG_SIZE;
 	int				len = USB_BUFSIZ - USB_DT_CONFIG_SIZE;
 	struct usb_function		*f;
@@ -331,6 +364,20 @@ static int config_buf(struct usb_configuration *config,
 					intf->bInterfaceNumber = interfaceCount++;
 				else
 					intf->bInterfaceNumber = interfaceCount - 1;
+				if (iad) {
+					iad->bFirstInterface =
+							intf->bInterfaceNumber;
+					iad = NULL;
+				}
+			} else if (intf->bDescriptorType ==
+					USB_DT_INTERFACE_ASSOCIATION) {
+				/* This will be first if it exists. Save
+				* a pointer to it so we can properly set
+				* bFirstInterface when we process the first
+				* interface.
+				*/
+				iad = (struct usb_interface_assoc_descriptor *)
+						dest;
 			}
 			dest += intf->bLength;
 		}
@@ -502,6 +549,11 @@ static int set_config(struct usb_composite_dev *cdev,
 	power = c->bMaxPower ? (2 * c->bMaxPower) : CONFIG_USB_GADGET_VBUS_DRAW;
 done:
 	usb_gadget_vbus_draw(gadget, power);
+
+	schedule_work(&cdev->switch_work);
+	if (cdev->mute_switch)
+		cdev->mute_switch = 0;
+
 	return result;
 }
 
@@ -845,11 +897,11 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	case USB_REQ_GET_CONFIGURATION:
 		if (ctrl->bRequestType != USB_DIR_IN)
 			goto unknown;
-		if (cdev->config) {
+		if (cdev->config)
 			*(u8 *)req->buf = cdev->config->bConfigurationValue;
-			value = min(w_length, (u16) 1);
-		} else
+		else
 			*(u8 *)req->buf = 0;
+		value = min(w_length, (u16) 1);
 		break;
 
 	/* function drivers must handle get/set altsetting; if there's
@@ -966,6 +1018,10 @@ static void composite_disconnect(struct usb_gadget *gadget)
 	spin_lock_irqsave(&cdev->lock, flags);
 	if (cdev->config)
 		reset_config(cdev);
+
+	if (!cdev->mute_switch)
+		schedule_work(&cdev->switch_work);
+
 	spin_unlock_irqrestore(&cdev->lock, flags);
 }
 
@@ -1015,6 +1071,7 @@ composite_unbind(struct usb_gadget *gadget)
 		kfree(cdev->req->buf);
 		usb_ep_free_request(gadget->ep0, cdev->req);
 	}
+	switch_dev_unregister(&cdev->sdev);
 	kfree(cdev);
 	set_gadget_data(gadget, NULL);
 	composite = NULL;
@@ -1040,6 +1097,19 @@ string_override(struct usb_gadget_strings **tab, u8 id, const char *s)
 		string_override_one(*tab, id, s);
 		tab++;
 	}
+}
+
+static void
+composite_switch_work(struct work_struct *data)
+{
+	struct usb_composite_dev        *cdev =
+		container_of(data, struct usb_composite_dev, switch_work);
+	struct usb_configuration *config = cdev->config;
+
+	if (config)
+		switch_set_state(&cdev->sdev, config->bConfigurationValue);
+	else
+		switch_set_state(&cdev->sdev, 0);
 }
 
 static int __init composite_bind(struct usb_gadget *gadget)
@@ -1069,7 +1139,8 @@ static int __init composite_bind(struct usb_gadget *gadget)
 	cdev->bufsiz = USB_BUFSIZ;
 	cdev->driver = composite;
 
-	usb_gadget_set_selfpowered(gadget);
+	/* Do not report Self Powered as WHQL tests fail on Win7 */
+	/*usb_gadget_set_selfpowered(gadget);*/
 
 	/* interface and string IDs start at zero via kzalloc.
 	 * we force endpoints to start unassigned; few controller
@@ -1084,6 +1155,12 @@ static int __init composite_bind(struct usb_gadget *gadget)
 	status = composite->bind(cdev);
 	if (status < 0)
 		goto fail;
+
+	cdev->sdev.name = "usb_configuration";
+	status = switch_dev_register(&cdev->sdev);
+	if (status < 0)
+		goto fail;
+	INIT_WORK(&cdev->switch_work, composite_switch_work);
 
 	cdev->desc = *composite->dev;
 	cdev->desc.bMaxPacketSize0 = gadget->ep0->maxpacket;
@@ -1137,6 +1214,8 @@ composite_suspend(struct usb_gadget *gadget)
 	}
 	if (composite->suspend)
 		composite->suspend(cdev);
+
+	usb_gadget_vbus_draw(gadget, 2);
 }
 
 static void
@@ -1144,6 +1223,7 @@ composite_resume(struct usb_gadget *gadget)
 {
 	struct usb_composite_dev	*cdev = get_gadget_data(gadget);
 	struct usb_function		*f;
+	u8				maxpower;
 
 	/* REVISIT:  should we have config level
 	 * suspend/resume callbacks?
@@ -1156,7 +1236,29 @@ composite_resume(struct usb_gadget *gadget)
 			if (f->resume)
 				f->resume(f);
 		}
+
+		maxpower = cdev->config->bMaxPower;
+
+		usb_gadget_vbus_draw(gadget, maxpower ?
+			(2 * maxpower) : CONFIG_USB_GADGET_VBUS_DRAW);
 	}
+}
+
+static int
+composite_uevent(struct device *dev, struct kobj_uevent_env *env)
+{
+	struct usb_function *f = dev_get_drvdata(dev);
+
+	if (!f) {
+		/* this happens when the device is first created */
+		return 0;
+	}
+
+	if (add_uevent_var(env, "FUNCTION=%s", f->name))
+		return -ENOMEM;
+	if (add_uevent_var(env, "ENABLED=%d", !f->hidden))
+		return -ENOMEM;
+	return 0;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1207,6 +1309,7 @@ int __init usb_composite_register(struct usb_composite_driver *driver)
 	driver->class = class_create(THIS_MODULE, "usb_composite");
 	if (IS_ERR(driver->class))
 		return PTR_ERR(driver->class);
+	driver->class->dev_uevent = composite_uevent;
 
 	return usb_gadget_register_driver(&composite_driver);
 }

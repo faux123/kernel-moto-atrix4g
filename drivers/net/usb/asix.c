@@ -34,6 +34,7 @@
 #include <linux/usb.h>
 #include <linux/crc32.h>
 #include <linux/usb/usbnet.h>
+#include <linux/miscdevice.h>
 
 #define DRIVER_VERSION "14-Jun-2006"
 static const char driver_name [] = "asix";
@@ -393,6 +394,54 @@ static struct sk_buff *asix_tx_fixup(struct usbnet *dev, struct sk_buff *skb,
 	return skb;
 }
 
+static int asix_enable_open(struct inode *ip, struct file *fp)
+{
+	/* Empty Function For Now */
+        return 0;
+}
+
+static int asix_enable_release(struct inode *ip, struct file *fp)
+{
+	/* Empty function for now */
+        return 0;
+}
+
+static const struct file_operations asix_enable_fops = {
+	.owner = THIS_MODULE,
+        .open = asix_enable_open,
+        .release = asix_enable_release,
+};
+
+static struct miscdevice asix_enable_device = {
+        .minor = MISC_DYNAMIC_MINOR,
+	.name = "asix_enable",
+        .fops = &asix_enable_fops,
+};
+
+static void asix_send_uevent(int config)
+{
+	char event_string[30];
+	char *envp[] = {event_string, NULL};
+
+	printk(KERN_INFO "asix lan cable uevent %s uevent\n",
+	       config? "connect" : "disconnect");
+	snprintf(event_string, sizeof(event_string), "LAN_CABLE_CONNECT=%d", config);
+	kobject_uevent_env(&asix_enable_device.this_device->kobj,
+			   KOBJ_CHANGE, envp);
+}
+
+struct asix_enable_config {
+	struct work_struct asix_defer_wq;
+	int cable_status;
+};
+
+static struct asix_enable_config g_asix_enable_config;
+
+static void asix_defer_work(struct work_struct *work)
+{
+	asix_send_uevent(g_asix_enable_config.cable_status);
+}
+
 static void asix_status(struct usbnet *dev, struct urb *urb)
 {
 	struct ax88172_int_data *event;
@@ -405,10 +454,15 @@ static void asix_status(struct usbnet *dev, struct urb *urb)
 	link = event->link & 0x01;
 	if (netif_carrier_ok(dev->net) != link) {
 		if (link) {
+			g_asix_enable_config.cable_status = 1;
+			schedule_work(&g_asix_enable_config.asix_defer_wq);
 			netif_carrier_on(dev->net);
 			usbnet_defer_kevent (dev, EVENT_LINK_RESET );
-		} else
+		} else {
+			g_asix_enable_config.cable_status = 0;
+			schedule_work(&g_asix_enable_config.asix_defer_wq);
 			netif_carrier_off(dev->net);
+		}
 		devdbg(dev, "Link Status is: %d", link);
 	}
 }
@@ -1327,7 +1381,7 @@ static const struct driver_info ax8817x_info = {
 	.status = asix_status,
 	.link_reset = ax88172_link_reset,
 	.reset = ax88172_link_reset,
-	.flags =  FLAG_ETHER,
+	.flags =  FLAG_USBETHER,
 	.data = 0x00130103,
 };
 
@@ -1337,7 +1391,7 @@ static const struct driver_info dlink_dub_e100_info = {
 	.status = asix_status,
 	.link_reset = ax88172_link_reset,
 	.reset = ax88172_link_reset,
-	.flags =  FLAG_ETHER,
+	.flags =  FLAG_USBETHER,
 	.data = 0x009f9d9f,
 };
 
@@ -1347,7 +1401,7 @@ static const struct driver_info netgear_fa120_info = {
 	.status = asix_status,
 	.link_reset = ax88172_link_reset,
 	.reset = ax88172_link_reset,
-	.flags =  FLAG_ETHER,
+	.flags =  FLAG_USBETHER,
 	.data = 0x00130103,
 };
 
@@ -1357,7 +1411,7 @@ static const struct driver_info hawking_uf200_info = {
 	.status = asix_status,
 	.link_reset = ax88172_link_reset,
 	.reset = ax88172_link_reset,
-	.flags =  FLAG_ETHER,
+	.flags =  FLAG_USBETHER,
 	.data = 0x001f1d1f,
 };
 
@@ -1367,7 +1421,7 @@ static const struct driver_info ax88772_info = {
 	.status = asix_status,
 	.link_reset = ax88772_link_reset,
 	.reset = ax88772_link_reset,
-	.flags = FLAG_ETHER | FLAG_FRAMING_AX,
+	.flags = FLAG_USBETHER | FLAG_FRAMING_AX,
 	.rx_fixup = asix_rx_fixup,
 	.tx_fixup = asix_tx_fixup,
 };
@@ -1378,7 +1432,7 @@ static const struct driver_info ax88178_info = {
 	.status = asix_status,
 	.link_reset = ax88178_link_reset,
 	.reset = ax88178_link_reset,
-	.flags = FLAG_ETHER | FLAG_FRAMING_AX,
+	.flags = FLAG_USBETHER | FLAG_FRAMING_AX,
 	.rx_fixup = asix_rx_fixup,
 	.tx_fixup = asix_tx_fixup,
 };
@@ -1509,13 +1563,24 @@ static struct usb_driver asix_driver = {
 
 static int __init asix_init(void)
 {
+	int ret;
+	ret = misc_register(&asix_enable_device);
+        if (ret) {
+                printk(KERN_ERR "asix_enable -  Can't register misc enable device %d \n",
+		       MISC_DYNAMIC_MINOR);
+		return ret;
+        }
+	INIT_WORK(&g_asix_enable_config.asix_defer_wq, asix_defer_work);
  	return usb_register(&asix_driver);
+
 }
 module_init(asix_init);
 
 static void __exit asix_exit(void)
 {
  	usb_deregister(&asix_driver);
+	misc_deregister(&asix_enable_device);
+
 }
 module_exit(asix_exit);
 

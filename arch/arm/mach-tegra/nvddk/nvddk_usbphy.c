@@ -40,7 +40,7 @@
  */
 
 #include "nvrm_pinmux.h"
-#include "nvrm_power.h"
+#include "nvrm_power_private.h"
 #include "nvrm_pmu.h"
 #include "nvrm_hardware_access.h"
 #include "nvddk_usbphy_priv.h"
@@ -196,7 +196,7 @@ UsbPhyDfsBusyHint(
 {
     NvRmDfsBusyHint pUsbHintOn[] =
     {
-        { NvRmDfsClockId_Emc, NV_WAIT_INFINITE, USB_HW_MIN_SYSTEM_FREQ_KH, NV_TRUE },
+        { NvRmDfsClockId_Emc, NV_WAIT_INFINITE, USB_HW_MIN_EMC_FREQ_KH, NV_TRUE },
         { NvRmDfsClockId_Ahb, NV_WAIT_INFINITE, USB_HW_MIN_SYSTEM_FREQ_KH, NV_TRUE },
         { NvRmDfsClockId_Cpu, NV_WAIT_INFINITE, USB_HW_MIN_CPU_FREQ_KH, NV_TRUE }
     };
@@ -634,6 +634,7 @@ NvDdkUsbPhyPowerUp(
     NvBool IsDpd)
 {
     NvError e = NvSuccess;
+    NvOdmSocPowerState state = NvRmPowerLowestStateGet();
 
     NV_ASSERT(hUsbPhy);
 
@@ -704,6 +705,7 @@ NvDdkUsbPhyPowerDown(
     NvError e = NvSuccess;
     NvDdkUsbPhyIoctl_VBusStatusOutputArgs VBusStatus;
     NvU32 TimeOut = USB_PHY_HW_TIMEOUT_US;
+    NvOdmSocPowerState state = NvRmPowerLowestStateGet();
 
     NV_ASSERT(hUsbPhy);
 

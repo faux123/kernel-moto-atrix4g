@@ -246,8 +246,8 @@ static int get_bootinfo(char *buf, char **start,
 /*
 	EMIT_FLAT_DEV_TREE_ADDRESS();
 	EMIT_BATTERY_STATUS_AT_BOOT();
+*/
 	EMIT_CID_RECOVER_BOOT();
-*/	
 
 	return len;
 }

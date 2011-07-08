@@ -98,6 +98,7 @@ static int cpcap_button_led_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct button_led *led;
+	struct cpcap_leds *platdata_leds;
 
 	if (pdev == NULL) {
 		pr_err("%s: platform data required - %d\n", __func__, -ENODEV);
@@ -112,13 +113,17 @@ static int cpcap_button_led_probe(struct platform_device *pdev)
 
 	led->cpcap = pdev->dev.platform_data;
 	platform_set_drvdata(pdev, led);
+	platdata_leds = ((struct cpcap_platform_data *)led->cpcap->spi->controller_data)->leds;
 
-	led->regulator = regulator_get(&pdev->dev, LD_SUPPLY);
-	if (IS_ERR(led->regulator)) {
-		pr_err("%s: Cannot get %s regulator\n", __func__, LD_SUPPLY);
-		ret = PTR_ERR(led->regulator);
-		goto exit_request_reg_failed;
-
+	if (platdata_leds->button_led.regulator){
+		led->regulator = regulator_get(&pdev->dev, platdata_leds->button_led.regulator);
+		if (IS_ERR(led->regulator)) {
+			pr_err("%s: Cannot get %s regulator\n", __func__, platdata_leds->button_led.regulator);
+			ret = PTR_ERR(led->regulator);
+			goto exit_request_reg_failed;
+		}
+	} else {
+		led->regulator = NULL;
 	}
 
 	led->regulator_state = 0;

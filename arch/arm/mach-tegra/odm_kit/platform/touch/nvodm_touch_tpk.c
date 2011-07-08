@@ -21,6 +21,7 @@
 #include "nvodm_touch_tpk.h"
 #include "nvodm_query_discovery.h"
 #include "tpk_reg.h"
+#include <linux/kernel.h>
 
 #define TPK_I2C_SPEED_KHZ                          40
 #define TPK_I2C_TIMEOUT                            500
@@ -165,8 +166,8 @@ static NvBool TPK_WriteRegister (TPK_TouchDevice* hTouch, NvU8 reg, NvU8 val)
 
     if (Error != NvOdmI2cStatus_Success)
     {
-        NVODMTOUCH_PRINTF(("I2C Write Failure = %d (addr=0x%x, reg=0x%x, val=0x%0x)\n", Error, 
-                           hTouch->DeviceAddr, reg, val));
+        pr_err(" I2C Write Failure = %d (addr=0x%x, reg=0x%x, val=0x%0x)\n", Error,
+                           hTouch->DeviceAddr, reg, val);
         return NV_FALSE;
     }
     return NV_TRUE;
@@ -225,8 +226,8 @@ static NvBool TPK_ReadRegisterOnce (TPK_TouchDevice* hTouch, NvU8 reg, NvU8* buf
 
     if (Error != NvOdmI2cStatus_Success)
     {
-        NVODMTOUCH_PRINTF(("I2C Read Failure = %d (addr=0x%x, reg=0x%x)\n", Error,
-                           hTouch->DeviceAddr, reg));
+        pr_err(" I2C Read Failure = %d (addr=0x%x, reg=0x%x)\n", Error,
+                           hTouch->DeviceAddr, reg);
         return NV_FALSE;
     }
 

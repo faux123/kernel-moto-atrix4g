@@ -39,6 +39,10 @@
 #include "clock.h"
 #include "nvrm_module.h"
 #include "nvrm_power.h"
+#include "nvrm_pinmux.h"
+#include "nvrm/core/common/nvrm_pinmux_utils.h"
+#include "mach/pinmux.h"
+#include "mach/pinmux-t2.h"
 
 static LIST_HEAD(clocks);
 static DEFINE_SPINLOCK(clock_lock);
@@ -115,6 +119,17 @@ static int tegra_periph_clk_enable(struct clk *c)
 			NvRmDfsBusyHintSyncMode_Async);
 	}
 
+	if (c->module == NvRmModuleID_Vi &&
+		c->flags == NvRmClockConfig_SubConfig) {
+		struct tegra_pingroup_config pin_config = {0};
+		pin_config.pingroup = TEGRA_PINGROUP_CSUS;
+		NvRmPrivAp20EnableExternalClockSource(s_hRmGlobal, &pin_config,
+			1, NV_TRUE);
+
+		tegra_pinmux_set_tristate(TEGRA_PINGROUP_CSUS,
+			TEGRA_TRI_NORMAL);
+	}
+
 	return 0;
 }
 
@@ -138,6 +153,16 @@ static void tegra_periph_clk_disable(struct clk *c)
 	if (e!=NvSuccess)
 		pr_err("%s: failed to disable %s\n", __func__, c->name);
 
+	if (c->module == NvRmModuleID_Vi &&
+		c->flags == NvRmClockConfig_SubConfig) {
+		struct tegra_pingroup_config pin_config = {0};
+		pin_config.pingroup = TEGRA_PINGROUP_CSUS;
+		NvRmPrivAp20EnableExternalClockSource(s_hRmGlobal, &pin_config,
+			1, NV_FALSE);
+		tegra_pinmux_set_tristate(TEGRA_PINGROUP_CSUS,
+			TEGRA_TRI_TRISTATE);
+	}
+
 	if (c->power) {
 		e = NvRmPowerVoltageControl(s_hRmGlobal, c->module,
 		clk_pwr_client,	NvRmVoltsOff, NvRmVoltsOff, NULL, 0, NULL);
@@ -145,6 +170,16 @@ static void tegra_periph_clk_disable(struct clk *c)
 		if (e!=NvSuccess)
 			pr_err("%s: failed to disable %s\n", __func__, c->name);
 	}
+
+	if ((c->module == NvRmModuleID_Vi) && (c->flags == NvRmClockConfig_SubConfig)){
+		struct tegra_pingroup_config pin_config = {0};
+		pin_config.pingroup = TEGRA_PINGROUP_CSUS;
+		NvRmPrivAp20EnableExternalClockSource(s_hRmGlobal, &pin_config,
+			1, NV_FALSE);
+		tegra_pinmux_set_tristate(TEGRA_PINGROUP_CSUS, TEGRA_TRI_TRISTATE);
+	}
+
+
 }
 
 static int tegra_periph_clk_set_rate(struct clk *c, unsigned long rate)
@@ -168,7 +203,7 @@ static int tegra_periph_clk_set_rate(struct clk *c, unsigned long rate)
 	}
 
 	e = NvRmPowerModuleClockConfig(s_hRmGlobal, c->module, clk_pwr_client,
-		min, max, &freq, 1, &freq, 0);
+		min, max, &freq, 1, &freq, c->flags);
 
 	if (e!=NvSuccess) {
 		pr_err("%s: failed to configure %s to %luHz\n",
@@ -187,7 +222,7 @@ static unsigned long tegra_periph_clk_get_rate(struct clk *c)
 	NvRmFreqKHz freq;
 
 	e = NvRmPowerModuleClockConfig(s_hRmGlobal, c->module,
-		clk_pwr_client, 0, 0, NULL, 0, &freq, 0);
+		clk_pwr_client, 0, 0, NULL, 0, &freq, c->flags);
 
 	if (e != NvSuccess) {
 		pr_debug("%s: failed to read %s\n", __func__, c->name);
@@ -250,7 +285,7 @@ static struct clk_ops dfs_clk_ops = {
 #define NvRmModuleID_Afi NvRmPrivModuleID_Afi
 #define NvRmModuleID_PcieXclk NvRmPrivModuleID_PcieXclk
 
-#define PERIPH_CLK(_name, _dev, _con, _modname, _instance, _tol, _min, _pow) \
+#define PERIPH_CLK(_name, _dev, _con, _modname, _instance, _tol, _min, _pow, _flags) \
 	{								\
 		.name = _name,						\
 		.lookup = {						\
@@ -262,26 +297,28 @@ static struct clk_ops dfs_clk_ops = {
 		.rate_min = _min,					\
 		.rate_tolerance = _tol,					\
 		.power = _pow,						\
+		.flags = _flags,					\
 	}
 
 static struct clk tegra_periph_clk[] = {
-	PERIPH_CLK("rtc", "rtc-tegra", NULL, Rtc, 0, 0, 0, false),
-	PERIPH_CLK("kbc", "tegra-kbc", NULL, Kbc, 0, 0, 0, false),
-	PERIPH_CLK("uarta", "uart.0", NULL, Uart, 0, 5, 0, false),
-	PERIPH_CLK("uartb", "uart.1", NULL, Uart, 1, 5, 0, false),
-	PERIPH_CLK("uartc", "uart.2", NULL, Uart, 2, 5, 0, false),
-	PERIPH_CLK("uartd", "uart.3", NULL, Uart, 3, 5, 0, false),
-	PERIPH_CLK("uarte", "uart.4", NULL, Uart, 4, 5, 0, false),
-	PERIPH_CLK("sdmmc1", "tegra-sdhci.0", NULL, Sdio, 0, 0, 400, false),
-	PERIPH_CLK("sdmmc2", "tegra-sdhci.1", NULL, Sdio, 1, 0, 400, false),
-	PERIPH_CLK("sdmmc3", "tegra-sdhci.2", NULL, Sdio, 2, 0, 400, false),
-	PERIPH_CLK("sdmmc4", "tegra-sdhci.3", NULL, Sdio, 3, 0, 400, false),
-	PERIPH_CLK("pcie", "tegra_pcie", NULL, Pcie, 0, 0, 0, true),
-	PERIPH_CLK("pcie_xclk", "tegra_pcie_xclk", NULL, PcieXclk, 0, 0, 0, false),
-	PERIPH_CLK("gr3d", "tegra_grhost", "gr3d", 3D, 0, 0, 0, true),
-	PERIPH_CLK("gr2d", "tegra_grhost", "gr2d", 2D, 0, 0, 0, true),
-	PERIPH_CLK("host1x", "tegra_grhost", "host1x", GraphicsHost, 0, 0, 0, true),
-	PERIPH_CLK("epp", "tegra_grhost", "epp", Epp, 0, 0, 0, true),
+	PERIPH_CLK("rtc", "rtc-tegra", NULL, Rtc, 0, 0, 0, false, 0),
+	PERIPH_CLK("kbc", "tegra-kbc", NULL, Kbc, 0, 0, 0, false, 0),
+	PERIPH_CLK("uarta", "uart.0", NULL, Uart, 0, 5, 0, false, 0),
+	PERIPH_CLK("uartb", "uart.1", NULL, Uart, 1, 5, 0, false, 0),
+	PERIPH_CLK("uartc", "uart.2", NULL, Uart, 2, 5, 0, false, 0),
+	PERIPH_CLK("uartd", "uart.3", NULL, Uart, 3, 5, 0, false, 0),
+	PERIPH_CLK("uarte", "uart.4", NULL, Uart, 4, 5, 0, false, 0),
+	PERIPH_CLK("sdmmc1", "tegra-sdhci.0", NULL, Sdio, 0, 0, 400, false, 0),
+	PERIPH_CLK("sdmmc2", "tegra-sdhci.1", NULL, Sdio, 1, 0, 400, false, 0),
+	PERIPH_CLK("sdmmc3", "tegra-sdhci.2", NULL, Sdio, 2, 0, 400, false, 0),
+	PERIPH_CLK("sdmmc4", "tegra-sdhci.3", NULL, Sdio, 3, 0, 400, false, 0),
+	PERIPH_CLK("pcie", "tegra_pcie", NULL, Pcie, 0, 0, 0, true, 0),
+	PERIPH_CLK("pcie_xclk", "tegra_pcie_xclk", NULL, PcieXclk, 0, 0, 0, false, 0),
+	PERIPH_CLK("gr3d", "tegra_grhost", "gr3d", 3D, 0, 0, 0, true, 0),
+	PERIPH_CLK("gr2d", "tegra_grhost", "gr2d", 2D, 0, 0, 0, true, 0),
+	PERIPH_CLK("host1x", "tegra_grhost", "host1x", GraphicsHost, 0, 0, 0, true, 0),
+	PERIPH_CLK("epp", "tegra_grhost", "epp", Epp, 0, 0, 0, true, 0),
+	PERIPH_CLK("vimclk", "tegra-camera", "vi", Vi, 0, 0, 0, true, NvRmClockConfig_SubConfig),
 };
 
 static struct clk tegra_clk_cpu = {

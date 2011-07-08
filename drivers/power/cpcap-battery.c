@@ -40,6 +40,7 @@
 #define CPCAP_BATT_IRQ_CC_CAL  0x04
 #define CPCAP_BATT_IRQ_ADCDONE 0x08
 #define CPCAP_BATT_IRQ_MACRO   0x10
+#define CPCAP_BATT_IRQ_LOWBPHL 0x20
 
 static int cpcap_batt_ioctl(struct inode *inode,
 			    struct file *file,
@@ -130,6 +131,11 @@ void cpcap_batt_irq_hdlr(enum cpcap_irqs irq, void *data)
 	sply->data_pending = 1;
 
 	switch (irq) {
+	case CPCAP_IRQ_LOWBPH:
+		sply->irq_status |= CPCAP_BATT_IRQ_LOWBPHL;
+		cpcap_irq_unmask(sply->cpcap, irq);
+		break;
+
 	case CPCAP_IRQ_BATTDETB:
 		sply->irq_status |= CPCAP_BATT_IRQ_BATTDET;
 		cpcap_irq_unmask(sply->cpcap, irq);
@@ -243,6 +249,10 @@ static int cpcap_batt_ioctl(struct inode *inode,
 		if (copy_from_user((void *)&sply->batt_state,
 				   (void *)arg, sizeof(struct cpcap_batt_data)))
 			return -EFAULT;
+		
+		printk("BATT: status = %d,health=%d,present=%d,batt_temp=%d,batt_volt=%d,batt_capacity=%d\n",sply->batt_state.status,sply->batt_state.health,sply->batt_state.present,sply->batt_state.batt_temp,sply->batt_state.batt_volt,sply->batt_state.capacity) ;
+
+
 		power_supply_changed(&sply->batt);
 
 		if (data->batt_changed)
@@ -499,6 +509,10 @@ static int cpcap_batt_probe(struct platform_device *pdev)
 				 cpcap_batt_irq_hdlr, sply);
 	if (ret)
 		goto unregmisc_exit;
+	ret = cpcap_irq_register(sply->cpcap, CPCAP_IRQ_LOWBPH,
+				 cpcap_batt_irq_hdlr, sply);
+	if (ret)
+		goto unregirq_exit;
 	ret = cpcap_irq_register(sply->cpcap, CPCAP_IRQ_BATTDETB,
 				 cpcap_batt_irq_hdlr, sply);
 	if (ret)
@@ -546,6 +560,7 @@ static int cpcap_batt_probe(struct platform_device *pdev)
 	goto prb_exit;
 
 unregirq_exit:
+	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_LOWBPH);
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_VBUSOV);
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_BATTDETB);
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_CC_CAL);
@@ -562,7 +577,6 @@ unregbatt_exit:
 	power_supply_unregister(&sply->batt);
 unregac_exit:
 	power_supply_unregister(&sply->ac);
-
 prb_exit:
 	return ret;
 }

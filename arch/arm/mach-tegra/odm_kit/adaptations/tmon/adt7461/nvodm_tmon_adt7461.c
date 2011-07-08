@@ -447,7 +447,8 @@ NvBool Adt7461Init(NvOdmTmonDeviceHandle hTmon)
         else if (pIoAddress->Interface == NvOdmIoModule_Gpio)
         {
             /* Use configuration data for GPIO assignment only for non-Motorola h/w */
-            if (!machine_is_olympus() && !machine_is_etna() && !machine_is_sunfire())
+            if (!machine_is_olympus() && !machine_is_etna() && !machine_is_sunfire()&& !machine_is_arowana()
+	        && !machine_is_tegra_daytona())
             {
                 NvU32 port = pIoAddress->Instance;
                 NvU32 pin  = pIoAddress->Address;
@@ -482,31 +483,66 @@ NvBool Adt7461Init(NvOdmTmonDeviceHandle hTmon)
 
         pPrivData->hGpioPin = NvOdmGpioAcquirePinHandle(pPrivData->hGpio, port, pin);
     } 
+    else if (machine_is_arowana())
+    {
+        NvU32 port;
+        NvU32 pin;
+
+        port = NVODM_PORT('d');
+        pin  = 0x01;
+
+        pPrivData->hGpioPin = NvOdmGpioAcquirePinHandle(pPrivData->hGpio, port, pin);
+    } 
     else if (machine_is_etna())
     {
         NvU32 port;
         NvU32 pin;
 
         if (HWREV_TYPE_IS_FINAL(system_rev) || 
-            (HWREV_TYPE_IS_PORTABLE(system_rev) && HWREV_REV(system_rev) >= HWREV_REV_2C))
-        { 
+            (HWREV_TYPE_IS_PORTABLE(system_rev) && HWREV_REV(system_rev) >= HWREV_REV_4B))
+        {
+            port = NVODM_PORT('d');
+            pin  = 0x01;
+        }
+        else if (HWREV_TYPE_IS_PORTABLE(system_rev) && HWREV_REV(system_rev) >= HWREV_REV_4A)
+        {
+            port = NVODM_PORT('e');
+            pin  = 0x06;
+        }
+        else if (HWREV_TYPE_IS_PORTABLE(system_rev) && HWREV_REV(system_rev) >= HWREV_REV_2C)
+        {
             port = NVODM_PORT('j');
             pin  = 0x03;
         }
         else
-        { 
+        {
             port = NVODM_PORT('e');
             pin  = 0x05;
         }
         pPrivData->hGpioPin = NvOdmGpioAcquirePinHandle(pPrivData->hGpio, port, pin);
+    }
+    else if (machine_is_tegra_daytona())
+    {
+        NvU32 port;
+        NvU32 pin;
+
+        port = NVODM_PORT('d');
+        pin  = 0x01;
+        pPrivData->hGpioPin = NvOdmGpioAcquirePinHandle(pPrivData->hGpio,port, pin);
     }
     else if (machine_is_sunfire())
     {
         NvU32 port;
         NvU32 pin;
 
-        port = NVODM_PORT('j');
-        pin  = 0x03;
+	if (HWREV_TYPE_IS_PORTABLE(system_rev) &&
+		HWREV_REV(system_rev) == HWREV_REV_0) {
+		port = NVODM_PORT('e');
+		pin  = 0x06;
+	} else {
+		port = NVODM_PORT('d');
+		pin  = 0x01;
+	}
 
         pPrivData->hGpioPin = NvOdmGpioAcquirePinHandle(pPrivData->hGpio, port, pin);
     }

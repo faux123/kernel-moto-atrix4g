@@ -38,6 +38,8 @@ struct nvhost_submit_hdr {
 	__u32 syncpt_incrs;
 	__u32 num_cmdbufs;
 	__u32 num_relocs;
+	__u32 num_waitchks;
+	__u32 waitchk_mask;
 };
 
 struct nvhost_cmdbuf {
@@ -51,6 +53,13 @@ struct nvhost_reloc {
 	__u32 cmdbuf_offset;
 	__u32 target;
 	__u32 target_offset;
+};
+
+struct nvhost_waitchk {
+	__u32 mem;
+	__u32 offset;
+	__u32 syncpt_id;
+	__u32 thresh;
 };
 
 struct nvhost_get_param_args {
@@ -71,8 +80,10 @@ struct nvhost_set_nvmap_fd_args {
 	_IOR(NVHOST_IOCTL_MAGIC, 4, struct nvhost_get_param_args)
 #define NVHOST_IOCTL_CHANNEL_SET_NVMAP_FD	\
 	_IOW(NVHOST_IOCTL_MAGIC, 5, struct nvhost_set_nvmap_fd_args)
+#define NVHOST_IOCTL_CHANNEL_GET_STATS		\
+	_IOR(NVHOST_IOCTL_MAGIC, 6, struct nvhost_get_param_args)
 #define NVHOST_IOCTL_CHANNEL_LAST		\
-	_IOC_NR(NVHOST_IOCTL_CHANNEL_SET_NVMAP_FD)
+	_IOC_NR(NVHOST_IOCTL_CHANNEL_GET_STATS)
 #define NVHOST_IOCTL_CHANNEL_MAX_ARG_SIZE sizeof(struct nvhost_get_param_args)
 
 struct nvhost_ctrl_syncpt_read_args {

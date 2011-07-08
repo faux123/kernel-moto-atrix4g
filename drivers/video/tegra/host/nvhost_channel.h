@@ -32,6 +32,7 @@
 
 #define NVHOST_CHANNEL_BASE 0
 #define NVHOST_NUMCHANNELS (NV_HOST1X_CHANNELS - 1)
+#define NVHOST_MAX_WAIT_CHECKS 256
 #define NVHOST_MAX_GATHERS 512
 #define NVHOST_MAX_HANDLES 1280
 
@@ -55,6 +56,7 @@ struct nvhost_channel {
 	struct nvhost_dev *dev;
 	const struct nvhost_channeldesc *desc;
 	struct nvhost_hwctx *cur_ctx;
+	u32 ctx_sw_count;
 	struct device *node;
 	struct cdev cdev;
 	struct nvhost_hwctx_handler ctxhandler;

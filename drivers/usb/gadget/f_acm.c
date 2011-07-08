@@ -99,6 +99,8 @@ static inline struct f_acm *port_to_acm(struct gserial *p)
 static struct f_acm *g_acm_dev;
 #endif
 
+static u8 use_iads;
+
 /*-------------------------------------------------------------------------*/
 
 /* notification endpoint uses smallish and infrequent fixed-size messages */
@@ -107,6 +109,20 @@ static struct f_acm *g_acm_dev;
 #define GS_NOTIFY_MAXPACKET		64	/* notification + 2 bytes */
 
 /* interface and class descriptors: */
+
+static struct usb_interface_assoc_descriptor
+acm_iad_descriptor = {
+	.bLength =              sizeof acm_iad_descriptor,
+	.bDescriptorType =      USB_DT_INTERFACE_ASSOCIATION,
+
+	/* .bFirstInterface =   DYNAMIC, */
+	.bInterfaceCount =      2,
+	.bFunctionClass =       USB_CLASS_COMM,
+	.bFunctionSubClass =    USB_CDC_SUBCLASS_ACM,
+	.bFunctionProtocol =    USB_CDC_ACM_PROTO_AT_V25TER,
+	/* .iFunction =         DYNAMIC */
+};
+
 
 #ifdef CONFIG_USB_MOT_ANDROID
 static struct usb_interface_descriptor acm_control_interface_desc = {
@@ -222,10 +238,24 @@ static struct usb_endpoint_descriptor acm_fs_out_desc __initdata = {
 };
 
 #ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_descriptor_header *acm_fs_function[] = {
+static struct usb_descriptor_header *acm_iads_fs_function[] = {
 #else
 static struct usb_descriptor_header *acm_fs_function[] __initdata = {
 #endif
+	(struct usb_descriptor_header *) &acm_iad_descriptor,
+	(struct usb_descriptor_header *) &acm_control_interface_desc,
+	(struct usb_descriptor_header *) &acm_header_desc,
+	(struct usb_descriptor_header *) &acm_call_mgmt_descriptor,
+	(struct usb_descriptor_header *) &acm_descriptor,
+	(struct usb_descriptor_header *) &acm_union_desc,
+	(struct usb_descriptor_header *) &acm_fs_notify_desc,
+	(struct usb_descriptor_header *) &acm_data_interface_desc,
+	(struct usb_descriptor_header *) &acm_fs_in_desc,
+	(struct usb_descriptor_header *) &acm_fs_out_desc,
+	NULL,
+};
+
+static struct usb_descriptor_header *acm_fs_function[] = {
 	(struct usb_descriptor_header *) &acm_control_interface_desc,
 	(struct usb_descriptor_header *) &acm_header_desc,
 	(struct usb_descriptor_header *) &acm_call_mgmt_descriptor,
@@ -276,10 +306,24 @@ static struct usb_endpoint_descriptor acm_hs_out_desc __initdata = {
 };
 
 #ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_descriptor_header *acm_hs_function[] = {
+static struct usb_descriptor_header *acm_iads_hs_function[] = {
 #else
 static struct usb_descriptor_header *acm_hs_function[] __initdata = {
 #endif
+	(struct usb_descriptor_header *) &acm_iad_descriptor,
+	(struct usb_descriptor_header *) &acm_control_interface_desc,
+	(struct usb_descriptor_header *) &acm_header_desc,
+	(struct usb_descriptor_header *) &acm_call_mgmt_descriptor,
+	(struct usb_descriptor_header *) &acm_descriptor,
+	(struct usb_descriptor_header *) &acm_union_desc,
+	(struct usb_descriptor_header *) &acm_hs_notify_desc,
+	(struct usb_descriptor_header *) &acm_data_interface_desc,
+	(struct usb_descriptor_header *) &acm_hs_in_desc,
+	(struct usb_descriptor_header *) &acm_hs_out_desc,
+	NULL,
+};
+
+static struct usb_descriptor_header *acm_hs_function[] = {
 	(struct usb_descriptor_header *) &acm_control_interface_desc,
 	(struct usb_descriptor_header *) &acm_header_desc,
 	(struct usb_descriptor_header *) &acm_call_mgmt_descriptor,
@@ -296,6 +340,7 @@ static struct usb_descriptor_header *acm_hs_function[] __initdata = {
 
 #define ACM_CTRL_IDX	0
 #define ACM_DATA_IDX	1
+#define ACM_IAD_IDX	2
 
 /* static strings, in UTF-8 */
 static struct usb_string acm_string_defs[] = {
@@ -306,6 +351,7 @@ static struct usb_string acm_string_defs[] = {
 	[ACM_CTRL_IDX].s = "CDC Abstract Control Model (ACM)",
 	[ACM_DATA_IDX].s = "CDC ACM Data",
 #endif
+	[ACM_IAD_IDX].s = "CDC Serial",
 	{  /* ZEROES END LIST */ },
 };
 
@@ -480,6 +526,10 @@ static int acm_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		usb_interface_enum_cb(ACM_TYPE_FLAG);
 	else if (acm->port_num == 1)
 		usb_interface_enum_cb(ACM1_TYPE_FLAG);
+	else if (acm->port_num == 2)
+		usb_interface_enum_cb(ACM2_TYPE_FLAG);
+	else if (acm->port_num == 3)
+		usb_interface_enum_cb(ACM3_TYPE_FLAG);
 	else
 		DBG(cdev, "Invalid port number = %d\n", acm->port_num);
 #endif
@@ -622,6 +672,26 @@ static int acm_tiocmset(struct gserial *port, int set, int clear)
 	 */
 	return acm_notify_serial_state(acm);
 }
+
+static int acm_tiocmget(struct gserial *port)
+{
+	struct f_acm            *acm = port_to_acm(port);
+	unsigned int result = 0;
+
+	if (acm->port_handshake_bits & ACM_CTRL_DTR)
+		result |= TIOCM_DTR;
+
+	if (acm->port_handshake_bits & ACM_CTRL_RTS)
+		result |= TIOCM_RTS;
+
+	if (acm->serial_state & TIOCM_CD)
+		result |= TIOCM_CD;
+
+	if (acm->serial_state & TIOCM_RI)
+		result |= TIOCM_RI;
+
+	return result;
+}
 #endif
 
 /* connect == the TTY link is open */
@@ -672,6 +742,7 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 	if (status < 0)
 		goto fail;
 	acm->ctrl_id = status;
+	acm_iad_descriptor.bFirstInterface = status;
 
 	acm_control_interface_desc.bInterfaceNumber = status;
 	acm_union_desc .bMasterInterface0 = status;
@@ -720,15 +791,19 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 	acm->notify_req->context = acm;
 
 	/* copy descriptors, and track endpoint copies */
-	f->descriptors = usb_copy_descriptors(acm_fs_function);
+	f->descriptors = usb_copy_descriptors(
+			 use_iads ? acm_iads_fs_function : acm_fs_function);
 	if (!f->descriptors)
 		goto fail;
 
-	acm->fs.in = usb_find_endpoint(acm_fs_function,
+	acm->fs.in = usb_find_endpoint(
+			use_iads ? acm_iads_fs_function : acm_fs_function,
 			f->descriptors, &acm_fs_in_desc);
-	acm->fs.out = usb_find_endpoint(acm_fs_function,
+	acm->fs.out = usb_find_endpoint(
+			use_iads ? acm_iads_fs_function : acm_fs_function,
 			f->descriptors, &acm_fs_out_desc);
-	acm->fs.notify = usb_find_endpoint(acm_fs_function,
+	acm->fs.notify = usb_find_endpoint(
+			use_iads ? acm_iads_fs_function : acm_fs_function,
 			f->descriptors, &acm_fs_notify_desc);
 
 	/* support all relevant hardware speeds... we expect that when
@@ -744,13 +819,17 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 				acm_fs_notify_desc.bEndpointAddress;
 
 		/* copy descriptors, and track endpoint copies */
-		f->hs_descriptors = usb_copy_descriptors(acm_hs_function);
+		f->hs_descriptors = usb_copy_descriptors(
+			use_iads ? acm_iads_hs_function : acm_hs_function);
 
-		acm->hs.in = usb_find_endpoint(acm_hs_function,
+		acm->hs.in = usb_find_endpoint(
+			use_iads ? acm_iads_hs_function : acm_hs_function,
 				f->hs_descriptors, &acm_hs_in_desc);
-		acm->hs.out = usb_find_endpoint(acm_hs_function,
+		acm->hs.out = usb_find_endpoint(
+			use_iads ? acm_iads_hs_function : acm_hs_function,
 				f->hs_descriptors, &acm_hs_out_desc);
-		acm->hs.notify = usb_find_endpoint(acm_hs_function,
+		acm->hs.notify = usb_find_endpoint(
+			use_iads ? acm_iads_hs_function : acm_hs_function,
 				f->hs_descriptors, &acm_hs_notify_desc);
 	}
 
@@ -787,6 +866,7 @@ acm_unbind(struct usb_configuration *c, struct usb_function *f)
 		usb_free_descriptors(f->hs_descriptors);
 	usb_free_descriptors(f->descriptors);
 	gs_free_req(acm->notify, acm->notify_req);
+	kfree(acm->port.func.name);
 	kfree(acm);
 }
 
@@ -817,11 +897,6 @@ static inline bool can_support_cdc(struct usb_configuration *c)
  * handle all the ones it binds.  Caller is also responsible
  * for calling @gserial_cleanup() before module unload.
  */
-static const char *acm_name_strings[2] = {
-		"acm0",
-		"acm1",
-};
-
 int __init acm_bind_config(struct usb_configuration *c, u8 port_num)
 {
 	struct f_acm	*acm;
@@ -851,6 +926,15 @@ int __init acm_bind_config(struct usb_configuration *c, u8 port_num)
 		acm_string_defs[ACM_DATA_IDX].id = status;
 
 		acm_data_interface_desc.iInterface = status;
+
+		if (use_iads) {
+			status = usb_string_id(c->cdev);
+			if (status < 0)
+				return status;
+			acm_string_defs[ACM_IAD_IDX].id = status;
+
+			acm_iad_descriptor.iFunction = status;
+		}
 	}
 
 	/* allocate and initialize one new instance */
@@ -866,7 +950,11 @@ int __init acm_bind_config(struct usb_configuration *c, u8 port_num)
 	acm->port.disconnect = acm_disconnect;
 	acm->port.send_break = acm_send_break;
 
-	acm->port.func.name = acm_name_strings[port_num];
+	acm->port.func.name = kasprintf(GFP_KERNEL, "acm%u", port_num);
+	if (!acm->port.func.name) {
+		kfree(acm);
+		return -ENOMEM;
+	}
 	acm->port.func.strings = acm_strings;
 	/* descriptors are per-instance copies */
 	acm->port.func.bind = acm_bind;
@@ -877,6 +965,7 @@ int __init acm_bind_config(struct usb_configuration *c, u8 port_num)
 
 #ifdef CONFIG_USB_MOT_ANDROID
 	acm->port.tiocmset = acm_tiocmset;
+	acm->port.tiocmget = acm_tiocmget;
 	g_acm_dev = acm;
 #endif
 
@@ -887,37 +976,53 @@ int __init acm_bind_config(struct usb_configuration *c, u8 port_num)
 }
 
 #if defined(CONFIG_USB_ANDROID_ACM) || defined(CONFIG_USB_MOT_ANDROID)
-static int acm_function_number;
-int acm0_function_bind_config(struct usb_configuration *c)
+#include <linux/platform_device.h>
+
+static struct acm_platform_data *acm_pdata;
+
+static int acm_probe(struct platform_device *pdev)
 {
-	int ret = acm_bind_config(c, 0);
-	if (ret == 0)
-		gserial_setup(c->cdev->gadget, acm_function_number);
+	acm_pdata = pdev->dev.platform_data;
+	/* Remove once all ACM including PIDs use IADs */
+	use_iads = acm_pdata->use_iads;
+	return 0;
+}
+
+static struct platform_driver acm_platform_driver = {
+	.driver = { .name = "acm", },
+	.probe = acm_probe,
+};
+
+int acm_function_bind_config(struct usb_configuration *c)
+{
+	int i;
+	u8 num_inst = acm_pdata ? acm_pdata->num_inst : 1;
+	int ret = gserial_setup(c->cdev->gadget, num_inst);
+
+	if (ret)
+		return ret;
+
+	for (i = 0; i < num_inst; i++) {
+		ret = acm_bind_config(c, i);
+		if (ret) {
+			pr_err("Could not bind acm%u config\n", i);
+			break;
+		}
+	}
+
 	return ret;
 }
 
-int acm1_function_bind_config(struct usb_configuration *c)
-{
-		int ret = acm_bind_config(c, 1);
-		return ret;
-}
-
-static struct android_usb_function acm0_function = {
-	.name = "acm0",
-	.bind_config = acm0_function_bind_config,
-};
-
-static struct android_usb_function acm1_function = {
-		.name = "acm1",
-		.bind_config = acm1_function_bind_config,
+static struct android_usb_function acm_function = {
+	.name = "acm",
+	.bind_config = acm_function_bind_config,
 };
 
 static int __init init(void)
 {
 	printk(KERN_INFO "f_acm init\n");
-	acm_function_number = 2;
-	android_register_function(&acm0_function);
-	android_register_function(&acm1_function);
+	platform_driver_register(&acm_platform_driver);
+	android_register_function(&acm_function);
 	return 0;
 }
 module_init(init);

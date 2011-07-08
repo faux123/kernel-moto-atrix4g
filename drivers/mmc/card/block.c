@@ -30,6 +30,7 @@
 #include <linux/mutex.h>
 #include <linux/scatterlist.h>
 #include <linux/string_helpers.h>
+#include <linux/apanic.h>
 
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
@@ -423,12 +424,15 @@ static bool mmc_handle_toshiba_write(struct mmc_queue *mq,
 	return true;
 }
 
-static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
+static int mmc_blk_xfer_rq(struct mmc_blk_data *md,
+	struct request *req, unsigned int *bytes_xfered)
 {
-	struct mmc_blk_data *md = mq->data;
-	struct mmc_card *card = md->queue.card;
+	struct mmc_queue *mq = &md->queue;
+	struct mmc_card *card = mq->card;
 	struct mmc_blk_request brq;
-	int ret = 1, disable_multi = 0;
+	int ret = 1;
+	int disable_multi = 0;
+	int retry = 0;
 
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 	if (mmc_bus_needs_resume(card->host)) {
@@ -437,7 +441,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 	}
 #endif
 
-	mmc_claim_host(card->host);
+	BUG_ON(!bytes_xfered);
 
 	do {
 		struct mmc_command cmd;
@@ -534,6 +538,8 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 
 		mmc_queue_bounce_post(mq);
 
+		ret = 0;
+		*bytes_xfered = brq.data.bytes_xfered;
 		/*
 		 * Check for errors here, but don't jump to cmd_err
 		 * until later as we need to wait for the card to leave
@@ -545,14 +551,19 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 				printk(KERN_WARNING "%s: retrying using single "
 				       "block read\n", req->rq_disk->disk_name);
 				disable_multi = 1;
+				retry = 1;
 				continue;
 			}
 			status = get_card_status(card, req);
 		} else if (disable_multi == 1) {
 			disable_multi = 0;
+			printk(KERN_INFO "%s: multi block enabled\n",
+				req->rq_disk->disk_name);
 		}
+		retry = 0;
 
 		if (brq.cmd.error) {
+			ret = brq.cmd.error;
 			printk(KERN_ERR "%s: error %d sending read/write "
 			       "command, response %#x, card status %#x\n",
 			       req->rq_disk->disk_name, brq.cmd.error,
@@ -560,6 +571,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		}
 
 		if (brq.data.error) {
+			ret = brq.data.error;
 			if (brq.data.error == -ETIMEDOUT && brq.mrq.stop)
 				/* 'Stop' response contains card status */
 				status = brq.mrq.stop->resp[0];
@@ -571,16 +583,20 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		}
 
 		if (brq.stop.error) {
+			ret = brq.stop.error;
 			printk(KERN_ERR "%s: error %d sending stop command, "
 			       "response %#x, card status %#x\n",
 			       req->rq_disk->disk_name, brq.stop.error,
 			       brq.stop.resp[0], status);
 		}
 
+		/*
+		* We need to wait for the card to leave programming mode
+		* even when things go wrong.
+		*/
 		if (!mmc_host_is_spi(card->host) && rq_data_dir(req) != READ) {
 			do {
 				int err;
-
 				cmd.opcode = MMC_SEND_STATUS;
 				cmd.arg = card->rca << 16;
 				cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
@@ -588,7 +604,8 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 				if (err) {
 					printk(KERN_ERR "%s: error %d requesting status\n",
 					       req->rq_disk->disk_name, err);
-					goto cmd_err;
+					ret = err;
+					break;
 				}
 				/*
 				 * Some cards mishandle the status bits,
@@ -597,75 +614,197 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 				 */
 			} while (!(cmd.resp[0] & R1_READY_FOR_DATA) ||
 				(R1_CURRENT_STATE(cmd.resp[0]) == 7));
-
-#if 0
-			if (cmd.resp[0] & ~0x00000900)
-				printk(KERN_ERR "%s: status = %08x\n",
-				       req->rq_disk->disk_name, cmd.resp[0]);
-			if (mmc_decode_status(cmd.resp))
-				goto cmd_err;
-#endif
-		}
-
-		if (brq.cmd.error || brq.stop.error || brq.data.error) {
-			if (rq_data_dir(req) == READ) {
-				/*
-				 * After an error, we redo I/O one sector at a
-				 * time, so we only reach here after trying to
-				 * read a single sector.
-				 */
-				spin_lock_irq(&md->lock);
-				ret = __blk_end_request(req, -EIO, brq.data.blksz);
-				spin_unlock_irq(&md->lock);
-				continue;
-			}
-			goto cmd_err;
 		}
 
 		/*
-		 * A block was successfully transferred.
+		 * Adjust the number of bytes transferred if there has been
+		 * an error...
+		 */
+		if (ret) {
+			/*
+			 * For reads we just fail the entire chunk as that
+			 * should be safe in all cases.
+			 *
+			 * If this is an SD card and we're writing, we can ask
+			 * the card for known good sectors.
+			 *
+			 * If the card is not SD, we can still ok written
+			 * sectors as reported by the controller (which might
+			 * be less than the real number of written sectors, but
+			 * never more).
+			 */
+			if (rq_data_dir(req) == READ)
+				*bytes_xfered = 0;
+			else if (mmc_card_sd(card)) {
+				u32 blocks = mmc_sd_num_wr_blocks(card);
+				if (blocks == (u32)-1)
+					*bytes_xfered = 0;
+				else
+					*bytes_xfered = blocks << 9;
+			}
+		}
+	} while (retry);
+
+	return ret;
+}
+
+static int mmc_blk_erase_rq(struct mmc_blk_data *md,
+	struct request *req, unsigned int *bytes_xfered)
+{
+	struct mmc_card *card;
+	struct mmc_command cmd;
+	int ret;
+
+	uint64_t start, end, blocks;
+
+	BUG_ON(!bytes_xfered);
+
+	*bytes_xfered = 0;
+
+	card = md->queue.card;
+
+	BUG_ON(mmc_card_blockaddr(card) && (card->csd.erase_size % 512));
+
+	start = ((uint64_t)blk_rq_pos(req)) << 9;
+	end = start + (((uint64_t)blk_rq_sectors(req)) << 9);
+
+	/*
+	 * The specs talk about the card removing the least
+	 * significant bits, but the erase sizes are not guaranteed
+	 * to be a power of two, so do a proper calculation.
+	 */
+	blocks = start;
+	if (do_div(blocks, card->csd.erase_size)) /* start % erase_size */
+		start = (blocks + 1) * card->csd.erase_size; /* roundup() */
+	blocks = end;
+	if (do_div(blocks, card->csd.erase_size))
+		end = blocks * card->csd.erase_size;
+
+	if (start == end)
+		goto out;
+
+	/*
+	 * The MMC spec isn't entirely clear that this should be done,
+	 * but it would be impossible to erase the entire card if the
+	 * addresses aren't sector based.
+	 */
+	if (mmc_card_blockaddr(card)) {
+		start >>= 9;
+		end >>= 9;
+	}
+
+	if (mmc_card_sd(card))
+		cmd.opcode = SD_ERASE_WR_BLK_START;
+	else
+		cmd.opcode = MMC_ERASE_GROUP_START;
+	cmd.arg = start;
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+
+	ret = mmc_wait_for_cmd(card->host, &cmd, 0);
+	if (ret) {
+		printk(KERN_ERR "%s: error %d setting block erase start address\n",
+		       req->rq_disk->disk_name, ret);
+		return ret;
+	}
+
+	if (mmc_card_sd(card))
+		cmd.opcode = SD_ERASE_WR_BLK_END;
+	else
+		cmd.opcode = MMC_ERASE_GROUP_END;
+	cmd.arg = end - 1; /* the span is inclusive */
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+
+	ret = mmc_wait_for_cmd(card->host, &cmd, 0);
+	if (ret) {
+		printk(KERN_ERR "%s: error %d setting block erase end address\n",
+		       req->rq_disk->disk_name, ret);
+		return ret;
+	}
+
+	cmd.opcode = MMC_ERASE;
+	cmd.arg = 0;	/* was MMC_ERASE_TYPE_SECURE */
+	cmd.flags = MMC_RSP_R1B | MMC_CMD_AC;
+
+	ret = mmc_wait_for_cmd(card->host, &cmd, 0);
+	if (ret) {
+		printk(KERN_ERR "%s: error %d starting block erase\n",
+		       req->rq_disk->disk_name, ret);
+		return ret;
+	}
+
+	/*
+	 * Wait for the card to finish the erase request...
+	 */
+	if (!mmc_host_is_spi(card->host)) {
+		do {
+			cmd.opcode = MMC_SEND_STATUS;
+			cmd.arg = card->rca << 16;
+			cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+			ret = mmc_wait_for_cmd(card->host, &cmd, 5);
+			if (ret) {
+				printk(KERN_ERR "%s: error %d requesting status\n",
+				       req->rq_disk->disk_name, ret);
+				return ret;
+			}
+			/*
+			 * Some cards mishandle the status bits,
+			 * so make sure to check both the busy
+			 * indication and the card state.
+			 */
+		} while (!(cmd.resp[0] & R1_READY_FOR_DATA) ||
+			(R1_CURRENT_STATE(cmd.resp[0]) == 7));
+	}
+
+out:
+	*bytes_xfered = blk_rq_sectors(req) << 9;
+
+	return 0;
+}
+
+static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
+{
+	struct mmc_blk_data *md = mq->data;
+	struct mmc_card *card = md->queue.card;
+	int ret, err, bytes_xfered;
+
+	mmc_claim_host(card->host);
+
+	do {
+		if (blk_discard_rq(req))
+			err = mmc_blk_erase_rq(md, req, &bytes_xfered);
+		else
+			err = mmc_blk_xfer_rq(md, req, &bytes_xfered);
+
+		/*
+		 * First handle the sectors that got transferred
+		 * successfully...
 		 */
 		spin_lock_irq(&md->lock);
-		ret = __blk_end_request(req, 0, brq.data.bytes_xfered);
+		ret = __blk_end_request(req, 0, bytes_xfered);
 		spin_unlock_irq(&md->lock);
+
+		/*
+		 * ...then check if things went south.
+		 */
+		if (err) {
+			mmc_release_host(card->host);
+
+			/*
+			 * Kill of the rest of the request...
+			 */
+			spin_lock_irq(&md->lock);
+			while (ret)
+				ret = __blk_end_request(req, -EIO,
+					blk_rq_cur_bytes(req));
+			spin_unlock_irq(&md->lock);
+
+			return 0;
+		}
 	} while (ret);
 
 	mmc_release_host(card->host);
 
 	return 1;
-
- cmd_err:
- 	/*
- 	 * If this is an SD card and we're writing, we can first
- 	 * mark the known good sectors as ok.
- 	 *
-	 * If the card is not SD, we can still ok written sectors
-	 * as reported by the controller (which might be less than
-	 * the real number of written sectors, but never more).
-	 */
-	if (mmc_card_sd(card)) {
-		u32 blocks;
-
-		blocks = mmc_sd_num_wr_blocks(card);
-		if (blocks != (u32)-1) {
-			spin_lock_irq(&md->lock);
-			ret = __blk_end_request(req, 0, blocks << 9);
-			spin_unlock_irq(&md->lock);
-		}
-	} else {
-		spin_lock_irq(&md->lock);
-		ret = __blk_end_request(req, 0, brq.data.bytes_xfered);
-		spin_unlock_irq(&md->lock);
-	}
-
-	mmc_release_host(card->host);
-
-	spin_lock_irq(&md->lock);
-	while (ret)
-		ret = __blk_end_request(req, -EIO, blk_rq_cur_bytes(req));
-	spin_unlock_irq(&md->lock);
-
-	return 0;
 }
 
 
@@ -791,6 +930,41 @@ static struct mmc_blk_data *mmc_blk_alloc(struct mmc_card *card)
 	return ERR_PTR(ret);
 }
 
+#if defined(CONFIG_MACH_MOT) && defined(CONFIG_APANIC_MMC)
+static int mmc_apanic_annotate(struct mmc_blk_data *md, struct mmc_card *card)
+{
+	char cap_str[10];
+	char manf_str[8] = "Unknown";
+	char ident[80];
+	static bool once = true;
+
+	string_get_size((u64)get_capacity(md->disk) << 9, STRING_UNITS_2,
+			cap_str, sizeof(cap_str));
+
+	switch (card->cid.manfid) {
+	case 0x02:
+	case 0x45:
+		strcpy(manf_str, "Sandisk");
+		break;
+	case 0x11:
+		strcpy(manf_str, "Toshiba");
+		break;
+	}
+
+	snprintf(ident, 80, "%s: %s %s %s %s %s\n",
+		md->disk->disk_name, mmc_card_id(card), manf_str,
+		mmc_card_name(card), cap_str, md->read_only ? "(ro)" : "");
+
+	printk(KERN_INFO "%s", ident);
+
+	if (once) {
+		once = false;
+		return apanic_annotate(ident);
+	} else
+		return 0;
+}
+#endif
+
 static int mmc_blk_probe(struct mmc_card *card)
 {
 	struct mmc_blk_data *md;
@@ -814,9 +988,14 @@ static int mmc_blk_probe(struct mmc_card *card)
 
 	string_get_size((u64)get_capacity(md->disk) << 9, STRING_UNITS_2,
 			cap_str, sizeof(cap_str));
+
+#if defined(CONFIG_MACH_MOT) && defined(CONFIG_APANIC_MMC)
+	mmc_apanic_annotate(md, card);
+#else
 	printk(KERN_INFO "%s: %s %s %s %s\n",
 		md->disk->disk_name, mmc_card_id(card), mmc_card_name(card),
 		cap_str, md->read_only ? "(ro)" : "");
+#endif
 
 	mmc_set_drvdata(card, md);
 #ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME

@@ -44,6 +44,7 @@ struct gserial {
 	/* notification callbacks */
 #ifdef CONFIG_USB_MOT_ANDROID
 	int (*tiocmset)(struct gserial *p, int set, int clear);
+	int (*tiocmget)(struct gserial *p);
 #endif
 	void (*connect)(struct gserial *p);
 	void (*disconnect)(struct gserial *p);

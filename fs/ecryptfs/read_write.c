@@ -236,7 +236,10 @@ int ecryptfs_read_lower(char *data, loff_t offset, size_t size,
 	ssize_t rc;
 
 	mutex_lock(&inode_info->lower_file_mutex);
-	BUG_ON(!inode_info->lower_file);
+	if (!inode_info->lower_file) {
+		mutex_unlock(&inode_info->lower_file_mutex);
+		return -EINVAL;
+	}
 	inode_info->lower_file->f_pos = offset;
 	fs_save = get_fs();
 	set_fs(get_ds());

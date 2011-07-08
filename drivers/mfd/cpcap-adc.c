@@ -30,6 +30,7 @@
 
 #define MAX_ADC_FIFO_DEPTH 8 /* this must be a power of 2 */
 #define MAX_TEMP_LVL 27
+#define FOUR_POINT_TWO_ADC 801
 
 struct cpcap_adc {
 	struct cpcap_device *cpcap;
@@ -419,11 +420,21 @@ static void adc_phase(struct cpcap_adc_request *req, int index)
 		tbl_index = (tbl_index % 2) ? CPCAP_ADC_BATTI_ADC :
 			    CPCAP_ADC_BATTP;
 
-	req->result[index] += conv_tbl[tbl_index].cal_offset;
-	req->result[index] += conv_tbl[tbl_index].align_offset;
-	req->result[index] *= phase_tbl[tbl_index].multiplier;
-	req->result[index] /= phase_tbl[tbl_index].divider;
-	req->result[index] += phase_tbl[tbl_index].offset;
+	if (((req->type == CPCAP_ADC_TYPE_BANK_0) ||
+	    (req->type == CPCAP_ADC_TYPE_BATT_PI)) &&
+	    (tbl_index == CPCAP_ADC_BATTP)) {
+		req->result[index] -= phase_tbl[tbl_index].offset;
+		req->result[index] -= FOUR_POINT_TWO_ADC;
+		req->result[index] *= phase_tbl[tbl_index].multiplier;
+		req->result[index] /= phase_tbl[tbl_index].divider;
+		req->result[index] += FOUR_POINT_TWO_ADC;
+	} else {
+		req->result[index] += conv_tbl[tbl_index].cal_offset;
+		req->result[index] += conv_tbl[tbl_index].align_offset;
+		req->result[index] *= phase_tbl[tbl_index].multiplier;
+		req->result[index] /= phase_tbl[tbl_index].divider;
+		req->result[index] += phase_tbl[tbl_index].offset;
+	}
 
 	if (req->result[index] < phase_tbl[tbl_index].min)
 		req->result[index] = phase_tbl[tbl_index].min;

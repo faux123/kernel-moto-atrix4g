@@ -223,7 +223,7 @@ int vni_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
                 dev->header_ops = NULL;
 
             /* also, and clone its IP, MAC and other information */
-            memcpy(dev->dev_addr,  slave->dev_addr,  sizeof(slave->dev_addr));
+            memcpy(dev->dev_addr,  slave->dev_addr,  ETH_ALEN);
             memcpy(dev->broadcast, slave->broadcast, sizeof(slave->broadcast));
 
             /* accept the parameters (no checks here) */
@@ -291,7 +291,7 @@ void vni_init(struct net_device *dev)
            dev->header_ops = NULL;
 
     /* also, and clone its IP, MAC and other information */
-    memcpy(dev->dev_addr,  slave->dev_addr,  sizeof(slave->dev_addr));
+    memcpy(dev->dev_addr,  slave->dev_addr,  ETH_ALEN);
     memcpy(dev->broadcast, slave->broadcast, sizeof(slave->broadcast));
 
     /* Assign default value (no checks here) */

@@ -38,6 +38,9 @@
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
 #include <linux/io.h>
+#include <linux/cpcap-accy.h>
+#include <linux/switch.h>
+
 
 #include "f_mot_android.h"
 #include "u_serial.h"
@@ -69,9 +72,14 @@ static const char longname[] = "Gadget Android";
 #define PRODUCT_ID              0x41da
 #define ADB_PRODUCT_ID          0x41da
 
-#define MAX_DEVICE_TYPE_NUM   20
-#define MAX_DEVICE_NAME_SIZE  30
+#define MAX_DEVICE_TYPE_NUM   30
+#define MAX_DEVICE_NAME_SIZE  45
 
+enum cable_state {
+	CABLE_NONE,
+	CABLE_USB,
+	CABLE_FACTORY,
+};
 
 struct device_pid_vid {
 	char *name;
@@ -84,6 +92,76 @@ struct device_pid_vid {
 	int protocol;
 };
 
+#if defined(CONFIG_TEGRA_ODM_DAYTONA)
+static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
+	{"msc", MSC_TYPE_FLAG | CDROM_TYPE_FLAG, 0x22b8, 0x70c6, "Motorola Config 14",
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE},
+	{"msc_adb", MSC_TYPE_FLAG | ADB_TYPE_FLAG | CDROM_TYPE_FLAG, 0x22b8, 0x70c7,
+	 "Motorola Config 42", USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE},
+	{"msc_only", MSC_TYPE_FLAG, 0x22b8, 0x70c6,
+	"Motorola Config 14", USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
+	USB_CLASS_PER_INTERFACE},
+	{"cdrom", CDROM_TYPE_FLAG, 0x22b8, 0x70d0, "Motorola CDROM Device",
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE},
+	{"eth", ETH_TYPE_FLAG, 0x22b8, 0x70c2, "Motorola Config 13",
+	 USB_CLASS_COMM, USB_CLASS_COMM, USB_CLASS_PER_INTERFACE},
+	{"mtp", MTP_TYPE_FLAG, 0x22b8, 0x70ca, "Motorola Config 15",
+	 USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE},
+	{"eth_adb", ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x70c3,
+	 "Motorola Android Composite Device"},
+	{"acm_eth_mtp", ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG, 0x22b8,
+	 0x70c4, "Motorola Config 30", USB_CLASS_VENDOR_SPEC,
+	 USB_CLASS_VENDOR_SPEC, USB_CLASS_VENDOR_SPEC},
+	{"mtp_adb", MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x70cb,
+	 "Motorola Config 32", USB_CLASS_VENDOR_SPEC,
+	 USB_CLASS_VENDOR_SPEC, USB_CLASS_VENDOR_SPEC},
+	{"acm_eth_mtp_adb",
+	 ACM_TYPE_FLAG | ETH_TYPE_FLAG | MTP_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8,
+	 0x70c5, "Motorola Config 31", USB_CLASS_VENDOR_SPEC,
+	 USB_CLASS_VENDOR_SPEC, USB_CLASS_VENDOR_SPEC},
+	{"msc_eth", MSC_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8, 0x7081,
+	 "Motorola Android Composite Device"},
+	{"msc_adb_eth", MSC_TYPE_FLAG | ADB_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8,
+	 0x7080, "Motorola Android Composite Device"},
+	{"charge_only", MSC_TYPE_FLAG, 0x22b8, 0x70c8, "Motorola Config 50",
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE},
+	{"charge_adb", MSC_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x70c9,
+	 "Motorola Config 50", USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE},
+	{"rndis", RNDIS_TYPE_FLAG, 0x22b8, 0x70cc, "Motorola RNDIS Device",
+	 USB_CLASS_WIRELESS_CONTROLLER, USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE},
+	{"rndis_adb", RNDIS_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x70cd,
+	 "Motorola RNDIS ADB Device",
+	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
+	 USB_CLASS_PER_INTERFACE},
+	{"acm_acm1_acm2_acm3_eth",
+	 ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ACM2_TYPE_FLAG | ACM3_TYPE_FLAG
+	 | ETH_TYPE_FLAG, 0x22b8, 0x7093,
+	 "Motorola Config 4ACM+BLAN", USB_CLASS_MISC,
+	 0x2, 0x1},
+	{"acm_acm1_acm2_acm3_eth_adb",
+	 ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ACM2_TYPE_FLAG | ACM3_TYPE_FLAG
+	 | ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x7094,
+	 "Motorola Config 4ACM+BLAN+ADB", USB_CLASS_MISC,
+	 0x2, 0x1},
+	{"rndis_acm_acm1_acm2_acm3_eth",
+	 RNDIS_TYPE_FLAG | ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ACM2_TYPE_FLAG
+	 | ACM3_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8, 0x7095,
+	 "Motorola Config RNDIS+4ACM+BLAN", USB_CLASS_MISC, 0x2, 0x1},
+	{"rndis_acm_acm1_acm2_acm3_eth_adb",
+	 RNDIS_TYPE_FLAG | ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ACM2_TYPE_FLAG
+	 | ACM3_TYPE_FLAG | ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x7096,
+	 "Motorola Config RNDIS+4ACM+BLAN+ADB", USB_CLASS_MISC, 0x2, 0x1},
+	{}
+};
+
+#else
 static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
 	{"msc", MSC_TYPE_FLAG | CDROM_TYPE_FLAG, 0x22b8, 0x7086, "Motorola Config 14",
 	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
@@ -128,15 +206,25 @@ static struct device_pid_vid mot_android_vid_pid[MAX_DEVICE_TYPE_NUM] = {
 	 "Motorola RNDIS ADB Device",
 	 USB_CLASS_PER_INTERFACE, USB_CLASS_PER_INTERFACE,
 	 USB_CLASS_PER_INTERFACE},
-	{"acm_acm1_eth_mtp_adb",
-	 ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ETH_TYPE_FLAG
-	 | MTP_TYPE_FLAG | ADB_TYPE_FLAG,
-	 0x22b8,
-	 0x7093, "Motorola Config 31", USB_CLASS_VENDOR_SPEC,
-	 USB_CLASS_VENDOR_SPEC, USB_CLASS_VENDOR_SPEC},
+	{"acm_acm1_acm2_acm3_eth",
+	 ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ACM2_TYPE_FLAG | ACM3_TYPE_FLAG
+	 | ETH_TYPE_FLAG, 0x22b8, 0x7093,
+	 "Motorola Config 4ACM+BLAN", USB_CLASS_MISC, 0x2, 0x1},
+	{"acm_acm1_acm2_acm3_eth_adb",
+	 ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ACM2_TYPE_FLAG | ACM3_TYPE_FLAG
+	 | ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x7094,
+	 "Motorola Config 4ACM+BLAN+ADB", USB_CLASS_MISC, 0x2, 0x1},
+	{"rndis_acm_acm1_acm2_acm3_eth",
+	 RNDIS_TYPE_FLAG | ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ACM2_TYPE_FLAG
+	 | ACM3_TYPE_FLAG | ETH_TYPE_FLAG, 0x22b8, 0x7095,
+	 "Motorola Config RNDIS+4ACM+BLAN", USB_CLASS_MISC, 0x2, 0x1},
+	{"rndis_acm_acm1_acm2_acm3_eth_adb",
+	 RNDIS_TYPE_FLAG | ACM_TYPE_FLAG | ACM1_TYPE_FLAG | ACM2_TYPE_FLAG
+	 | ACM3_TYPE_FLAG | ETH_TYPE_FLAG | ADB_TYPE_FLAG, 0x22b8, 0x7096,
+	 "Motorola Config RNDIS+4ACM+BLAN+ADB", USB_CLASS_MISC, 0x2, 0x1},
 	{}
 };
-
+#endif
 
 struct device_mode_change_dev {
 	int adb_mode_changed_flag;
@@ -162,6 +250,7 @@ struct android_dev {
 
 	int product_id;
 	int version;
+	struct switch_dev sdev;
 };
 
 static struct android_dev *_android_dev;
@@ -209,19 +298,37 @@ static struct usb_device_descriptor device_desc = {
 };
 
 static struct list_head _functions = LIST_HEAD_INIT(_functions);
-static int _registered_function_count;
+static bool _are_functions_bound;
 
-void android_usb_set_connected(int connected)
+void android_usb_set_connected(int connected, unsigned int accy)
 {
-	if (_android_dev && _android_dev->cdev
-	    && _android_dev->cdev->gadget) {
-		if (connected) {
-			usb_gadget_disconnect(_android_dev->cdev->gadget);
-#ifdef CONFIG_USB_TEGRA_OTG
-			usb_gadget_vbus_connect(_android_dev->cdev->gadget);
-#endif
-		}
+	struct android_dev *dev = _android_dev;
+
+	if (!dev)
+		return;
+
+	printk(KERN_INFO "%s - connected = %d, accy = %d \n",
+		__func__, connected, accy);
+	switch (accy) {
+	case CPCAP_ACCY_USB:
+		if (connected)
+			switch_set_state(&dev->sdev, CABLE_USB);
+		else
+			switch_set_state(&dev->sdev, CABLE_NONE);
+		break;
+	case CPCAP_ACCY_FACTORY:
+		if (connected)
+			switch_set_state(&dev->sdev, CABLE_FACTORY);
+		else
+			switch_set_state(&dev->sdev, CABLE_NONE);
+		break;
+	default:
+		return;
 	}
+
+	if (connected && dev->cdev && dev->cdev->gadget)
+		usb_gadget_vbus_connect(dev->cdev->gadget);
+
 }
 
 static struct android_usb_function *get_function(const char *name)
@@ -232,6 +339,50 @@ static struct android_usb_function *get_function(const char *name)
 			return f;
 	}
 	return 0;
+}
+
+static bool are_functions_registered(struct android_dev *dev)
+{
+	char **functions = dev->functions;
+	int i;
+
+	/* Look only for functions required by the board config */
+	for (i = 0; i < dev->num_functions; i++) {
+		char *name = *functions++;
+		bool is_match = false;
+		/* Could reuse get_function() here, but a reverse search
+		 * should yield less comparisons overall */
+		struct android_usb_function *f;
+		list_for_each_entry_reverse(f, &_functions, list) {
+			if (!strcmp(name, f->name)) {
+				is_match = true;
+				break;
+			}
+		}
+		if (is_match)
+			continue;
+		else
+			return false;
+	}
+
+	return true;
+}
+
+static bool should_bind_functions(struct android_dev *dev)
+{
+	/* Don't waste time if the main driver hasn't bound */
+	if (!dev->config)
+		return false;
+
+	/* Don't waste time if we've already bound the functions */
+	if (_are_functions_bound)
+		return false;
+
+	/* This call is the most costly, so call it last */
+	if (!are_functions_registered(dev))
+		return false;
+
+	return true;
 }
 
 static void bind_functions(struct android_dev *dev)
@@ -250,6 +401,8 @@ static void bind_functions(struct android_dev *dev)
 			       "function %s not found in bind_functions\n",
 			       name);
 	}
+
+	_are_functions_bound = true;
 }
 
 static int __init android_bind_config(struct usb_configuration *c)
@@ -259,8 +412,7 @@ static int __init android_bind_config(struct usb_configuration *c)
 	printk(KERN_DEBUG "android_bind_config\n");
 	dev->config = c;
 
-	/* bind our functions if they have all registered */
-	if (_registered_function_count == dev->num_functions)
+	if (should_bind_functions(dev))
 		bind_functions(dev);
 
 	return 0;
@@ -394,10 +546,8 @@ void adb_mode_change_cb(void)
 
 	ret = wait_event_interruptible(dev_mode_change->adb_cb_wq,
 		(!dev_mode_change->adb_mode_changed_flag));
-	if (ret < 0) {
+	if (ret < 0)
 		printk(KERN_ERR "adb_change_cb: %d\n", ret);
-		return;
-	}
 
 	dev_mode_change->adb_mode_changed_flag = 1;
 	wake_up_interruptible(&dev_mode_change->device_mode_change_wq);
@@ -435,7 +585,13 @@ static int product_has_function(struct android_usb_product *p,
 	int i;
 
 	for (i = 0; i < count; i++) {
-		if (!strcmp(name, *functions++))
+		/* For functions with multiple instances, usb_function.name
+		 * will have an index appended to the core name (ex: acm0),
+		 * while android_usb_product.functions[i] will only have the
+		 * core name (ex: acm). So, only compare up to the length of
+		 * android_usb_product.functions[i].
+		 */
+		if (!strncmp(name, functions[i], strlen(functions[i])))
 			return 1;
 	}
 	return 0;
@@ -502,7 +658,6 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 	strings_dev[STRING_CONFIG_IDX].id = id;
 	android_config_driver.iConfiguration = id;
 
-
 	/* Remove Remote Wakeup
 	if (gadget->ops->wakeup)
 		android_config_driver.bmAttributes |=
@@ -532,7 +687,8 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 		device_desc.bcdDevice = __constant_cpu_to_le16(0x9999);
 	}
 
-	usb_gadget_set_selfpowered(gadget);
+	/* Do not Set Self Powered as WHQL tests are failing on Win7 */
+	/*usb_gadget_set_selfpowered(gadget); */
 	dev->cdev = cdev;
 	product_id = get_product_id(dev);
 	device_desc.idProduct = __constant_cpu_to_le16(product_id);
@@ -639,20 +795,6 @@ static int enable_android_usb_product_function(char *device_name, int cnt)
 		}
 		return 0;
 	}
-	if (!strncmp(device_name, "acm_acm1_eth_mtp_adb", cnt - 1)) {
-		list_for_each_entry(f, &android_config_driver.functions,
-			list) {
-			if (!strcmp(f->name, "acm0")
-				|| !strcmp(f->name, "acm1")
-				|| !strcmp(f->name, "usbnet")
-				|| !strcmp(f->name, "mtp")
-				|| !strcmp(f->name, "adb"))
-				f->hidden = disable;
-			else
-				f->hidden = enable;
-		}
-		return 0;
-	}
 	if (!strncmp(device_name, "mtp", cnt - 1)) {
 		list_for_each_entry(f, &android_config_driver.functions,
 				    list) {
@@ -675,6 +817,7 @@ static int enable_android_usb_product_function(char *device_name, int cnt)
 		return 0;
 	}
 	if (!strncmp(device_name, "msc", cnt - 1)
+	    || !strncmp(device_name, "msc_only", cnt - 1)
 	    || !strncmp(device_name, "cdrom", cnt - 1)
 	    || !strncmp(device_name, "charge_only", cnt - 1)) {
 		list_for_each_entry(f, &android_config_driver.functions,
@@ -712,6 +855,67 @@ static int enable_android_usb_product_function(char *device_name, int cnt)
 		list_for_each_entry(f, &android_config_driver.functions,
 				    list) {
 			if (!strcmp(f->name, "rndis")
+			    || !strcmp(f->name, "adb"))
+				f->hidden = disable;
+			else
+				f->hidden = enable;
+		}
+		return 0;
+	}
+	if (!strncmp(device_name, "acm_acm1_acm2_acm3_eth", cnt - 1)) {
+		list_for_each_entry(f, &android_config_driver.functions,
+				    list) {
+			if (!strcmp(f->name, "acm0")
+			    || !strcmp(f->name, "acm1")
+			    || !strcmp(f->name, "acm2")
+			    || !strcmp(f->name, "acm3")
+			    || !strcmp(f->name, "usbnet"))
+				f->hidden = disable;
+			else
+				f->hidden = enable;
+		}
+		return 0;
+	}
+	if (!strncmp(device_name, "acm_acm1_acm2_acm3_eth_adb", cnt - 1)) {
+		list_for_each_entry(f, &android_config_driver.functions,
+				    list) {
+			if (!strcmp(f->name, "acm0")
+			    || !strcmp(f->name, "acm1")
+			    || !strcmp(f->name, "acm2")
+			    || !strcmp(f->name, "acm3")
+			    || !strcmp(f->name, "usbnet")
+			    || !strcmp(f->name, "adb"))
+				f->hidden = disable;
+			else
+				f->hidden = enable;
+		}
+		return 0;
+	}
+	if (!strncmp(device_name, "rndis_acm_acm1_acm2_acm3_eth", cnt - 1)) {
+		list_for_each_entry(f, &android_config_driver.functions,
+				    list) {
+			if (!strcmp(f->name, "rndis")
+			    || !strcmp(f->name, "acm0")
+			    || !strcmp(f->name, "acm1")
+			    || !strcmp(f->name, "acm2")
+			    || !strcmp(f->name, "acm3")
+			    || !strcmp(f->name, "usbnet"))
+				f->hidden = disable;
+			else
+				f->hidden = enable;
+		}
+		return 0;
+	}
+	if (!strncmp(device_name, "rndis_acm_acm1_acm2_acm3_eth_adb",
+		     cnt - 1)) {
+		list_for_each_entry(f, &android_config_driver.functions,
+				    list) {
+			if (!strcmp(f->name, "rndis")
+			    || !strcmp(f->name, "acm0")
+			    || !strcmp(f->name, "acm1")
+			    || !strcmp(f->name, "acm2")
+			    || !strcmp(f->name, "acm3")
+			    || !strcmp(f->name, "usbnet")
 			    || !strcmp(f->name, "adb"))
 				f->hidden = disable;
 			else
@@ -765,10 +969,7 @@ static void force_reenumeration(struct android_dev *dev, int dev_type)
 		 * relevant with USB transceiver on device/host side.
 		 *  Sleep 50ms here to make it smoothly
 		 */
-		usb_gadget_disconnect(dev->cdev->gadget);
-		msleep(100);
-		usb_gadget_connect(dev->cdev->gadget);
-		msleep(100);
+		usb_composite_force_reset(dev->cdev);
 	}
 }
 
@@ -778,24 +979,14 @@ void android_register_function(struct android_usb_function *f)
 
 	printk(KERN_INFO "android_register_function %s\n", f->name);
 	list_add_tail(&f->list, &_functions);
-	_registered_function_count++;
 
-	/* bind our functions if they have all registered
-	 * and the main driver has bound.
-	 */
-	if (dev->config
-	    && _registered_function_count == dev->num_functions)
+	if (dev && should_bind_functions(dev))
 		bind_functions(dev);
 }
 
 void android_enable_function(struct usb_function *f, int enable)
 {
-	struct android_dev *dev = _android_dev;
 	int disable = !enable;
-	int product_id;
-	char *func_name;
-	int func_name_len;
-	int adb_enable = 0;
 
 	if (!!f->hidden != disable) {
 		if (!strcmp(f->name, "rndis")) {
@@ -807,6 +998,9 @@ void android_enable_function(struct usb_function *f, int enable)
 			return;
 		}
 	}
+
+	if (!strcmp(f->name, "usb_mass_storage"))
+		usb_function_set_enabled(f, enable);
 }
 
 /*
@@ -831,6 +1025,7 @@ static int device_mode_change_release(struct inode *ip, struct file *fp)
 	    _device_mode_change_dev;
 
 	atomic_dec(&dev_mode_change->device_mode_change_excl);
+	dev_mode_change->adb_mode_changed_flag = 0;
 	return 0;
 }
 
@@ -868,9 +1063,13 @@ device_mode_change_write(struct file *file, const char __user * buffer,
 		dev_mode_change->usb_device_cfg_flag = 0;
 		dev_mode_change->usb_get_desc_flag = 0;
 		usb_gadget_disconnect(_android_dev->cdev->gadget);
-#ifdef CONFIG_USB_TEGRA_OTG
 		usb_gadget_vbus_disconnect(_android_dev->cdev->gadget);
-#endif
+		/*
+		 * Set the composite switch to 0 during a disconnect.
+		 * This is required to handle a few corner cases, where
+		 * enumeration has not completed, but the cable is yanked out
+		 */
+		switch_set_state(&_android_dev->cdev->sdev, 0);
 		printk(KERN_INFO "%s - Handled Detach\n", __func__);
 		return count;
 	}
@@ -1161,17 +1360,22 @@ static int __init init(void)
 
 	dev_mode_change->adb_mode_changed_flag = 0;
 	dev_mode_change->tethering_mode_changed_flag = 0;
-	_registered_function_count = 0;
 	atomic_set(&tethering_enable_excl, 0);
+	dev->sdev.name = "usb_connected";
+	ret = switch_dev_register(&dev->sdev);
+	if (ret < 0)
+		return ret;
 
 	ret = platform_driver_register(&android_platform_driver);
 	if (ret) {
+		switch_dev_unregister(&dev->sdev);
 		kfree(_android_dev);
 		kfree(_device_mode_change_dev);
 		return ret;
 	}
 	ret = misc_register(&mode_change_device);
 	if (ret) {
+		switch_dev_unregister(&dev->sdev);
 		kfree(_android_dev);
 		kfree(_device_mode_change_dev);
 		platform_driver_unregister(&android_platform_driver);
@@ -1188,6 +1392,7 @@ static void __exit cleanup(void)
 	platform_driver_unregister(&android_platform_driver);
 	kfree(_device_mode_change_dev);
 	_device_mode_change_dev = NULL;
+	switch_dev_unregister(&_android_dev->sdev);
 	kfree(_android_dev);
 	_android_dev = NULL;
 }

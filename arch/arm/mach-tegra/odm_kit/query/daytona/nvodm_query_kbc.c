@@ -38,9 +38,12 @@
  */
 
 #include "nvodm_query_kbc.h"
+#include "hwrev.h"
 
-static NvU32 RowNumbers[] = {0, 1, 1, 2, 2};
-static NvU32 ColNumbers[] = {0, 0, 1, 0, 1};
+/* HOME key has different connection based HW  revision  */
+static NvU32 RowNumbers[] = {2};
+static NvU32 ColNumbers_P1C[] = {0};
+static NvU32 ColNumbers[] = {2};
 
 void
 NvOdmKbcGetParameter(
@@ -81,8 +84,11 @@ NvOdmKbcIsSelectKeysWkUpEnabled(
     NvU32 *NumOfKeys)
 {
     *pRowNumber = &RowNumbers[0];
-    *pColNumber = &ColNumbers[0];
-    *NumOfKeys = 5;
+   if (HWREV_REV(system_rev) <= HWREV_REV_1C)
+	*pColNumber = &ColNumbers_P1C[0];
+    else
+	*pColNumber = &ColNumbers[0];
+    *NumOfKeys = 1;
     return NV_TRUE;
 }
 

@@ -114,7 +114,7 @@ static int mmc_decode_cid(struct mmc_card *card)
 static int mmc_decode_csd(struct mmc_card *card)
 {
 	struct mmc_csd *csd = &card->csd;
-	unsigned int e, m;
+	unsigned int e, m, a, b;
 	u32 *resp = card->raw_csd;
 
 	/*
@@ -156,6 +156,11 @@ static int mmc_decode_csd(struct mmc_card *card)
 	csd->r2w_factor = UNSTUFF_BITS(resp, 26, 3);
 	csd->write_blkbits = UNSTUFF_BITS(resp, 22, 4);
 	csd->write_partial = UNSTUFF_BITS(resp, 21, 1);
+
+	a = UNSTUFF_BITS(resp, 42, 5);
+	b = UNSTUFF_BITS(resp, 37, 5);
+	csd->erase_size = (a + 1) * (b + 1);
+	csd->erase_size <<= csd->write_blkbits;
 
 	return 0;
 }
@@ -244,7 +249,7 @@ static int mmc_read_ext_csd(struct mmc_card *card)
 #ifdef CONFIG_EMBEDDED_MMC_START_OFFSET
 			offs = card->host->ops->get_host_offset(card->host);
 			offs >>= 9;
-			BUG_ON(offs >= card->ext_csd.sectors);
+			BUG_ON(offs > card->ext_csd.sectors);
 			card->ext_csd.sectors -= offs;
 #endif
 			offs = ext_csd[EXT_CSD_BOOT_SIZE_MULTI] * SZ_256K / 512;
@@ -277,9 +282,15 @@ static int mmc_read_ext_csd(struct mmc_card *card)
 					1 << ext_csd[EXT_CSD_S_A_TIMEOUT];
 	}
 
-	if (card->ext_csd.rev >= 5)
-		card->ext_csd.rel_wr_sec_c = ext_csd[EXT_CSD_REL_WR_SEC_C];
+	if (card->ext_csd.rev >= 5) {
+		int i;
+		for (i = EXT_CSD_PWR_CL_52_195;
+		     i <= EXT_CSD_PWR_CL_26_360; i++)
+			card->ext_csd.power_class[MMC_EXT_CSD_PWR_CL(i)] =
+			                                           ext_csd[i];
 
+		card->ext_csd.rel_wr_sec_c = ext_csd[EXT_CSD_REL_WR_SEC_C];
+	}
 out:
 	kfree(ext_csd);
 
@@ -496,6 +507,15 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 			bus_width = MMC_BUS_WIDTH_4;
 		}
 
+		err = mmc_set_power_class(host, max_dtr, bus_width);
+
+		if (err && err != -EBADMSG)
+			goto free_card;
+
+		/*
+		 * Some cards don't honor power class but will support wide
+		 * bus anyway.
+		 */
 		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
 				 EXT_CSD_BUS_WIDTH, ext_csd_bit);
 

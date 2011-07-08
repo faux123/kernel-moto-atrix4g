@@ -328,6 +328,42 @@ config MDM_CTRL
 	bool "Modem control"
 	default n
 
+config MISC_NVODMCAM
+	tristate "Camera driver for use with nVidia ODM subsystem"
+	depends on ARCH_TEGRA
+	---help---
+	  This is a custom driver to facilitate camera power control with nVidia ODM
+
+config MOT_TCMD_DRIVER
+       bool "Motorola tcmd driver"
+       default n
+
+config  MOT_FEAT_TD_TS27010MUX
+	bool "TS27010 MUX Motorola driver for TD-SCDMA modem"
+
+config MOT_FEAT_TD_BP_CTRL
+	tristate "Motorola TD Modem ctrl driver"
+	default n
+
+config MOT_FEAT_PANIC_NOTIFIER
+	bool "Extra notifier when a panic happens"
+	default n
+	---help---
+	It does not depends on any panic dumping features.
+
+config GPS_BCM4750
+	bool "Enable or disable GPS PM driver"
+	default n
+	---help---
+	If you want to build BCM4750 gps power management code
+	just enable it
+
+config MISC_NVODMCAM
+    tristate "Camera driver for use with nVidia ODM subsystem"
+    depends on ARCH_TEGRA
+    ---help---
+    This is a custom driver to facilitate camera power control with nVidia ODM
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
@@ -335,5 +371,6 @@ source "drivers/misc/ts27010mux/Kconfig"
 source "drivers/misc/sec/Kconfig"
 source "drivers/misc/spi-tty/Kconfig"
 source "drivers/misc/vni/Kconfig"
+source "drivers/misc/radio_ctrl/Kconfig"
 
 endif # MISC_DEVICES

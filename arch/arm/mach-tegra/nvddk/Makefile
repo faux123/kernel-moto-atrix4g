@@ -10,6 +10,7 @@ obj-y	+= nvddk_usbphy.o
 obj-y	+= nvddk_usbphy_ap20.o
 endif
 
+obj-$(CONFIG_TEGRA_FUSE)	+= apbio.o
 obj-$(CONFIG_TEGRA_FUSE)	+= nvddk_fuse_ap20.o
 
 obj-$(CONFIG_TEGRA_AES)		+= nvddk_aes_intf_ap20.o

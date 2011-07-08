@@ -32,22 +32,6 @@
 #define dprintk(msg...) cpufreq_debug_printk(CPUFREQ_DEBUG_CORE, \
 						"cpufreq-core", msg)
 
-#define USE_FAKE_SHMOO
-#ifdef USE_FAKE_SHMOO
-#include "../nvrm/core/common/nvrm_clocks_limits_private.h"
-#include "../nvrm/core/common/nvrm_power_dfs.h"
-#include <nvrm_diag.h>
-
-/* 
- * TEGRA AP20 CPU OC/UV Hack by Cpasjuste @ https://github.com/Cpasjuste/tegra_lg_p990_kernel_oc_uv
- * Inspired by mblaster @ https://github.com/mblaster/linux_2.6.32_folio100
-*/
-
-int *FakeShmoo_UV_mV_Ptr; // Stored voltage table from cpufreq sysfs
-extern NvRmCpuShmoo fake_CpuShmoo;  // Stored faked CpuShmoo values
-extern NvRmDfs *fakeShmoo_Dfs;
-#endif // USE_FAKE_SHMOO
-
 /**
  * The "cpufreq driver" - the arch- or hardware-dependent low
  * level driver of CPUFreq support, and its spinlock. This lock
@@ -663,58 +647,6 @@ static ssize_t show_scaling_setspeed(struct cpufreq_policy *policy, char *buf)
 	return policy->governor->show_setspeed(policy, buf);
 }
 
-#ifdef USE_FAKE_SHMOO
-static ssize_t show_cpu_temp(struct cpufreq_policy *policy, char *buf)
-{
-	int pTemp = 0;
-
-	if( fakeShmoo_Dfs != NULL )
-	{
-		NvRmDtt* pDtt = &fakeShmoo_Dfs->ThermalThrottler;
-		NvOdmTmonTemperatureGet(pDtt->hOdmTcore, &pTemp);
-	}
-	return sprintf(buf, "%i\n",  pTemp);
-}
-
-static ssize_t show_frequency_voltage_table(struct cpufreq_policy *policy, char *buf)
-{
-	int i;
-	char *table = buf;
-
-	for( i=fake_CpuShmoo.ShmooVmaxIndex; i>-1; i-- )
-	{
-		table += sprintf(table, "%d %d %d\n", fake_CpuShmoo.pScaledCpuLimits->MaxKHzList[i], fake_CpuShmoo.ShmooVoltages[i], fake_CpuShmoo.ShmooVoltages[i] - FakeShmoo_UV_mV_Ptr[i] );
-	}
-	return table - buf;
-}
-
-
-static ssize_t show_UV_mV_table(struct cpufreq_policy *policy, char *buf)
-{
-	int i;
-	char *table = buf;
-
-	for( i=fake_CpuShmoo.ShmooVmaxIndex; i>-1; i-- )
-	{
-		table += sprintf(table, "%d ", FakeShmoo_UV_mV_Ptr[i] );
-	}
-	table += sprintf(table, "\n" );
-	return table - buf;
-}
-
-static ssize_t store_UV_mV_table(struct cpufreq_policy *policy, const char *buf, size_t count)
-{
-	int ret = sscanf( buf, "%i %i %i %i %i %i %i %i", &FakeShmoo_UV_mV_Ptr[7], &FakeShmoo_UV_mV_Ptr[6], 
-								&FakeShmoo_UV_mV_Ptr[5], &FakeShmoo_UV_mV_Ptr[4], 
-								&FakeShmoo_UV_mV_Ptr[3], &FakeShmoo_UV_mV_Ptr[2], 
-								&FakeShmoo_UV_mV_Ptr[1], &FakeShmoo_UV_mV_Ptr[0] );
-	if (ret != 1)
-		return -EINVAL;
-
-	return count;
-}
-#endif // USE_FAKE_SHMOO
-
 #define define_one_ro(_name) \
 static struct freq_attr _name = \
 __ATTR(_name, 0444, show_##_name, NULL)
@@ -740,11 +672,6 @@ define_one_rw(scaling_min_freq);
 define_one_rw(scaling_max_freq);
 define_one_rw(scaling_governor);
 define_one_rw(scaling_setspeed);
-#ifdef USE_FAKE_SHMOO
-define_one_ro(cpu_temp);
-define_one_ro(frequency_voltage_table);
-define_one_rw(UV_mV_table);
-#endif // USE_FAKE_SHMOO
 
 static struct attribute *default_attrs[] = {
 	&cpuinfo_min_freq.attr,
@@ -758,11 +685,6 @@ static struct attribute *default_attrs[] = {
 	&scaling_driver.attr,
 	&scaling_available_governors.attr,
 	&scaling_setspeed.attr,
-#ifdef USE_FAKE_SHMOO
-	&cpu_temp.attr,
-	&frequency_voltage_table.attr,
-	&UV_mV_table.attr,
-#endif // USE_FAKE_SHMOO
 	NULL
 };
 
@@ -975,12 +897,15 @@ int cpufreq_add_dev_interface(unsigned int cpu, struct cpufreq_policy *policy,
 		if (ret)
 			goto err_out_kobj_put;
 	}
+#ifndef CONFIG_MACH_MOT
 	if (cpufreq_driver->target) {
+#endif
 		ret = sysfs_create_file(&policy->kobj, &scaling_cur_freq.attr);
 		if (ret)
 			goto err_out_kobj_put;
+#ifndef CONFIG_MACH_MOT
 	}
-
+#endif
 	spin_lock_irqsave(&cpufreq_driver_lock, flags);
 	for_each_cpu(j, policy->cpus) {
 	if (!cpu_online(j))
@@ -1143,6 +1068,7 @@ err_out_unregister:
 
 err_unlock_policy:
 	unlock_policy_rwsem_write(cpu);
+	free_cpumask_var(policy->related_cpus);
 err_free_cpumask:
 	free_cpumask_var(policy->cpus);
 err_free_policy:
@@ -1167,6 +1093,8 @@ static int __cpufreq_remove_dev(struct sys_device *sys_dev)
 	unsigned int cpu = sys_dev->id;
 	unsigned long flags;
 	struct cpufreq_policy *data;
+	struct kobject *kobj;
+	struct completion *cmp;
 #ifdef CONFIG_SMP
 	struct sys_device *cpu_sys_dev;
 	unsigned int j;
@@ -1195,10 +1123,11 @@ static int __cpufreq_remove_dev(struct sys_device *sys_dev)
 		dprintk("removing link\n");
 		cpumask_clear_cpu(cpu, data->cpus);
 		spin_unlock_irqrestore(&cpufreq_driver_lock, flags);
-		sysfs_remove_link(&sys_dev->kobj, "cpufreq");
+		kobj = &sys_dev->kobj;
 		cpufreq_cpu_put(data);
 		cpufreq_debug_enable_ratelimit();
 		unlock_policy_rwsem_write(cpu);
+		sysfs_remove_link(kobj, "cpufreq");
 		return 0;
 	}
 #endif
@@ -1237,7 +1166,10 @@ static int __cpufreq_remove_dev(struct sys_device *sys_dev)
 					data->governor->name, CPUFREQ_NAME_LEN);
 #endif
 			cpu_sys_dev = get_cpu_sysdev(j);
-			sysfs_remove_link(&cpu_sys_dev->kobj, "cpufreq");
+			kobj = &cpu_sys_dev->kobj;
+			unlock_policy_rwsem_write(cpu);
+			sysfs_remove_link(kobj, "cpufreq");
+			lock_policy_rwsem_write(cpu);
 			cpufreq_cpu_put(data);
 		}
 	}
@@ -1248,16 +1180,20 @@ static int __cpufreq_remove_dev(struct sys_device *sys_dev)
 	if (cpufreq_driver->target)
 		__cpufreq_governor(data, CPUFREQ_GOV_STOP);
 
-	kobject_put(&data->kobj);
+	kobj = &data->kobj;
+	cmp = &data->kobj_unregister;
+	unlock_policy_rwsem_write(cpu);
+	kobject_put(kobj);
 
 	/* we need to make sure that the underlying kobj is actually
 	 * not referenced anymore by anybody before we proceed with
 	 * unloading.
 	 */
 	dprintk("waiting for dropping of refcount\n");
-	wait_for_completion(&data->kobj_unregister);
+	wait_for_completion(cmp);
 	dprintk("wait complete\n");
 
+	lock_policy_rwsem_write(cpu);
 	if (cpufreq_driver->exit)
 		cpufreq_driver->exit(data);
 
@@ -2056,11 +1992,6 @@ EXPORT_SYMBOL_GPL(cpufreq_unregister_driver);
 static int __init cpufreq_core_init(void)
 {
 	int cpu;
-
-#ifdef USE_FAKE_SHMOO
-	// Allocate some memory for the voltage tab
-	FakeShmoo_UV_mV_Ptr = kzalloc(sizeof(int)*(fake_CpuShmoo.ShmooVmaxIndex+1), GFP_KERNEL);
-#endif // USE_FAKE_SHMOO
 
 	for_each_possible_cpu(cpu) {
 		per_cpu(policy_cpu, cpu) = -1;

@@ -142,8 +142,8 @@ static int tegra_gpio_request(struct gpio_chip *chip, unsigned offset)
 
 static void tegra_gpio_free(struct gpio_chip *chip, unsigned offset)
 {
-	tegra_gpio_disable(offset);
 	tegra_set_gpio_tristate(offset, TEGRA_TRI_TRISTATE);
+	tegra_gpio_disable(offset);
 	WARN_ON(tegra_gpio_io_power_config(offset, 0) != 0);
 }
 

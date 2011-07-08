@@ -124,6 +124,7 @@ struct qtouch_ts_data
 	int					i2cBLAddr;
 
 	uint8_t				cal_check_flag;
+	uint8_t				resume_full_reload_flag;
 	unsigned long		cal_timer;
 };
 
@@ -145,6 +146,8 @@ static irqreturn_t qtouch_ts_irq_handler(int irq, void *dev_id);
 
 static int ignore_keyarray_touches = 0;
 #define KEYARRAY_IGNORE_TIME (msecs_to_jiffies(100))
+
+static	int	need2check4IC_problem;
 
 static uint32_t qtouch_tsdebug;
 module_param_named(tsdebug, qtouch_tsdebug, uint, 0664);
@@ -238,13 +241,13 @@ static void qtouch_enable_irq(int irq)
 		QTOUCH_INFO("%s: IRQ should be enabled by now.\n", __func__);
 }
 
-static void qtouch_disable_irq_nosync(int irq)
+static void qtouch_disable_irq(int irq)
 {
 	if ( tsGl->irqStatus )
 	{
 		QTOUCH_INFO("%s: Disabling IRQ %d.\n", __func__, irq);
 		tsGl->irqStatus = FALSE;
-		disable_irq_nosync(irq);
+		disable_irq(irq);
 	}
 	else
 		QTOUCH_INFO("%s: IRQ should be disabled by now.\n", __func__);
@@ -258,11 +261,6 @@ static irqreturn_t qtouch_ts_irq_handler(int irq, void *dev_id)
 	QTOUCH_INFO("%s: Enter...\n",__func__);
 
 	queue_work(qtouch_ts_wq, &ts->work);
-	qtouch_enable_irq(ts->irqInt);
-
-/*
-	NvOdmGpioInterruptDone(ts->NvOdmHandles.hGpioIntr);
-*/
 
 	QTOUCH_INFO("%s: Exit...\n",__func__);
 	return 0; 
@@ -512,6 +510,28 @@ static int qtouch_force_calibration(struct qtouch_ts_data *ts)
 	return ret;
 }
 
+static int qtouch_force_backupnv(struct qtouch_ts_data *ts)
+{
+	struct qtm_object *obj;
+	uint16_t addr;
+	uint8_t val;
+	int ret;
+
+	QTOUCH_INFO("%s: Forcing Backup NV\n", __func__);
+
+	obj = find_obj(ts, QTM_OBJ_GEN_CMD_PROC);
+
+	addr = obj->entry.addr + offsetof(struct qtm_gen_cmd_proc, backupnv);
+	val = 0x55;
+	ret = qtouch_write_addr(ts, addr, &val, 1);
+	if (ret)
+		QTOUCH_ERR("%s: Unable to send the Backup NV request message\n",
+					__func__);
+
+	msleep(500);
+	return ret;
+}
+
 static int	mode_codes[5] = 
 {	
 	/* 16x14 */ 224,
@@ -677,9 +697,8 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 	int ret;
 	uint16_t adj_addr;
 
-	QTOUCH_INFO("%s: Doing hw init\n", __func__);
+	QTOUCH_ERR("%s: Doing hw init\n", __func__);
 	ts->hw_init = TRUE;
-	qtouch_disable_irq_nosync(ts->irqInt);
 
 	/* take the IC out of suspend */
 	qtouch_power_config(ts, TRUE);
@@ -703,6 +722,7 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 	obj = find_obj(ts, QTM_OBJ_TOUCH_MULTI);
 	if (obj && obj->entry.num_inst > 0) 
 	{
+		uint8_t sec_screen = ts->pdata->multi_touch_cfg.sec_screen;
 		struct qtm_touch_multi_cfg cfg;
 		memcpy(&cfg, &ts->pdata->multi_touch_cfg, sizeof(cfg));
 		if (ts->pdata->flags & QTOUCH_USE_MULTITOUCH)
@@ -714,6 +734,20 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 		if (ret != 0) 
 		{
 			QTOUCH_ERR("%s: Can't write multi-touch config\n", __func__);
+			goto failed2write;
+		}
+		/* Sometimes the register 295 maybe wrote to 0xff wrongly,
+		 * 1.now we will initial this register to 0 every powerup.
+		 * 2.if it is modified when running, we will reflash it to 0.
+		 * 
+		 * Note: if the register 295 is used for other function or
+		 * the obj->entry.size is added, please delete these modify.
+		 */
+		ret = qtouch_write_addr(ts, obj->entry.addr + obj->entry.size,
+					&sec_screen, 1);
+		if (ret != 0) 
+		{
+			QTOUCH_ERR("%s: Can't write sec_screen config\n", __func__);
 			goto failed2write;
 		}
 	}
@@ -1027,7 +1061,6 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 	}
 failed2write:
 	clean_i2c(ts);
-	qtouch_enable_irq(ts->irqInt);
 	ts->hw_init = FALSE;
 	return 0;
 }
@@ -1104,12 +1137,10 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj, vo
 
 	if (msg->status & QTM_CMD_PROC_STATUS_CFGERR) 
 	{
-/*
 		ret = qtouch_hw_init(ts);
 		if (ret != 0)
 			QTOUCH_ERR("%s:Cannot init the touch IC\n",
-			       __func__);
-*/
+				 __func__);
 		QTOUCH_ERR("%s: Configuration error\n", __func__);
 	}
 	/* Check the EEPROM checksum.  An ESD event may cause
@@ -1145,7 +1176,7 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj, vo
 					ret = qtouch_hw_init(ts);
 					if (ret != 0)
 						QTOUCH_ERR("%s:Cannot init the touch IC\n",
-						__func__);
+							 __func__);
 					qtouch_force_reset(ts, FALSE);
 					ts->checksum_cnt++;
 				}
@@ -1168,6 +1199,7 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	uint32_t finger;
 	int down;
 	int btnFlag;
+	int stuckFinger;
 
 	QTOUCH_INFO4("%s: dump of arrived multitouch message: \n", __func__);
 	QTOUCH_INFO4("\treport_id: %d\n",msg->report_id);
@@ -1190,7 +1222,25 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	y = (msg->ypos_msb << 2) | ((msg->xypos_lsb >> 2) & 0x3);
 	width = msg->touch_area;
 	pressure = msg->touch_amp;
+	down = !(msg->status & QTM_TOUCH_MULTI_STATUS_RELEASE);
 
+	/*
+	 * IC may report old finger 2 as new finger 2 after lift and down of a
+	 * finger 1. That is a condition under which we have to generate a
+	 * liftoff for the finger 2. Some strange bug on IC.
+	 */
+	stuckFinger = FALSE;
+	if (need2check4IC_problem)
+	{
+		if (finger == 1 && down  &&
+			ts->finger_data[finger].x_data == x &&
+			ts->finger_data[finger].y_data == y)
+		{
+			QTOUCH_ERR("%s: Detected stuck finger!\n",
+					__func__);
+			stuckFinger = TRUE;
+		}
+	}
 	if (ts->pdata->flags & QTOUCH_FLIP_X)
 		x = (ts->pdata->abs_max_x-1)-x;
 
@@ -1207,22 +1257,22 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 		return 1;
 	}
 
-	down = !(msg->status & QTM_TOUCH_MULTI_STATUS_RELEASE);
 	QTOUCH_INFO2("%s: stat=%02x, f=%d x=%d y=%d p=%d w=%d, down=%d\n", __func__,
 			msg->status, finger, x, y, pressure, width, down);
+
 
 	/* The chip may report erroneous points way
 	beyond what a user could possibly perform so we filter
 	these out */
 	if (ts->finger_data[finger].down &&
-			(abs(ts->finger_data[finger].x_data - x) > ts->x_delta ||
-			abs(ts->finger_data[finger].y_data - y) > ts->y_delta)) 
+		(abs(ts->finger_data[finger].x_data - x) > ts->x_delta ||
+		abs(ts->finger_data[finger].y_data - y) > ts->y_delta))
 	{
 		down = 0;
 		QTOUCH_INFO2("%s: x0 %i x1 %i y0 %i y1 %i\n",
 				__func__,
 				ts->finger_data[finger].x_data, x,
-						ts->finger_data[finger].y_data, y);
+				ts->finger_data[finger].y_data, y);
 	} 
 	else 
 	{
@@ -1237,10 +1287,20 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	if (!down) 
 	{
 		ts->finger_data[finger].z_data = 0;
+		/* this will cause check to be performed on the next point */
+		if (finger == 0)
+			need2check4IC_problem = TRUE;
+		else
+			need2check4IC_problem = FALSE;
 	} 
 	else 
 	{
-		ts->finger_data[finger].z_data = 1;
+		ts->finger_data[finger].z_data = msg->touch_amp;
+		/*
+		 * No need to do check on the next point, since it's only
+		 * important after a lift
+		 */
+		need2check4IC_problem = FALSE;
 	}
 
 	/* check to make sure user is not pressing the buttons area */
@@ -1259,12 +1319,14 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 	{
 		if ( ts->multiMode )
 		{
-			for (i = 0; i < ts->pdata->multi_touch_cfg.num_touch; i++) 
+			for (i = 0;
+				i < ts->pdata->multi_touch_cfg.num_touch;
+				i++)
 			{
 				if ( ts->finger_data[i].down == 0
-					&& ts->finger_data[i].z_data == 0 
-					&& ts->finger_data[i].w_data == 0 
-					&& ts->finger_data[i].x_data == 0 
+					&& ts->finger_data[i].z_data == 0
+					&& ts->finger_data[i].w_data == 0
+					&& ts->finger_data[i].x_data == 0
 					&& ts->finger_data[i].y_data == 0  )
 					continue;
 				if ( !ts->suspendMode )
@@ -1375,13 +1437,35 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 			}
 		}
 	}
+	if (stuckFinger)
+	{
+		if (!ts->suspendMode)
+		{
+			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR,
+					 0);
+			input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR,
+					 ts->finger_data[1].w_data);
+			input_report_abs(ts->input_dev, ABS_MT_POSITION_X,
+					 ts->finger_data[1].x_data);
+			input_report_abs(ts->input_dev, ABS_MT_POSITION_Y,
+					 ts->finger_data[1].y_data);
+			input_mt_sync(ts->input_dev);
+			ts->finger_data[1].x_data = 0;
+			ts->finger_data[1].y_data = 0;
+			ts->finger_data[1].w_data = 0;
+		}
+	}
 	if (!down) 
 	{
-		memset(&ts->finger_data[finger], 0, sizeof(struct coordinate_map));
+		memset(&ts->finger_data[finger],
+				0,
+				sizeof(struct coordinate_map));
 	}
 
 	for (i = 0; i < ts->pdata->multi_touch_cfg.num_touch; i++) 
-		memcpy ( &(ts->prev_finger_data[i]), &(ts->finger_data[i]), sizeof(ts->finger_data[i]));
+		memcpy(&(ts->prev_finger_data[i]),
+				&(ts->finger_data[i]),
+				sizeof(ts->finger_data[i]));
 
 	QTOUCH_INFO("%s: exit...\n", __func__);
 	return 0;
@@ -1891,20 +1975,13 @@ static ssize_t qtouch_irq_enable(struct device *dev,
 
 	switch (value) {
 	case 0:
-		qtouch_disable_irq_nosync(ts->irqInt);
+		qtouch_disable_irq(ts->irqInt);
 		err = size;
 		break;
 	case 1:
-/*
-		msg = qtouch_read_msg(ts);
-		if (msg == NULL)
-			pr_err("%s: Cannot read message\n", __func__);
-		qtouch_enable_irq(ts->client->irq);
-*/
-		qtouch_force_reset(ts, FALSE);
-		qtouch_process_info_block(ts);
-		qtouch_force_calibration(ts);
 		qtouch_enable_irq(ts->irqInt);
+		qtouch_force_reset(ts, FALSE);
+		qtouch_force_calibration(ts);
 		err = size;
 		break;
 	default:
@@ -1972,6 +2049,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	qtouch_tsdebug = 0xFF;
 	QTOUCH_INFO("%s: Enter...\n", __func__);
 
+	need2check4IC_problem = FALSE;
 	if (pdata == NULL) 
 	{
 		QTOUCH_ERR("%s: platform data required\n", __func__);
@@ -2290,7 +2368,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	}
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
+	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 1;
 	ts->early_suspend.suspend = qtouch_ts_early_suspend;
 	ts->early_suspend.resume = qtouch_ts_late_resume;
 	register_early_suspend(&ts->early_suspend);
@@ -2329,6 +2407,10 @@ static int qtouch_ts_probe(struct i2c_client *client,
 
 	ts->cal_check_flag = 0;
 	ts->cal_timer = 0;
+	/* Assume at this point that nvram has configuration and there is no
+	 * need to do full reload on resume.
+	 */
+	ts->resume_full_reload_flag = FALSE;
 
 	return 0;
 
@@ -2375,6 +2457,10 @@ static int qtouch_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
+/* Alternative resume methods */
+#define USE_RESET_TO_RESUME  /* use soft reset instead of power config */
+#define DO_HARD_RESET        /* do hard reset before soft reset */
+
 static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 {
 	struct qtouch_ts_data *ts = i2c_get_clientdata(client);
@@ -2382,14 +2468,8 @@ static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 
 	QTOUCH_INFO("%s: Suspending\n", __func__);
 
-	qtouch_disable_irq_nosync(ts->irqInt);
-	ret = cancel_work_sync(&ts->work);
-	if (ret) 
-	{ 
-		/* if work was pending disable-count is now 2 */
-		QTOUCH_INFO("%s: Pending work item\n", __func__);
-		qtouch_enable_irq(ts->irqInt);
-	}
+	/* Note, this may block and suspend timer may expire, causing panic */
+	cancel_work_sync(&ts->work);
 
 	ret = qtouch_power_config(ts, FALSE);
 	if (ret < 0)
@@ -2401,54 +2481,87 @@ static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 static int qtouch_ts_resume(struct i2c_client *client)
 {
 	struct qtouch_ts_data *ts = i2c_get_clientdata(client);
+	int ret;
 	int i;
 
 	QTOUCH_INFO4("%s: Resuming\n", __func__);
 
-	wake_lock(&(ts->wLock));
-
-	/* If we were suspended while a touch was happening
-	   we need to tell the upper layers so they do not hang
-	   waiting on the liftoff that will not come. */
-	for (i = 0; i < ts->pdata->multi_touch_cfg.num_touch; i++) 
+	/*
+	* If we were suspended while a touch was happening
+	*  we need to tell the upper layers so they do not hang
+	* waiting on the liftoff that will not come.
+	*/
+	for (i = 0; i < ts->pdata->multi_touch_cfg.num_touch; i++)
 	{
 		QTOUCH_INFO4("%s: Finger %i down state %i\n",
-				__func__, i, ts->finger_data[i].down);
+			__func__, i, ts->finger_data[i].down);
 		if (ts->finger_data[i].down == 0)
 			continue;
 		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
 		input_mt_sync(ts->input_dev);
 		memset(&ts->finger_data[i], 0,
-		sizeof(struct coordinate_map));
+			sizeof(struct coordinate_map));
 	}
 	input_sync(ts->input_dev);
 
+#ifdef USE_RESET_TO_RESUME
+/*
+ * hard reset does not generate reset message, so there
+ * will be no re-calibration after the hard reset.
+ * soft reset does, and does not require configuration reload.
+ * so we prefer to do just soft reset, since it makes resume faster
+ * and avoids mucking with interrupts.
+ * not clear if there is anything that hard reset actually solves
+ */
+
+#ifdef DO_HARD_RESET
 	qtouch_force_reset(ts, FALSE);
-/* use soft reset. hard reset does not generate reset message, so there 
- * will be no re-calibration after the hard reset 
-*/
+	if (ts->resume_full_reload_flag == TRUE)
+	{
+		/*
+		 * Unfortunately, this means that we failed to save config
+		 * into nvram. But for the good news, we can re-load it again
+		 * and try saving it to nvram. Since we are sending the full
+		 * config, trying to save it to nvram adds very little
+		 * overhead
+		 */
+		ret = qtouch_hw_init(ts);
+		if (ret != 0)
+		{
+			QTOUCH_ERR("%s: Cannot reload IC configuration\n",
+					__func__);
+			return -EIO;
+		}
+		/* try saving to nvram */
+		if (!qtouch_force_backupnv(ts))
+			ts->resume_full_reload_flag = FALSE;
+
+		/* nothing more to do, qtouch_hw_init did the rest */
+		return 0;
+	}
+	/* fall through here, to do power/calibration */
+
+#else /* DO_HARD_RESET */
 	qtouch_force_reset(ts, TRUE);
-/*
-	qtouch_process_info_block(ts);
-*/
-	clean_i2c(ts);
+	/*
+	 * nothing more to do, qtouch_hw_init from control msg will do the rest
+	 */
+	return 0;
+#endif /* DO_HARD_RESET */
+#endif /* USE_RESET_TO_RESUME */
 
-
-/*
 	ret = qtouch_power_config(ts, TRUE);
 	if (ret < 0) 
 	{
 		QTOUCH_ERR("%s: Cannot write power config\n", __func__);
 		return -EIO;
 	}
-*/
-/*
-	qtouch_force_reset(ts, FALSE);
-*/
 
-	qtouch_enable_irq(ts->irqInt);
-
-	wake_unlock(&(ts->wLock));
+	ret = qtouch_force_calibration(ts);
+	if (ret != 0) {
+		pr_err("%s: Unable to write to calibrate\n", __func__);
+		return -EIO;
+	}
 
 	return 0;
 }
@@ -2505,7 +2618,8 @@ unsigned char	kernelBuffer[sizeof(struct qtim_ioctl_data)];
  * @return 0 in success, or negative error code
  */
 static	QTM_ALL_OBJECTS qtmAllObjects;
-static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp, unsigned int cmd, unsigned long arg)
+static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp,
+		unsigned int code, unsigned long arg)
 {
 	IOCTL_DATA	*usrData;
 	struct qtm_object *obj;
@@ -2519,12 +2633,14 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp, unsigned in
 	uint8_t	*fields;
 	char *raw;
 	char	need2send = FALSE;
+	unsigned int	cmd;
 
 	QTOUCH_INFO("%s: entering\n", __func__);
 	if ( tsGl->modeOfOperation == QTOUCH_MODE_UNKNOWN )
 		return -1;
 
-	bCount = copy_from_user(kernelBuffer, (char *)arg, (unsigned long)sizeof(IOCTL_DATA)); 
+	bCount = copy_from_user(kernelBuffer, (char *)arg,
+			(unsigned long)sizeof(IOCTL_DATA));
 	if ( bCount == 0 )
 	{
 		usrData = (IOCTL_DATA *)kernelBuffer;
@@ -2532,21 +2648,25 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp, unsigned in
 	else
 		return -1;
 
+	cmd = usrData->cmd;
 	switch (cmd) 
 	{
+	case QTOUCH_IOCTL_GET_DEBUG:
+		usrData->data.debug = qtouch_tsdebug;
+		break;
 	case QTOUCH_IOCTL_SET_DEBUG:
-		if ( usrData->data.debug )
-			qtouch_tsdebug = 255;
-		else
-			qtouch_tsdebug = 0;
-		rc = 0;
+		QTOUCH_INFO("%s: Setting debug to %d\n", __func__,
+				usrData->data.debug);
+		qtouch_tsdebug = usrData->data.debug;
+		usrData->data.debug = qtouch_tsdebug;
 		break;
 	case QTOUCH_IOCTL_GET_VERSION:
 		/* Make sure that IC can accept the config information */
 		if ( tsGl->modeOfOperation != QTOUCH_MODE_NORMAL )
 			return -1;
 		rc = qtouch_process_info_block(tsGl);
-		QTOUCH_INFO("%s: Dumping information from Id info block:\n", __func__ );
+		QTOUCH_INFO("%s: Dumping information from Id info block:\n",
+				__func__);
 		QTOUCH_INFO("================================\n");
 		QTOUCH_INFO("\t Family ID: %d\n", qtm_info.family_id);
 		usrData->data.ioctl_version.FamilyId = qtm_info.family_id;
@@ -2572,23 +2692,22 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp, unsigned in
 			if ( tsGl->modeOfOperation != QTOUCH_MODE_NORMAL )
 			{
 				/* Resetting the hardware should put the device into normal mode */
-				qtouch_disable_irq_nosync(tsGl->irqInt);
 				tsGl->client->addr = tsGl->i2cNormAddr;
 				rc = qtouch_force_reset(tsGl, FALSE);
+				qtouch_force_calibration(tsGl);
 				tsGl->modeOfOperation = QTOUCH_MODE_NORMAL;
-				qtouch_enable_irq(tsGl->irqInt);
 			}
 			break;
 		case QTOUCH_MODE_BOOTLOADER:
 			if ( tsGl->modeOfOperation == QTOUCH_MODE_UNKNOWN )
 				return -1;
-			QTOUCH_INFO("%s: Setting mode to BOOTLOADER\n", __func__);
+			QTOUCH_INFO("%s: Setting mode to BOOTLOADER\n",
+					__func__);
 			if ( tsGl->modeOfOperation != QTOUCH_MODE_BOOTLOADER )
 			{
 				char	data[3];
 
 				/* Need to disable interrupt, so we can do i2c read in this function */
-				qtouch_disable_irq_nosync(tsGl->irqInt);
 				/* Setting device and all needed flags to bootloader mode */
 				/* Make sure power is not 0 */
 				qtouch_power_config(tsGl, TRUE);
@@ -2617,7 +2736,6 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp, unsigned in
 				}
 				else
 					QTOUCH_INFO("%s: did not receive confirmation of the BOOTLOADER mode. Got: 0x%02X\n", __func__, data[0] );
-				qtouch_enable_irq(tsGl->irqInt);
 			}
 			break;
 		case QTOUCH_MODE_GET:
@@ -2662,13 +2780,12 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp, unsigned in
 		switch ( usrData->data.irq )
 		{
 		case QTOUCH_IRQ_ON:
-/*
 			qtouch_enable_irq(tsGl->irqInt);
-*/
-			qtouch_ts_resume(tsGl->client);
+			qtouch_force_reset(tsGl, FALSE);
+			qtouch_force_calibration(tsGl);
 			break;
 		case QTOUCH_IRQ_OFF:
-			qtouch_disable_irq_nosync(tsGl->irqInt);
+			qtouch_disable_irq(tsGl->irqInt);
 			break;
 		case QTOUCH_IRQ_GET:
 			break;
@@ -2893,7 +3010,15 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp, unsigned in
 		/* Make sure that IC can accept the config information */
 		if ( tsGl->modeOfOperation != QTOUCH_MODE_NORMAL )
 			return -1;
+		/*
+		 * At this point all the objects have been sent to the IC
+		 * This is perfect time to backup the data to nv
+		 */
+		if (qtouch_force_backupnv(tsGl))
+			tsGl->resume_full_reload_flag = TRUE;
+
 		qtouch_force_reset(tsGl, FALSE);
+		qtouch_force_calibration(tsGl);
 		rc = qtouch_process_info_block(tsGl);
 		break;
 	case QTOUCH_IOCTL_GET_CONFIG:

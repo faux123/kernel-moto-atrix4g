@@ -33,10 +33,17 @@
 
 #define DBG(format, arg...)								\
 do {											\
-	if (debug == 1) {								\
+	if (debug && (debug_level == 1)) {						\
 		printk(KERN_INFO "QCUSBNet2k::%s " format, __FUNCTION__, ## arg);	\
 	}										\
-} while(0)										\
+} while (0)										\
+
+#define VDBG(format, arg...)								\
+do {											\
+	if (debug && (debug_level >= 2)) {						\
+		printk(KERN_INFO "QCUSBNet2k::%s " format, __FUNCTION__, ## arg);	\
+	}										\
+} while (0)										\
 
 struct qcusbnet;
 
@@ -69,6 +76,7 @@ struct qmidev {
 	struct list_head clients;
 	spinlock_t clients_lock;
 	atomic_t qmitid;
+	int qmiidx;
 };
 
 enum {

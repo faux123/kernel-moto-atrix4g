@@ -36,6 +36,15 @@
 
 #include <asm/uaccess.h>
 
+#ifdef CONFIG_TEGRA_ODM_AROWANA
+#if defined(CONFIG_GPS_BCM4750)
+/* flag to resolve conflict between debug console and GPS
+   1-BCM is using UART B;
+   0-User choose UART B as debug console.
+ */
+int tegra_uartB_for_BCM=1;
+#endif
+#endif
 /*
  * for_each_console() allows you to iterate on each console
  */
@@ -934,6 +943,26 @@ static int __init console_setup(char *str)
 		strcpy(buf, "ttyS0");
 	if (!strcmp(str, "ttyb"))
 		strcpy(buf, "ttyS1");
+#endif
+
+#ifdef CONFIG_TEGRA_ODM_AROWANA
+	/* UART B is shared by GPS and debug serial console 
+	on arowana, if "ttyS0" is chosen as debug port from
+	cmdline, we will assign this port to console, other-
+	wise, in the most cases, GPS on arowana will take 
+	this uart port. No smarter way to judge if "ttyS0" 
+	means to UART B or not."ttySn" is hardcoded in 
+	serial 8250.c. Just assume "ttyS0" is equal  to UART
+	B because HW design is so, urgly but no choices...
+	*/
+#if defined(CONFIG_GPS_BCM4750)
+/* flag to resolve conflict between debug console and GPS
+   1-BCM is using UART B;
+   0-User choose UART B as debug console.
+ */
+	if (!strncmp("ttyS0",buf,strlen("ttyS0")))
+	  tegra_uartB_for_BCM=0;
+#endif	
 #endif
 	for (s = buf; *s; s++)
 		if ((*s >= '0' && *s <= '9') || *s == ',')

@@ -1968,6 +1968,8 @@ static void reset_irq(struct fsl_udc *udc)
 	 * head and TR Queue */
 	reset_queues(udc);
 	udc->usb_state = USB_STATE_DEFAULT;
+
+	(void) fsl_vbus_draw(&udc->gadget, USB_DEFAULT_CURRENT_LIMIT_MA);
 #else
 	if (fsl_readl(&dr_regs->portsc1) & PORTSCX_PORT_RESET) {
 		VDBG("Bus reset");

@@ -23,6 +23,7 @@
 
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
+#include <linux/mmc/mmc.h>
 
 #include <linux/regulator/consumer.h>
 
@@ -925,7 +926,9 @@ static void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 	sdhci_prepare_data(host, cmd->data);
 
 #ifdef CONFIG_EMBEDDED_MMC_START_OFFSET
-	if (cmd->data) {
+	if (cmd->data ||
+	   (cmd->opcode == MMC_ERASE_GROUP_START) ||
+	   (cmd->opcode == MMC_ERASE_GROUP_END)) {
 		unsigned long offset = host->start_offset;
 		if (likely(mmc_card_blockaddr(host->mmc->card)))
 			offset >>= 9;
@@ -1206,10 +1209,15 @@ static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		sdhci_set_clock(host, ios->clock);
 	}
 
-	if (ios->power_mode == MMC_POWER_OFF)
+	if (ios->power_mode == MMC_POWER_OFF) {
+		spin_unlock_irqrestore(&host->lock, flags);
 		sdhci_set_power(host, -1);
-	else
+		spin_lock_irqsave(&host->lock, flags);
+	} else {
+		spin_unlock_irqrestore(&host->lock, flags);
 		sdhci_set_power(host, ios->vdd);
+		spin_lock_irqsave(&host->lock, flags);
+	}
 
 	ctrl = sdhci_readb(host, SDHCI_HOST_CONTROL);
 
@@ -1941,6 +1949,16 @@ int sdhci_add_host(struct sdhci_host *host)
 	if (host->data_width >= 8)
 		mmc->caps |= MMC_CAP_8_BIT_DATA;
 
+#ifdef CONFIG_MACH_MOT
+	if (!mmc->ocr_avail) {
+		if (caps & SDHCI_CAN_VDD_330)
+			mmc->ocr_avail |= MMC_VDD_32_33|MMC_VDD_33_34;
+		if (caps & SDHCI_CAN_VDD_300)
+			mmc->ocr_avail |= MMC_VDD_29_30|MMC_VDD_30_31;
+		if (caps & SDHCI_CAN_VDD_180)
+			mmc->ocr_avail |= MMC_VDD_165_195;
+	}
+#else
 	mmc->ocr_avail = 0;
 	if (caps & SDHCI_CAN_VDD_330)
 		mmc->ocr_avail |= MMC_VDD_32_33|MMC_VDD_33_34;
@@ -1948,6 +1966,7 @@ int sdhci_add_host(struct sdhci_host *host)
 		mmc->ocr_avail |= MMC_VDD_29_30|MMC_VDD_30_31;
 	if (caps & SDHCI_CAN_VDD_180)
 		mmc->ocr_avail |= MMC_VDD_165_195;
+#endif
 
 	if (mmc->ocr_avail == 0) {
 		printk(KERN_ERR "%s: Hardware doesn't report any "
@@ -2007,6 +2026,8 @@ int sdhci_add_host(struct sdhci_host *host)
 	 * Maximum block count.
 	 */
 	mmc->max_blk_count = (host->quirks & SDHCI_QUIRK_NO_MULTIBLOCK) ? 1 : 65535;
+
+	mmc->max_power_class = host->max_power_class;
 
 	/*
 	 * Init tasklets.

@@ -101,7 +101,7 @@ static const NvU32 s_NvOdmPinMuxConfig_Hdmi[] = {
 };
 
 static const NvU32 s_NvOdmPinMuxConfig_Pwm[] = {
-    0,
+    NvOdmPwmPinMap_Config1,
 };
 
 static const NvU32 s_NvOdmPinMuxConfig_Ata[] = {

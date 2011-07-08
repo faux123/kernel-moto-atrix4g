@@ -20,8 +20,8 @@
 
 #include "nvodm_query_kbc.h"
 
-static NvU32 RowNumbers[] = {0, 1, 1, 2, 2};
-static NvU32 ColNumbers[] = {0, 0, 1, 0, 1};
+static NvU32 RowNumbers[] = {0, 1};
+static NvU32 ColNumbers[] = {0, 0};
 
 void
 NvOdmKbcGetParameter(
@@ -63,7 +63,8 @@ NvOdmKbcIsSelectKeysWkUpEnabled(
 {
     *pRowNumber = &RowNumbers[0];
     *pColNumber = &ColNumbers[0];
-    *NumOfKeys = 5;
+    /*Allow volume keys wakeup*/
+    *NumOfKeys = 2;
     return NV_TRUE;
 }
 

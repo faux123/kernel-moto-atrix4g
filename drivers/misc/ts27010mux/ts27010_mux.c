@@ -77,7 +77,7 @@
 #define TS0710MUX_MINOR_START 0
 
 /* 2500ms, for BP UART hardware flow control AP UART  */
-#define TS0710MUX_TIME_OUT 250
+#define TS0710MUX_TIME_OUT 2500
 
 #define CRC_VALID 0xcf
 

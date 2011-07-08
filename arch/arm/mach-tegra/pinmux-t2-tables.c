@@ -675,7 +675,11 @@ static const int gpio_pin_pingroup[] = {
 	gpio_pingroup(M, 3, LHP2),
 	gpio_pingroup(M, 4, LVP1),
 	gpio_pingroup(M, 5, LHP0),
-	gpio_pingroup(M, 6, LD1),
+#if defined(CONFIG_GPS_BCM4750)
+    gpio_pingroup(M, 6, LDI),
+#else
+    gpio_pingroup(M, 6, LD1),
+#endif
 	gpio_pingroup(M, 7, LPP),
 
 	gpio_pingroup(N, 0, DAP1),

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007 - 2010 Motorola, Inc.
+ * Copyright (C) 2007 - 2011 Motorola, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -24,7 +24,8 @@
 #include <linux/workqueue.h>
 #include <linux/switch.h>
 #include <linux/delay.h>
-
+#include <linux/mutex.h>
+#include <linux/gpio.h>
 #include <linux/regulator/consumer.h>
 
 #include <linux/spi/cpcap.h>
@@ -84,6 +85,8 @@
 
 #define SENSE_WHISPER_PPD   (CPCAP_BIT_CHRGCURR1_S | \
 			     CPCAP_BIT_DP_S_LS)
+
+#define SENSE_WHISPER_PPD_NO_DP   (CPCAP_BIT_CHRGCURR1_S)
 
 #define SENSE_WHISPER_SPD   SENSE_CHARGER
 
@@ -185,6 +188,7 @@ struct cpcap_usb_det_data {
 	unsigned char audio;
 	unsigned char uartmux;
 	short whisper_auth;
+	bool hall_effect_connected;
 	enum cpcap_irqs irq;
 };
 
@@ -198,11 +202,16 @@ static const char *accy_devices[] = {
 	"cpcap_whisper_smart_dock",
 };
 
-
+static DEFINE_MUTEX(switch_access);
+static enum cpcap_accy current_accy = CPCAP_ACCY_NONE;
+enum cpcap_accy cpcap_accy_get_crrent_accry(void)
+{
+	return current_accy;
+}
+EXPORT_SYMBOL(cpcap_accy_get_crrent_accry);
 /* Expects values from 0 to 2: 0=no_log, 1=basic_log, 2=max_log */
 static int cpcap_usb_det_debug = 1;
 module_param(cpcap_usb_det_debug, int, S_IRUGO | S_IWUSR | S_IWGRP);
-
 
 static ssize_t dock_print_name(struct switch_dev *switch_dev, char *buf)
 {
@@ -263,6 +272,56 @@ void whisper_toggle_audio_switch_for_spdif(struct cpcap_device *cpcap, bool stat
 	}
 }
 
+void cpcap_accy_set_dock_switch(struct cpcap_device *cpcap, int state, bool is_hall_effect)
+{
+    struct cpcap_usb_det_data *data = cpcap->accydata;
+
+    if (data->regulator != NULL) {
+		mutex_lock(&switch_access);
+
+		/* if request from whisper docks, then can override hall_effect docks
+		   OR if request from hall_effect, then can only change state if either
+		   no-dock connected or if a hall_effect dock was already connected
+		*/
+		if (!is_hall_effect || (is_hall_effect && (switch_get_state(&data->dsdev)
+				== NO_DOCK || data->hall_effect_connected))) {
+			if (!is_hall_effect) {
+				/* whisper resets previous dock states */
+				switch_set_state(&data->edsdev, EXT_NO_DOCK);
+				switch_set_state(&data->dsdev, NO_DOCK);
+			}
+
+			switch (state) {
+			case DESK_DOCK:
+				switch_set_state(&data->edsdev, EXT_DESK_DOCK);
+				switch_set_state(&data->dsdev, DESK_DOCK);
+				data->hall_effect_connected = is_hall_effect;
+				break;
+			case CAR_DOCK:
+				switch_set_state(&data->edsdev, EXT_CAR_DOCK);
+				switch_set_state(&data->dsdev, CAR_DOCK);
+				data->hall_effect_connected = is_hall_effect;
+				break;
+			case HD_DOCK:
+				switch_set_state(&data->edsdev, EXT_HD_DOCK);
+				switch_set_state(&data->dsdev, DESK_DOCK);
+				data->hall_effect_connected = is_hall_effect;
+				break;
+			case MOBILE_DOCK:
+				switch_set_state(&data->edsdev, EXT_MOBILE_DOCK);
+				data->hall_effect_connected = is_hall_effect;
+				break;
+			default:
+				switch_set_state(&data->edsdev, EXT_NO_DOCK);
+				switch_set_state(&data->dsdev, NO_DOCK);
+				data->hall_effect_connected = false;
+				break;
+			}
+		}
+		mutex_unlock(&switch_access);
+    }
+}
+
 static void vusb_enable(struct cpcap_usb_det_data *data)
 {
 	if (!data->is_vusb_enabled) {
@@ -279,6 +338,47 @@ static void vusb_disable(struct cpcap_usb_det_data *data)
 		regulator_disable(data->regulator);
 		data->is_vusb_enabled = 0;
 	}
+}
+
+static void dump_sense_bits(struct cpcap_usb_det_data *data)
+{
+	if (CPCAP_BIT_CHRGCURR1_S & data->sense)
+		pr_info("cpcap_usb_det: SenseBit = CPCAP_BIT_CHRGCURR1_S\n");
+	if (CPCAP_BIT_DM_S_LS & data->sense)
+		pr_info("cpcap_usb_det: SenseBit = CPCAP_BIT_DM_S_LS\n");
+	if (CPCAP_BIT_DP_S_LS & data->sense)
+		pr_info("cpcap_usb_det: SenseBit = CPCAP_BIT_DP_S_LS)\n");
+	if (CPCAP_BIT_ID_FLOAT_S & data->sense)
+		pr_info("cpcap_usb_det: SenseBit = CPCAP_BIT_ID_FLOAT_S\n");
+	if (CPCAP_BIT_ID_GROUND_S & data->sense)
+		pr_info("cpcap_usb_det: SenseBit = CPCAP_BIT_ID_GROUND_S\n");
+	if (CPCAP_BIT_SE1_S & data->sense)
+		pr_info("cpcap_usb_det: SenseBit = CPCAP_BIT_SE1_S\n");
+	if (CPCAP_BIT_SESSVLD_S & data->sense)
+		pr_info("cpcap_usb_det: SenseBit = CPCAP_BIT_SESSVLD_S\n");
+	if (CPCAP_BIT_VBUSVLD_S & data->sense)
+		pr_info("cpcap_usb_det: SenseBit = CPCAP_BIT_VBUSVLD_S\n");
+
+	if (SENSE_CHARGER == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_CHARGER\n");
+	if (SENSE_CHARGER_FLOAT == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_CHARGER_FLOAT\n");
+	if (SENSE_FACTORY == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_FACTORY\n");
+	if (SENSE_FACTORY_COM == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_FACTORY_COM\n");
+	if (SENSE_USB == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_USB\n");
+	if (SENSE_USB_FLASH == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_USB_FLASH\n");
+	if (SENSE_WHISPER_PPD == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_WHISPER_PPD\n");
+	if (SENSE_WHISPER_PPD_NO_DP == data->sense)
+		pr_info("cpcap_usb_det: Sense Patt=SENSE_WHISPER_PPD_NO_DP\n");
+	if (SENSE_WHISPER_SMART == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_WHISPER_SMART\n");
+	if (SENSE_WHISPER_SPD == data->sense)
+		pr_info("cpcap_usb_det: Sense Pattern = SENSE_WHISPER_SPD\n");
 }
 
 static int get_sense(struct cpcap_usb_det_data *data)
@@ -348,8 +448,12 @@ static int get_sense(struct cpcap_usb_det_data *data)
 	data->sense |= (value & (CPCAP_BIT_DP_S |
 			       CPCAP_BIT_DM_S)) << CPCAP_SENSE4_LS;
 
-	if (cpcap_usb_det_debug && data->state > SAMPLE_2)
+	if (cpcap_usb_det_debug && data->state > SAMPLE_2) {
 		pr_info("cpcap_usb_det: SenseBits = 0x%04x\n", data->sense);
+		if (cpcap_usb_det_debug > 1) {
+		    dump_sense_bits(data);
+		}
+	}
 
 	return 0;
 }
@@ -378,7 +482,6 @@ static int configure_hardware(struct cpcap_usb_det_data *data, enum cpcap_accy a
 		if ((data->cpcap->vendor == CPCAP_VENDOR_ST) &&
 			(data->cpcap->revision == CPCAP_REVISION_2_0))
 				vusb_enable(data);
-
 		break;
 
 	case CPCAP_ACCY_CHARGER:
@@ -424,6 +527,7 @@ static int configure_hardware(struct cpcap_usb_det_data *data, enum cpcap_accy a
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3, CPCAP_BIT_VBUSSTBY_EN,
 					     CPCAP_BIT_VBUSSTBY_EN);
 		data->whisper_auth = AUTH_NOT_STARTED;
+		tegra_gpio_enable(data->cpcap->spdif_gpio);
 		break;
 
 	case CPCAP_ACCY_WHISPER_SMART_DOCK:
@@ -449,6 +553,7 @@ static int configure_hardware(struct cpcap_usb_det_data *data, enum cpcap_accy a
 		retval |= cpcap_regacc_write(data->cpcap, CPCAP_REG_USBC3, CPCAP_BIT_VBUSSTBY_EN,
 					     CPCAP_BIT_VBUSSTBY_EN);
 		data->whisper_auth = AUTH_NOT_STARTED;
+		tegra_gpio_enable(data->cpcap->spdif_gpio);
 		break;
 	}
 
@@ -538,7 +643,7 @@ static void notify_accy(struct cpcap_usb_det_data *data, enum cpcap_accy accy)
 		data->usb_accy = CPCAP_ACCY_USB_DEVICE;
 	else
 		data->usb_accy = accy;
-
+	current_accy = accy;
 	if (accy != CPCAP_ACCY_NONE) {
 		/* SMART dock needs to charge */
 		if (!data->usb_dev) {
@@ -588,8 +693,12 @@ static void notify_whisper_switch(struct cpcap_usb_det_data *data, enum cpcap_ac
 		switch_set_state(&data->wsdev, 1);
 	} else if (accy != CPCAP_ACCY_CHARGER && accy != CPCAP_ACCY_WHISPER_PPD) {
 		switch_set_state(&data->wsdev, 0);
-		switch_set_state(&data->dsdev, NO_DOCK);
-		switch_set_state(&data->edsdev, EXT_NO_DOCK);
+		mutex_lock(&switch_access);
+		if (!(data->hall_effect_connected)) {
+			switch_set_state(&data->dsdev, NO_DOCK);
+			switch_set_state(&data->edsdev, EXT_NO_DOCK);
+		}
+		mutex_unlock(&switch_access);
 		switch_set_state(&data->emusdev, NO_DEVICE);
 	}
 }
@@ -610,6 +719,11 @@ static void detection_work(struct work_struct *work)
 	bool   isVBusValid = false;
 	struct cpcap_usb_det_data *data =
 		container_of(work, struct cpcap_usb_det_data, work.work);
+
+	if (cpcap_usb_det_debug > 1) {
+		pr_info("cpcap_usb_det: in detection_work\n");
+		dump_sense_bits(data);
+	}
 
 	if (cpcap_usb_det_debug && data->state > SAMPLE_2)
 		pr_info("cpcap_usb_det: state %s\n",state_names[data->state]);
@@ -659,6 +773,8 @@ static void detection_work(struct work_struct *work)
 			queue_delayed_work(data->wq, &data->work, msecs_to_jiffies(100));
 		} else {
 			/* cable connected: try to identify what was connected... */
+			if (cpcap_usb_det_debug > 1)
+				pr_info("cpcap_usb_det: cable connected.\n");
 			data->state = IDENTIFY;
 			queue_delayed_work(data->wq, &data->work, 0);
 		}
@@ -691,10 +807,11 @@ static void detection_work(struct work_struct *work)
 
 			/* Special handling of factory cable undetect. */
 			data->state = FACTORY;
-		} else if ((data->sense == SENSE_CHARGER_FLOAT) ||
-			   (data->sense == SENSE_CHARGER) ||
+		} else if (((data->sense | CPCAP_BIT_VBUSVLD_S) ==
+			    SENSE_CHARGER_FLOAT) ||
+			   ((data->sense | CPCAP_BIT_VBUSVLD_S) ==
+			    SENSE_CHARGER) ||
 			   (data->sense == SENSE_WHISPER_SPD)) {
-
 			if (cpcap_usb_det_debug)
 				pr_info("cpcap_usb_det: CHARGER or WHISPER_SPD\n");
 
@@ -729,7 +846,8 @@ static void detection_work(struct work_struct *work)
 
 			data->state = WHISPER_SMART_DOCK;
 			switch_set_state(&data->sdsdev, 1);
-		} else if (data->sense == SENSE_WHISPER_PPD) {
+		} else if (data->sense == SENSE_WHISPER_PPD ||
+				   data->sense == SENSE_WHISPER_PPD_NO_DP) {
 
 			if (cpcap_usb_det_debug)
 				pr_info("cpcap_usb_det: WHISPER_PPD\n");
@@ -1042,28 +1160,10 @@ int cpcap_accy_whisper(struct cpcap_device *cpcap, unsigned long cmd)
 			if (value != 0) {
 				cpcap_irq_mask(data->cpcap, CPCAP_IRQ_SE1);
 				dock_type = ((cmd >> 27)%MAX_DOCK);
-				switch(dock_type) {
-				case CAR_DOCK:
-					switch_set_state(&data->edsdev, EXT_CAR_DOCK);
-					switch_set_state(&data->dsdev, CAR_DOCK);
-					break;
-				case DESK_DOCK:
-					switch_set_state(&data->edsdev, EXT_DESK_DOCK);
-					switch_set_state(&data->dsdev, DESK_DOCK);
-					break;
-				case HD_DOCK:
-					switch_set_state(&data->edsdev, EXT_HD_DOCK);
-					switch_set_state(&data->dsdev, DESK_DOCK);
-					break;
-				case MOBILE_DOCK:
-					switch_set_state(&data->edsdev, EXT_MOBILE_DOCK);
-					break;
-				default:
-					switch_set_state(&data->edsdev, EXT_NO_DOCK);
-					switch_set_state(&data->dsdev, NO_DOCK);
-					break;
-				}
+				cpcap_accy_set_dock_switch(data->cpcap, dock_type, false);
+				data->whisper_auth = AUTH_PASSED;
 				if (data->state != WHISPER_SMART_DOCK) {
+					tegra_gpio_enable(data->cpcap->spdif_gpio);
 					retval = cpcap_regacc_write(cpcap, CPCAP_REG_USBC2, CPCAP_BIT_USBSUSPEND,
 						 CPCAP_BIT_UARTMUX1 | CPCAP_BIT_UARTMUX0 |
 						 CPCAP_BIT_EMUMODE2 |
@@ -1075,16 +1175,22 @@ int cpcap_accy_whisper(struct cpcap_device *cpcap, unsigned long cmd)
 					whisper_audio_check(data);
 					retval = cpcap_regacc_write(cpcap, CPCAP_REG_USBC1,
 						value, CPCAP_BIT_ID100KPU);
-				} else
+				} else if (data->state == WHISPER_SMART_DOCK) {
+					tegra_gpio_disable(data->cpcap->spdif_gpio);
 					retval = 0;
+				}
 				data->whisper_auth = AUTH_PASSED;
 
 				if (data->state == CHARGER || data->state == WHISPER_SMART_DOCK)
 					cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_VBUSVLD);
 
 			} else {
-				switch_set_state(&data->dsdev, NO_DOCK);
-				switch_set_state(&data->edsdev, EXT_NO_DOCK);
+				/* HE docks will fail authentication so don't clear
+				 * the switches when one is connected */
+				if (!data->hall_effect_connected) {
+					switch_set_state(&data->dsdev, NO_DOCK);
+					switch_set_state(&data->edsdev, EXT_NO_DOCK);
+				}
 				data->whisper_auth = AUTH_FAILED;
 				if (data->state != WHISPER_SMART_DOCK) {
 					retval = cpcap_regacc_write(cpcap, CPCAP_REG_USBC2, CPCAP_BIT_USBSUSPEND,
@@ -1148,6 +1254,7 @@ static int __init cpcap_usb_det_probe(struct platform_device *pdev)
 	switch_dev_register(&data->edsdev);
 	data->uartmux = 1;
 	data->whisper_auth = AUTH_NOT_STARTED;
+	data->hall_effect_connected = false;
 	data->irq = CPCAP_IRQ__START;
 
 	platform_set_drvdata(pdev, data);
@@ -1266,6 +1373,7 @@ static int __exit cpcap_usb_det_remove(struct platform_device *pdev)
 	wake_lock_destroy(&data->wake_lock);
 
 	kfree(data);
+	current_accy = CPCAP_ACCY_NONE;
 	return 0;
 }
 

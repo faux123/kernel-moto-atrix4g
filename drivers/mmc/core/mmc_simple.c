@@ -648,7 +648,7 @@ static int mmc_simple_read_ext_csd(struct mmc_card *card)
 			unsigned offs;
 			offs = card->host->ops->get_host_offset(card->host);
 			offs >>= 9;
-			BUG_ON(offs >= card->ext_csd.sectors);
+			BUG_ON(offs > card->ext_csd.sectors);
 			card->ext_csd.sectors -= offs;
 #endif
 			mmc_card_set_blockaddr(card);

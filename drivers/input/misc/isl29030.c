@@ -289,10 +289,10 @@ irqreturn_t ld_isl29030_irq_handler(int irq, void *dev)
 {
 	struct isl29030_data *isl = dev;
 
-	if ( isl->pdata->getIrqStatus )
+	if (isl->pdata->getIrqStatus)
 		irqStatus = isl->pdata->getIrqStatus();
 	else
-		pr_err("%s: getIrqStatus() is not defined.\n", __func__ );
+		pr_err("%s: getIrqStatus() is not defined.\n", __func__);
 
 	disable_irq_nosync(isl->client->irq);
 	queue_work(isl->working_queue, &isl->wq);

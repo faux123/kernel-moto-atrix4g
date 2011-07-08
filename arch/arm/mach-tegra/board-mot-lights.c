@@ -44,7 +44,7 @@ static int disp_backlight_init(void)
             __func__, ret);
         return ret;
     }
-	if (machine_is_olympus()) {
+	if (machine_is_olympus() || machine_is_arowana()) {
 		if ((ret = gpio_request(TEGRA_KEY_BACKLIGHT_EN_GPIO,
 				"key_backlight_en"))) {
 			pr_err("%s: gpio_request(%d, key_backlight_en) failed: %d\n",
@@ -96,7 +96,7 @@ struct lm3532_platform_data lm3532_pdata = {
     .power_off = disp_backlight_power_off,
 
     .ramp_time = 0,   /* Ramp time in milliseconds */
-    .ctrl_a_fs_current = LM3532_17p8mA_FS_CURRENT,
+    .ctrl_a_fs_current = LM3532_26p6mA_FS_CURRENT,
     .ctrl_b_fs_current = LM3532_8p2mA_FS_CURRENT,
     .ctrl_a_mapping_mode = LM3532_LINEAR_MAPPING,
     .ctrl_b_mapping_mode = LM3532_LINEAR_MAPPING,
@@ -128,6 +128,13 @@ void mot_setup_lights(struct i2c_board_info *info)
             pr_info("\n%s: Daytona; removing LM3532 button backlight\n",
                 __func__);
             lm3532_pdata.flags = 0;
+	} else if (machine_is_sunfire()) {
+		pr_info("\n%s: Sunfire; removing LM3532 button backlight\n",
+		__func__);
+		lm3532_pdata.flags = LM3532_HAS_WEBTOP;
+	}
+	else if (machine_is_arowana()) {
+		lm3532_pdata.flags &= ~LM3532_HAS_WEBTOP;
 	}
 	else {
 #ifdef CONFIG_LEDS_DISP_BTN_TIED

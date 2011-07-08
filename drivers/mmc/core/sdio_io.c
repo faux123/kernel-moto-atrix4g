@@ -657,10 +657,14 @@ void sdio_f0_writeb(struct sdio_func *func, unsigned char b, unsigned int addr,
 
 	BUG_ON(!func);
 
-	if ((addr < 0xF0 || addr > 0xFF) && (!mmc_card_lenient_fn0(func->card))) {
-		if (err_ret)
-			*err_ret = -EINVAL;
-		return;
+	/* To by pass the check for Beceem Vendor Products */
+	if (func->card->cis.vendor != 0x392) {
+		if ((addr < 0xF0 || addr > 0xFF) &&
+			(!mmc_card_lenient_fn0(func->card))) {
+			if (err_ret)
+				*err_ret = -EINVAL;
+			return;
+		}
 	}
 
 	ret = mmc_io_rw_direct(func->card, 1, 0, addr, b, NULL);
@@ -668,3 +672,69 @@ void sdio_f0_writeb(struct sdio_func *func, unsigned char b, unsigned int addr,
 		*err_ret = ret;
 }
 EXPORT_SYMBOL_GPL(sdio_f0_writeb);
+
+#ifdef CONFIG_MOT_WIMAX
+/* this is the bcm supported API for the cmd53 */
+int bcm_sdio_cmd53(struct sdio_func *func, int write,
+						unsigned addr, int incr_addr,
+						u8 *buf, unsigned size,
+						int bcm_fn0_cur_blk_size)
+{
+	unsigned remainder = size;
+	unsigned max_blocks;
+	int ret;
+
+	/* Do the bulk of the transfer using block mode (if supported). */
+	if (func->card->cccr.multi_block) {
+		/* Blocks per command is limited by host count, host transfer
+		 * size (we only use a single sg entry) and the maximum for
+		 * IO_RW_EXTENDED of 511 blocks. */
+		max_blocks = min(min(
+			func->card->host->max_blk_count,
+			func->card->host->max_seg_size / bcm_fn0_cur_blk_size),
+			511u);
+
+		while (remainder > bcm_fn0_cur_blk_size) {
+			unsigned blocks;
+
+			blocks = remainder / bcm_fn0_cur_blk_size;
+			if (blocks > max_blocks)
+				blocks = max_blocks;
+			size = blocks * bcm_fn0_cur_blk_size;
+
+			ret = mmc_io_rw_extended(func->card, write,
+				0, addr, incr_addr, buf,
+				blocks, bcm_fn0_cur_blk_size);
+			if (ret)
+				return ret;
+
+			remainder -= size;
+			buf += size;
+			if (incr_addr)
+				addr += size;
+		}
+	}
+
+	/* Write the remainder using byte mode. */
+	while (remainder > 0) {
+		size = remainder;
+		if (size > bcm_fn0_cur_blk_size)
+			size = bcm_fn0_cur_blk_size;
+		if (size > 512)
+			size = 512; /* maximum size for byte mode */
+
+		ret = mmc_io_rw_extended(func->card, write, 0, addr,
+			 incr_addr, buf, 1, size);
+		if (ret)
+			return ret;
+
+		remainder -= size;
+		buf += size;
+		if (incr_addr)
+			addr += size;
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(bcm_sdio_cmd53);
+#endif /* CONFIG_MOT_WIMAX */
+

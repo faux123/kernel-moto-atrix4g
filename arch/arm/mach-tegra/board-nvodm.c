@@ -64,8 +64,10 @@
 #include "power.h"
 #include "board.h"
 #include "nvrm_pmu.h"
-
 #include "hwrev.h"
+#ifdef CONFIG_MACH_MOT
+#include "board-mot.h"
+#endif
 
 # define BT_RESET 0
 # define BT_SHUTDOWN 1
@@ -76,6 +78,9 @@
 #include <linux/input.h>
 #endif
 
+#ifdef CONFIG_MACH_MOT
+#include <linux/mmc/host.h>
+#endif
 
 NvRmGpioHandle s_hGpioGlobal;
 
@@ -210,18 +215,26 @@ static struct tegra_sdhci_platform_data tegra_sdhci_platform[] = {
 	[0] = {
 		.bus_width = 4,
 		.debounce = 5,
+		.max_power_class = 15,
 	},
 	[1] = {
 		.bus_width = 4,
 		.debounce = 5,
+		.max_power_class = 15,
+#ifdef CONFIG_MOT_WIMAX
+		.ocr_mask = MMC_VDD_165_195,
+		.register_status_notify = bcm_wimax_status_register,
+#endif
 	},
 	[2] = {
 		.bus_width = 4,
 		.debounce = 5,
+		.max_power_class = 15,
 	},
 	[3] = {
 		.bus_width = 4,
 		.debounce = 5,
+		.max_power_class = 15,
 	},
 };
 static struct resource tegra_sdhci_resources[][2] = {
@@ -337,14 +350,22 @@ static void __init tegra_setup_sdhci(void) {
 	NvRmModuleSdmmcInterfaceCaps caps;
 	int i;
 
-	/* Currently only Olympus P3 or greater can handle shutting down the
-	   external SD card. */
-	if (machine_is_olympus() &&
+	/* Olympus P3+, Etna P2+, Etna S3+, Daytona and Sunfire
+	   can handle shutting down the external SD card. */
+	if ((machine_is_olympus() &&
 		(HWREV_TYPE_IS_FINAL(system_rev) ||
 		(HWREV_TYPE_IS_PORTABLE(system_rev) &&
-		(HWREV_REV(system_rev) >= HWREV_REV_3)))) {
-			tegra_sdhci_platform[2].regulator_str = (char *)tegra_sdio_ext_reg_str;
-}
+		(HWREV_REV(system_rev) >= HWREV_REV_3)))) || machine_is_arowana() ||
+	     machine_is_tegra_daytona() ||
+	    (machine_is_etna() &&
+		(HWREV_TYPE_IS_FINAL(system_rev) ||
+		(HWREV_TYPE_IS_PORTABLE(system_rev) &&
+		 (HWREV_REV(system_rev) >= HWREV_REV_2)) ||
+		(HWREV_TYPE_IS_BRASSBOARD(system_rev) &&
+		 (HWREV_REV(system_rev) >= HWREV_REV_3)))) ||
+	     machine_is_sunfire() ) {
+		tegra_sdhci_platform[2].regulator_str = (char *)tegra_sdio_ext_reg_str;
+        }
 
 	NvOdmQueryClockLimits(NvOdmIoModule_Sdio, &clock_limits, &clock_count);
 	NvOdmQueryPinMux(NvOdmIoModule_Sdio, &pinmux, &nr_pinmux);
@@ -427,7 +448,7 @@ static void __init tegra_setup_sdhci(void) {
 static void __init tegra_setup_sdhci(void) { }
 #endif
 
-#ifdef CONFIG_SERIAL_TEGRA
+#if defined(CONFIG_SERIAL_TEGRA) || defined(CONFIG_SERIAL_TEGRA_TD)
 struct tegra_serial_platform_data tegra_uart_platform[] = {
 	{
 		.p = {
@@ -723,6 +744,18 @@ static void __init tegra_setup_hcd(void)
 		} else if (p->IdPinDetectionType == NvOdmUsbIdPinType_CableId) {
 			plat->id_detect = ID_PIN_CABLE_ID;
 		}
+
+		/* Some connected devices such as Wrigley expect VBUS to stay
+		 * on even when the AP20 is in LP0. */
+		if (p->vbus_regulator != NULL)
+			plat->regulator_str = p->vbus_regulator;
+
+		/* Enable fast wakeup by default to use resume signaling on
+		 * wakeup from LP0 instead of a bus reset.
+		 */
+		if (p->UsbMode == NvOdmUsbModeType_Host)
+			plat->fast_wakeup = 1;
+
 		platform_device_register(&tegra_hcd[i]);
 	}
 }
@@ -757,7 +790,8 @@ static noinline void __init tegra_setup_kbc(void)
 	}
 	pdata->wake_cnt = 0;
 	if (NvOdmKbcIsSelectKeysWkUpEnabled(&wake_row, &wake_col, &wake_num)) {
-		BUG_ON(!wake_num || wake_num>=KBC_MAX_KEY);
+		BUG_ON(wake_num >= KBC_MAX_KEY);
+		if (wake_num) {
 		pdata->wake_cfg = kzalloc(sizeof(*pdata->wake_cfg)*wake_num,
 			GFP_KERNEL);
 		if (pdata->wake_cfg) {
@@ -769,6 +803,9 @@ static noinline void __init tegra_setup_kbc(void)
 		} else
 			pr_err("disabling wakeup key filtering due to "
 				"out-of-memory error\n");
+		} else
+			pr_warning("no wakeup keys are configured \n");
+
 	}
 
 	NvOdmKbcGetParameter(NvOdmKbcParameter_DebounceTime, 1, &temp);
@@ -1560,6 +1597,25 @@ static struct tegra_suspend_platform_data tegra_suspend_platform = {
 static void __init tegra_setup_suspend(void)
 {
 #ifdef CONFIG_ARCH_TEGRA_2x_SOC
+#ifdef CONFIG_MOT_WIMAX
+	const int wakepad_irq[] = {
+		/*gpio_to_irq(TEGRA_GPIO_PO5),*/ gpio_to_irq(TEGRA_GPIO_PV3),
+		gpio_to_irq(TEGRA_GPIO_PL1), gpio_to_irq(TEGRA_GPIO_PB6),
+		gpio_to_irq(TEGRA_GPIO_PN7), gpio_to_irq(TEGRA_GPIO_PA0),
+		gpio_to_irq(TEGRA_GPIO_PU5), gpio_to_irq(TEGRA_GPIO_PU6),
+		gpio_to_irq(TEGRA_GPIO_PC7), /*gpio_to_irq(TEGRA_GPIO_PS2),*/
+		gpio_to_irq(TEGRA_GPIO_PAA1), gpio_to_irq(TEGRA_GPIO_PW3),
+		gpio_to_irq(TEGRA_GPIO_PW2), gpio_to_irq(TEGRA_GPIO_PY6),
+		gpio_to_irq(TEGRA_GPIO_PV6), gpio_to_irq(TEGRA_GPIO_PJ7),
+		INT_RTC, INT_KBC, INT_EXTERNAL_PMU,
+		/* FIXME: USB wake pad interrupt mapping may be wrong */
+		INT_USB, INT_USB3, INT_USB, INT_USB3,
+		gpio_to_irq(TEGRA_GPIO_PI5), gpio_to_irq(TEGRA_GPIO_PV2),
+		gpio_to_irq(TEGRA_GPIO_PS4), gpio_to_irq(TEGRA_GPIO_PS5),
+		/*gpio_to_irq(TEGRA_GPIO_PS0),*/ gpio_to_irq(TEGRA_GPIO_PQ6),
+		gpio_to_irq(TEGRA_GPIO_PQ7), gpio_to_irq(TEGRA_GPIO_PN2),
+	};
+#else
 	const int wakepad_irq[] = {
 		gpio_to_irq(TEGRA_GPIO_PO5), gpio_to_irq(TEGRA_GPIO_PV3),
 		gpio_to_irq(TEGRA_GPIO_PL1), gpio_to_irq(TEGRA_GPIO_PB6),
@@ -1577,7 +1633,8 @@ static void __init tegra_setup_suspend(void)
 		gpio_to_irq(TEGRA_GPIO_PS0), gpio_to_irq(TEGRA_GPIO_PQ6),
 		gpio_to_irq(TEGRA_GPIO_PQ7), gpio_to_irq(TEGRA_GPIO_PN2),
 	};
-#endif
+#endif /* CONFIG_MOT_WIMAX */
+#endif /* CONFIG_ARCH_TEGRA_2x_SOC */
 	const NvOdmWakeupPadInfo *w;
 	const NvOdmSocPowerStateInfo *lp;
 	struct tegra_suspend_platform_data *plat = &tegra_suspend_platform;

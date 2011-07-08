@@ -25,16 +25,16 @@
 #include "gpio-names.h"
 #include "board-mot.h"
 
-#define TEGRA_PROX_INT_GPIO		 	33		// TEGRA_GPIO_PE1
-#define TEGRA_HF_NORTH_GPIO			146		// TEGRA_GPIO_PS2
-#define TEGRA_HF_SOUTH_GPIO			144		// TEGRA_GPIO_PS0
-#define TEGRA_VIBRATOR_GPIO		 	24		// TEGRA_GPIO_PD0
-#define TEGRA_VIBRATOR_GPIO_ETNA_S1	164		// TEGRA_GPIO_PU4
-#define TEGRA_KXTF9_INT_GPIO		171     // TEGRA_GPIO_PV3
-#define TEGRA_KXTF9_INT_GPIO_ETNA_S1 108    // TEGRA_GPIO_PN4
+#define TEGRA_PROX_INT_GPIO			TEGRA_GPIO_PE1
+#define TEGRA_HF_NORTH_GPIO			TEGRA_GPIO_PS2
+#define TEGRA_HF_SOUTH_GPIO			TEGRA_GPIO_PS0
+#define TEGRA_VIBRATOR_GPIO			TEGRA_GPIO_PD0
+#define TEGRA_VIBRATOR_GPIO_ETNA_S1	TEGRA_GPIO_PU4
+#define TEGRA_KXTF9_INT_GPIO		TEGRA_GPIO_PV3
+#define TEGRA_KXTF9_INT_GPIO_ETNA_S1 TEGRA_GPIO_PN4
 #define TEGRA_L3G4200D_IRQ_GPIO		TEGRA_GPIO_PH2
 
-#define TEGRA_AKM8975_RESET_GPIO	85		// TEGRA_GPIO_PK5
+#define TEGRA_AKM8975_RESET_GPIO	TEGRA_GPIO_PK5
 
 #ifdef CONFIG_VIB_PWM
 NvOdmServicesPwmHandle hOdmPwm = NULL;
@@ -64,7 +64,14 @@ static void tegra_vibrator_exit(void)
 
 static int tegra_vibrator_power_on(void)
 {
-	regulator_set_voltage(tegra_vibrator_regulator, 3000000, 3000000);
+	if (machine_is_sunfire()) {
+		/* Sunfire has different vibrator P/N 59002313001 than Etna) */
+		regulator_set_voltage(tegra_vibrator_regulator,
+			1800000, 1800000);
+	} else {
+		regulator_set_voltage(tegra_vibrator_regulator,
+			3000000, 3000000);
+	}
 	return regulator_enable(tegra_vibrator_regulator);
 }
 
@@ -75,7 +82,7 @@ static int tegra_vibrator_power_off(void)
 	return 0;
 }
 
-static int	isl29030_getIrqStatus(void)
+static int isl29030_getIrqStatus(void)
 {
 	int	status = -1;
 
@@ -132,19 +139,25 @@ static void tegra_lvibrator_exit(void)
 static int tegra_lvibrator_power_on(int freq, int duty_cycle)
 {
 	NvU32 ReqPeriod, RetPeriod;
-	printk("Haesik tegra_lvibrator_power_on\n");
-	hOdmPwm = NvOdmPwmOpen();
+	printk("tegra_lvibrator_power_on\n");
 
+        if (hOdmPwm)
+        {
+            NvOdmPwmClose(hOdmPwm);
+            hOdmPwm = NULL;
+        }
+
+        hOdmPwm = NvOdmPwmOpen();
 	if (!hOdmPwm)
 	{
-		printk("Haesik pwm vib:  NvOdmPwmOpen failed\n");
+		printk("pwm vib:  NvOdmPwmOpen failed\n");
 		return NV_FALSE;
 	}
 	ReqPeriod = freq;
 	NvOdmPwmConfig(hOdmPwm, NvOdmPwmOutputId_PWM1, NvOdmPwmMode_Enable,
 		duty_cycle, &ReqPeriod, &RetPeriod);
 
-	printk("Haesik Requested %d, ReturnPeriod=%d \n", ReqPeriod, RetPeriod);
+	printk("Requested %d, ReturnPeriod=%d \n", ReqPeriod, RetPeriod);
 	regulator_set_voltage(tegra_vibrator_regulator, 3000000, 3000000);
 	return regulator_enable(tegra_vibrator_regulator);
 }
@@ -154,11 +167,14 @@ static int tegra_lvibrator_power_off(void)
 	NvU32 ReqPeriod, RetPeriod;
 	ReqPeriod = 0;
 
-	NvOdmPwmConfig(hOdmPwm, NvOdmPwmOutputId_PWM1, NvOdmPwmMode_Disable,
+        if (hOdmPwm != NULL)
+        {
+            NvOdmPwmConfig(hOdmPwm, NvOdmPwmOutputId_PWM1, NvOdmPwmMode_Disable,
                 0, &ReqPeriod, &RetPeriod);
 
-	NvOdmPwmClose(hOdmPwm);
-	hOdmPwm = NULL;
+            NvOdmPwmClose(hOdmPwm);
+            hOdmPwm = NULL;
+        }
 
 	if (tegra_vibrator_regulator)
 		return regulator_disable(tegra_vibrator_regulator);
@@ -174,7 +190,7 @@ static struct vib_pwm_platform_data vib_pwm_data = {
 	.exit = tegra_lvibrator_exit,
 	.power_on = tegra_lvibrator_power_on,
 	.power_off = tegra_lvibrator_power_off,
-	.device_name = "lvibrator",
+	.device_name = "vibrator",
 };
 
 static struct platform_device tegra_vib_pwm = {
@@ -198,6 +214,7 @@ static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 	.docked_north_gpio = TEGRA_HF_NORTH_GPIO,
 	.docked_south_gpio = TEGRA_HF_SOUTH_GPIO,
 	.north_is_desk = 1,
+	.set_switch_func = cpcap_set_dock_switch,
 };
 
 
@@ -355,6 +372,11 @@ static void __init kxtf9_init(void)
 		}
 	}
 	else if (machine_is_sunfire()) {
+		kxtf9_data.negate_z = 1;
+		/* Swap x and y */
+		kxtf9_data.axis_map_x = 1;
+		kxtf9_data.axis_map_y = 0;
+
 		kxtf9_data.negate_y = 0;
 		kxtf9_data.negate_x = 0;
 	}	
@@ -519,6 +541,35 @@ struct isl29030_platform_data isl29030_als_ir_data_Etna = {
 	.interrupt_cntrl = 0x20,
 	.prox_lower_threshold = 0x0f,
 	.prox_higher_threshold = 0x14,
+	.crosstalk_vs_covered_threshold = 0x82,
+	.default_prox_noise_floor = 0xAA,
+	.num_samples_for_noise_floor = 0x05,
+	.lens_percent_t = 3,
+	.irq = 0,
+	.getIrqStatus = isl29030_getIrqStatus,
+	.gpio_intr = PROX_INT_GPIO,
+};
+/*Arowana prox sensor is the same as etna*/
+struct isl29030_platform_data isl29030_als_ir_data_Arowana = {
+/*
+	NOTE: Original values
+	.configure = 0x6c,
+	.interrupt_cntrl = 0x40,
+	.prox_lower_threshold = 0x1e,
+	.prox_higher_threshold = 0x32,
+	.als_ir_low_threshold = 0x00,
+	.als_ir_high_low_threshold = 0x00,
+	.als_ir_high_threshold = 0x45,
+	.lens_percent_t = 100,
+*/
+	.init = NULL,
+	.exit = NULL,
+	.power_on = NULL,
+	.power_off = NULL,
+	.configure = 0x66,
+	.interrupt_cntrl = 0x20,
+	.prox_lower_threshold = 0x0f,
+	.prox_higher_threshold = 0x14,
 	.crosstalk_vs_covered_threshold = 0x96,
 	.default_prox_noise_floor = 0x96,
 	.num_samples_for_noise_floor = 0x05,
@@ -528,33 +579,34 @@ struct isl29030_platform_data isl29030_als_ir_data_Etna = {
 	.gpio_intr = PROX_INT_GPIO,
 };
 
+
 struct isl29030_platform_data isl29030_als_ir_data_Daytona = {
 /*
-        NOTE: Original values
-        .configure = 0x6c,
-        .interrupt_cntrl = 0x40,
-        .prox_lower_threshold = 0x1e,
-        .prox_higher_threshold = 0x32,
-        .als_ir_low_threshold = 0x00,
-        .als_ir_high_low_threshold = 0x00,
-        .als_ir_high_threshold = 0x45,
-        .lens_percent_t = 100,
+	NOTE: Original values
+	.configure = 0x6c,
+	.interrupt_cntrl = 0x40,
+	.prox_lower_threshold = 0x1e,
+	.prox_higher_threshold = 0x32,
+    .als_ir_low_threshold = 0x00,
+    .als_ir_high_low_threshold = 0x00,
+	.als_ir_high_threshold = 0x45,
+	.lens_percent_t = 100,
 */
-        .init = NULL,
-        .exit = NULL,
-        .power_on = NULL,
-        .power_off = NULL,
-        .configure = 0x66,
-        .interrupt_cntrl = 0x20,
-        .prox_lower_threshold = 0x0a,
-        .prox_higher_threshold = 0x14,
-        .crosstalk_vs_covered_threshold = 0x3c,
-        .default_prox_noise_floor = 0x3c,
-        .num_samples_for_noise_floor = 0x05,
-        .lens_percent_t = 10,
-        .irq = 0,
-		.getIrqStatus = isl29030_getIrqStatus,
-		.gpio_intr = PROX_INT_GPIO,
+	.init = NULL,
+	.exit = NULL,
+	.power_on = NULL,
+	.power_off = NULL,
+	.configure = 0x66,
+	.interrupt_cntrl = 0x20,
+	.prox_lower_threshold = 0x0a,
+	.prox_higher_threshold = 0x14,
+	.crosstalk_vs_covered_threshold = 0x46,
+	.default_prox_noise_floor = 0x3c,
+	.num_samples_for_noise_floor = 0x05,
+	.lens_percent_t = 3,
+	.irq = 0,
+	.getIrqStatus = isl29030_getIrqStatus,
+	.gpio_intr = PROX_INT_GPIO,
 };
 
 struct isl29030_platform_data isl29030_als_ir_data_Sunfire = {
@@ -584,6 +636,10 @@ static void __init isl29030_init(void)
 	if (machine_is_olympus()) {
 		isl29030_als_ir_data_Olympus.irq = gpio_to_irq(PROX_INT_GPIO);
 		isl29030_als_ir.dev.platform_data = &(isl29030_als_ir_data_Olympus);
+	}
+	if (machine_is_arowana()) {
+		isl29030_als_ir_data_Arowana.irq = gpio_to_irq(PROX_INT_GPIO);
+		isl29030_als_ir.dev.platform_data = &(isl29030_als_ir_data_Arowana);
 	}
 	if (machine_is_etna()) {
 		isl29030_als_ir_data_Etna.irq = gpio_to_irq(PROX_INT_GPIO);
@@ -722,12 +778,16 @@ void __init mot_sensors_init(void)
 {
 	kxtf9_init();
 	tegra_akm8975_init();
-	tegra_hall_effect_init();
+	if (machine_is_tegra_daytona())
+		tegra_hall_effect_init();
+
 	tegra_vibrator_init();
 	if(!(bi_powerup_reason() & PWRUP_BAREBOARD)) {
 		isl29030_init();
 	}
-	if (machine_is_etna() || machine_is_sunfire()) {
+	if (machine_is_etna() ||
+		machine_is_tegra_daytona() ||
+		machine_is_sunfire()) {
 			tegra_l3g4200d_init();
 	}
 

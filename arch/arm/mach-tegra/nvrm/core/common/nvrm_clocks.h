@@ -203,13 +203,13 @@ typedef struct NvRmPllFixedConfigRec
 #define NVRM_PLLHD_AT_12MHZ { 594000, 12, 594, 0, 0}
 #define NVRM_PLLHD_AT_13MHZ { 594000, 13, 594, 0, 0}
 #define NVRM_PLLHD_AT_19MHZ { 594000, 16, 495, 0, 0}
-#define NVRM_PLLHD_AT_26MHZ { 594000, 13, 594, 1, 0}
+#define NVRM_PLLHD_AT_26MHZ { 445500, 13, 891, 2, 0}
 
 /* Defines PLLD/PLLC 480p HDMI configurations */
 #define NVRM_PLLHD_480_AT_12MHZ { 606000, 12, 606, 0, 0}
 #define NVRM_PLLHD_480_AT_13MHZ { 606000, 13, 606, 0, 0}
 #define NVRM_PLLHD_480_AT_19MHZ { 606000, 16, 505, 0, 0}
-#define NVRM_PLLHD_480_AT_26MHZ { 606000, 13, 606, 1, 0}
+#define NVRM_PLLHD_480_AT_26MHZ { 404000, 13, 808, 2, 0}
 
 // Display divider is part of the display module and it is not described
 // in central module clock information table. Hence, need this define.

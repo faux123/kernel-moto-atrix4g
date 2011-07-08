@@ -1,0 +1,5 @@
+menuconfig MOT_FEAT_TD_TS27010MUX
+	bool "TD-SCDMA modem MUX Support"
+	default y
+	help
+	  Say Y here to enable TD-SCDMA modem MUX support.

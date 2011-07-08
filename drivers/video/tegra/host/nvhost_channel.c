@@ -112,6 +112,7 @@ int __init nvhost_channel_init(struct nvhost_channel *ch,
 	ch->dev = dev;
 	ch->desc = &channelmap[index];
 	ch->aperture = channel_aperture(dev->aperture, index);
+	ch->ctx_sw_count = 0;
 	mutex_init(&ch->reflock);
 	mutex_init(&ch->submitlock);
 

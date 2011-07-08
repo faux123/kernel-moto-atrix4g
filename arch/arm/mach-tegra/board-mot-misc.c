@@ -6,10 +6,12 @@
 #include <linux/gpio.h>
 #include <linux/platform_device.h>
 #include <linux/major.h>
+#include <linux/tcmd_driver.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/setup.h>
+#include <asm/bootinfo.h>
 
 #include <mach/iomap.h>
 #include <mach/mdm_ctrl.h>
@@ -92,9 +94,13 @@ static struct platform_device apanic_handle_mmc_platform_device = {
 	}
 };
 
+static struct notifier_block extra_panic_blk;
+
 extern struct tegra_nand_platform tegra_nand_plat;
 extern int tegra_sdhci_boot_device;
 extern struct platform_device tegra_sdhci_devices[];
+static int arowana_panic_notifier(struct notifier_block *this,
+		unsigned long event, void *ptr);
 
 int apanic_mmc_init(void)
 {
@@ -149,7 +155,42 @@ int apanic_mmc_init(void)
 	return result;
 }
 #endif
+/*Implementation of extra panic notifications to user
+ * like vibrations, LED,etc. different products should
+ * put their own code within this function. feature's
+ * config switch is in board-mot.h, board-mot.c will
+ * call this function unconditionally.
+ * You may need to change panic reboot timeout value to
+ * get enough time to user before reboot by panic.
+ * */
+#ifdef CONFIG_MOT_FEAT_PANIC_NOTIFIER
+void mot_panic_notifier_init(void)
+{
 
+	extra_panic_blk.notifier_call = NULL;
+	if (machine_is_arowana())
+		extra_panic_blk.notifier_call = arowana_panic_notifier;
+/*
+ * put other products' implementation here before we register it
+*/
+	if (extra_panic_blk.notifier_call)
+		atomic_notifier_chain_register(&panic_notifier_list,
+				&extra_panic_blk);
+	return;
+}
+#endif
+static int arowana_panic_notifier(struct notifier_block *this,
+		unsigned long event, void *ptr)
+{
+/*
+ * Requesting a GPIO regularly could fail since vibrator driver may have already
+ * requested it. Just do it directly and hard coded IO pin for a single product.
+ * This notifier call back should be called only when a panic happens.
+ */
+	printk(KERN_WARNING "Call panic notifier of Arowana, enable vibrator\n");
+	gpio_direction_output(TEGRA_GPIO_PD0, 1);
+	return 0;
+}
 void mot_set_hsj_mux(short hsj_mux_gpio)
 {
 	/* set pin M 2 to 1 to route audio onto headset or 0 to route console uart */
@@ -182,6 +223,40 @@ void mot_sec_init(void)
 
 
 /*
+ * TCMD
+ */
+static struct tcmd_driver_platform_data mot_tcmd_platform_data;
+static struct platform_device mot_tcmd_platform_device = {
+    .name          = "tcmd_driver",
+    .id            = 0,
+    .dev = {
+		.platform_data = &mot_tcmd_platform_data,
+    }
+};
+
+void mot_tcmd_init(void)
+{
+	mot_tcmd_platform_data.gpio_list[TCMD_GPIO_ISL29030_INT]
+      = TEGRA_GPIO_PE1;
+	mot_tcmd_platform_data.gpio_list[TCMD_GPIO_KXTF9_INT]
+      = TEGRA_GPIO_PV3;
+	mot_tcmd_platform_data.gpio_list[TCMD_GPIO_MMC_DETECT]
+      = TEGRA_GPIO_PI5;
+	mot_tcmd_platform_data.gpio_list[TCMD_GPIO_INT_MAX_NUM]
+      = -1;
+	mot_tcmd_platform_data.size = TCMD_GPIO_INT_MAX_NUM;
+
+	if (machine_is_etna()) {
+		if (system_rev == 0x1100) {
+			mot_tcmd_platform_data.gpio_list[TCMD_GPIO_KXTF9_INT]
+				= TEGRA_GPIO_PN4;
+      }
+    }
+
+	platform_device_register(&mot_tcmd_platform_device);
+}
+
+/*
  * Some global queries for the framebuffer, display, and backlight drivers.
  */
 static unsigned int s_MotorolaDispInfo = 0;
@@ -191,6 +266,8 @@ unsigned short bootloader_ver_major = 0;
 unsigned short bootloader_ver_minor = 0;
 unsigned short uboot_ver_major = 0;
 unsigned short uboot_ver_minor = 0;
+
+unsigned char lpddr2_mr[12];
 
 int MotorolaBootFBArgGet(unsigned int *arg)
 {
@@ -216,6 +293,7 @@ int MotorolaBootDispArgGet(unsigned int *arg)
 static int __init parse_tag_motorola(const struct tag *tag)
 {
     const struct tag_motorola *moto_tag = &tag->u.motorola;
+    int i = 0;
 
     s_MotorolaDispInfo = moto_tag->panel_size;
     s_MotorolaFBInfo = moto_tag->allow_fb_open;
@@ -226,10 +304,24 @@ static int __init parse_tag_motorola(const struct tag *tag)
     bootloader_ver_minor = moto_tag->bl_ver_minor;
     uboot_ver_major = moto_tag->uboot_ver_major;
     uboot_ver_minor = moto_tag->uboot_ver_minor;
+	bi_set_cid_recover_boot(moto_tag->cid_suspend_boot);
 
     pr_info("%s: panel_size: %x\n", __func__, s_MotorolaDispInfo);
     pr_info("%s: allow_fb_open: %x\n", __func__, s_MotorolaFBInfo);
     pr_info("%s: factory: %d\n", __func__, mot_sec_platform_data.fl_factory);
+    pr_info("%s: cid_suspend_boot: %u\n", __func__,
+				(unsigned)moto_tag->cid_suspend_boot);
+
+    /*
+     *	Dump memory information
+     */
+     /* FIXME:  Add eMMC support */
+	for (i = 0; i < 12; i++) {
+		lpddr2_mr[i] = moto_tag->at_lpddr2_mr[i];
+		pr_info("%s: LPDDR2 MR%d:     0x%04X (0x%04X)\n", __func__, i,
+			lpddr2_mr[i],
+			moto_tag->at_lpddr2_mr[i]);
+	}
 
     return 0;
 }
@@ -244,19 +336,21 @@ static int keymap_update_connect(struct input_handler *handler, struct input_dev
  {
 	int i;
 
-	if( strcmp (dev->name ,"tegra-kbc")) return 0;  
-	/* add numbers keys to keymap */
-	for(i= KEY_1 ;i <= KEY_0; i++ )
-		set_bit(i, dev->keybit);
+	if (strcmp(dev->name , "tegra-kbc"))  return 0;
 
 	set_bit(0x38, dev->keybit); // ALT
 	set_bit(0x3E, dev->keybit); // CALL
 	set_bit(0x3D, dev->keybit); // ENDCALL
-	set_bit(0xE3, dev->keybit); // *
-	set_bit(0xE4, dev->keybit); // #
 	set_bit(0xE7, dev->keybit); // SEND
-	
-	pr_info("keymap_update add key codes to device %s  \n", dev->name);
+	set_bit(0x6A, dev->keybit); // DPAD_UP
+	set_bit(0x69, dev->keybit); // DPAD_DOWN
+	set_bit(0x67, dev->keybit); // DPAD_LEFT
+	set_bit(0x6C, dev->keybit); // DPAD_RIGHT
+	set_bit(0xE8, dev->keybit); // DPAD_CENTER
+	set_bit(0xA2, dev->keybit); // Power
+
+
+	pr_info("keymap_update add key codes to device %s\n", dev->name);
 	return 0;
  }
 

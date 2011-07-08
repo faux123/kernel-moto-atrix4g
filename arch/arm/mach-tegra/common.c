@@ -28,6 +28,7 @@
 
 #include <mach/iomap.h>
 #include <mach/dma.h>
+#include <mach/fuse.h>
 
 #ifdef CONFIG_MFD_CPCAP
 #include <linux/spi/cpcap.h>
@@ -108,13 +109,24 @@ void tegra_machine_restart(char mode, const char *cmd)
 void __init tegra_init_cache(void)
 {
 #ifdef CONFIG_CACHE_L2X0
-	void __iomem *p = IO_ADDRESS(TEGRA_ARM_PERIF_BASE) + 0x3000;
+	void __iomem	*p = IO_ADDRESS(TEGRA_ARM_PERIF_BASE) + 0x3000;
+	unsigned	pl310_auxctrl = 0x7C480001;
+	unsigned	reg;
 
 	writel(0x331, p + L2X0_TAG_LATENCY_CTRL);
 	writel(0x441, p + L2X0_DATA_LATENCY_CTRL);
 	writel(7, p + L2X0_PREFETCH_OFFSET);
 
-	l2x0_init(p, 0x7C480001, 0x8200c3fe);
+	l2x0_init(p, pl310_auxctrl, 0x8200c3fe);
+
+#ifdef CONFIG_CPU_V7
+#define PL310_FLZE	(1<<0)
+	asm volatile ("mrc p15, 0, %0, c1, c0, 1" : "=r" (reg) : : "cc");
+	/* enable Full Line of Zeros */
+	if (pl310_auxctrl & PL310_FLZE)
+		reg |= 1 << 3;
+	asm volatile ("mcr p15, 0, %0, c1, c0, 1" : : "r" (reg) : "cc");
+#endif
 #endif
 }
 
@@ -132,6 +144,7 @@ void __init tegra_common_init(void)
 				"iram", NVMEM_HEAP_CARVEOUT_IRAM);
 	tegra_init_clock();
 	tegra_init_cache();
+	tegra_init_fuse_cache();
 	tegra_dma_init();
 	tegra_mc_init();
 	arm_pm_restart = tegra_machine_restart;

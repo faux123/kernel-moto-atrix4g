@@ -29,4 +29,7 @@ config TEGRA_ODM_OLYMPUS
 	bool "Motorola OLYMPUS brassboard/phone"
 	depends on ARCH_TEGRA_2x_SOC
 
+config TEGRA_ODM_AROWANA
+	bool "Motorola AROWANA brassboard/phone"
+	depends on ARCH_TEGRA_2x_SOC
 endchoice

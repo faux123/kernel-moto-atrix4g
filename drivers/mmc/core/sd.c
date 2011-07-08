@@ -111,7 +111,7 @@ static int mmc_decode_csd(struct mmc_card *card)
 		m = UNSTUFF_BITS(resp, 62, 12);
 		csd->capacity	  = (1 + m) << (e + 2);
 #ifdef CONFIG_EMBEDDED_MMC_START_OFFSET
-		BUG_ON(card->host->ops->get_host_offset(card->host) >=
+		BUG_ON(card->host->ops->get_host_offset(card->host) >
 			csd->capacity);
 		csd->capacity -= card->host->ops->get_host_offset(card->host);
 #endif
@@ -123,6 +123,13 @@ static int mmc_decode_csd(struct mmc_card *card)
 		csd->r2w_factor = UNSTUFF_BITS(resp, 26, 3);
 		csd->write_blkbits = UNSTUFF_BITS(resp, 22, 4);
 		csd->write_partial = UNSTUFF_BITS(resp, 21, 1);
+
+		if (UNSTUFF_BITS(resp, 46, 1))
+			csd->erase_size = 512;
+		else {
+			csd->erase_size = UNSTUFF_BITS(resp, 39, 7) + 1;
+			csd->erase_size <<= csd->write_blkbits;
+		}
 		break;
 	case 1:
 		/*
@@ -143,7 +150,7 @@ static int mmc_decode_csd(struct mmc_card *card)
 		m = UNSTUFF_BITS(resp, 48, 22);
 		csd->capacity     = (1 + m) << 10;
 #ifdef CONFIG_EMBEDDED_MMC_START_OFFSET
-		BUG_ON((card->host->ops->get_host_offset(card->host) >> 9) >=
+		BUG_ON((card->host->ops->get_host_offset(card->host) >> 9) >
 			csd->capacity);
 		csd->capacity -=
 			(card->host->ops->get_host_offset(card->host) >> 9);
@@ -156,6 +163,7 @@ static int mmc_decode_csd(struct mmc_card *card)
 		csd->r2w_factor = 4; /* Unused */
 		csd->write_blkbits = 9;
 		csd->write_partial = 0;
+		csd->erase_size = 512;
 		break;
 	default:
 		printk(KERN_ERR "%s: unrecognised CSD structure version %d\n",

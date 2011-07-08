@@ -29,7 +29,8 @@ struct vib_pwm_data {
 	struct work_struct vib_work;
 	struct hrtimer timer;
 	/* Ensure only one vibration at a time */
-	struct mutex lock;
+       spinlock_t lock;
+       struct mutex update_mutex;
 
 	struct vib_pwm_platform_data *pdata;
 	int vib_power_state;
@@ -60,7 +61,9 @@ static void vib_pwm_set(int on)
 
 static void vib_pwm_update(struct work_struct *work)
 {
+        mutex_lock(&pwm_misc_data->update_mutex);
 	vib_pwm_set(pwm_misc_data->vib_state);
+        mutex_unlock(&pwm_misc_data->update_mutex);
 }
 
 static enum hrtimer_restart pwm_timer_func(struct hrtimer *timer)
@@ -87,21 +90,23 @@ static int vib_pwm_get_time(struct timed_output_dev *dev)
 static void vib_pwm_enable(struct timed_output_dev *dev, int value)
 {
 	struct vib_pwm_data *data = container_of(dev, struct vib_pwm_data, dev);
+        unsigned long flags;
 
-	mutex_lock(&data->lock);
+        spin_lock_irqsave(&data->lock, flags);
 	hrtimer_cancel(&data->timer);
 
 	if (value == 0)
 		data->vib_state = 0;
 	else {
+                value = (value > data->pdata->max_timeout ?
+                                data->pdata->max_timeout : value);
 		data->vib_state = 1;
 		hrtimer_start(&data->timer,
 			      ktime_set(value / 1000, (value % 1000) * 1000000),
 			      HRTIMER_MODE_REL);
 	}
 
-	mutex_unlock(&data->lock);
-
+        spin_unlock_irqrestore(&data->lock, flags);
 	schedule_work(&data->vib_work);
 }
 
@@ -136,7 +141,8 @@ static int vib_pwm_probe(struct platform_device *pdev)
 	hrtimer_init(&pwm_data->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 
 	pwm_data->timer.function = pwm_timer_func;
-	mutex_init(&pwm_data->lock);
+        spin_lock_init(&pwm_data->lock);
+        mutex_init(&pwm_data->update_mutex);
 
 	pwm_data->dev.name = pdata->device_name;
 	pwm_data->dev.get_time = vib_pwm_get_time;

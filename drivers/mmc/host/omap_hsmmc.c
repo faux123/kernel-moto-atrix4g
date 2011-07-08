@@ -26,6 +26,7 @@
 #include <linux/workqueue.h>
 #include <linux/timer.h>
 #include <linux/clk.h>
+#include <linux/mmc/mmc.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/core.h>
 #include <linux/io.h>
@@ -1047,11 +1048,15 @@ omap_hsmmc_prepare_data(struct omap_hsmmc_host *host, struct mmc_request *req)
 	if (req->data == NULL) {
 		OMAP_HSMMC_WRITE(host->base, BLK, 0);
 		/*
-		 * Set an arbitrary 100ms data timeout for commands with
+		 * Set an arbitrary data timeout for commands with
 		 * busy signal.
 		 */
-		if (req->cmd->flags & MMC_RSP_BUSY)
-			set_data_timeout(host, 100000000U, 0);
+		if (req->cmd->flags & MMC_RSP_BUSY) {
+			if (req->cmd->opcode == MMC_ERASE)
+				set_data_timeout(host, 2000000000U, 0);
+			else
+				set_data_timeout(host, 100000000U, 0);
+		}
 		return 0;
 	}
 

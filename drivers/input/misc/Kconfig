@@ -358,3 +358,10 @@ config INPUT_ALS_IR_ISL29030
 
 	  If unsure, say N.
 
+config INPUT_HALLEFFECT_BU52014HV
+	tristate "BU52014HV Hall Effect Sensor"
+	help
+		Say Y here if you wish to include support for the BU52014HV hall
+		effect sensor.
+
+		If unsure, say N.

@@ -194,6 +194,7 @@ struct tegra_uart_port {
 	unsigned		uart_wake_request;
 	bool			uart_ipc;
 	bool			uart_peer_is_dead;
+	unsigned char		ier_at_death;
 #endif
 	int			last_read_index;
 	int			already_read_bytecount;
@@ -698,9 +699,6 @@ static void do_handle_tx_pio(struct tegra_uart_port *t)
 {
 	struct circ_buf *xmit = &t->uport.state->xmit;
 
-	t->ier_shadow |= UART_IER_MSI;
-	uart_writeb(t, t->ier_shadow, UART_IER);
-
 	fill_tx_fifo(t, t->tx_bytes);
 
 	del_timer_sync(&t->tx_timer);
@@ -723,6 +721,18 @@ static void tegra_tx_dma_complete_callback(struct tegra_dma_req *req)
 	UART_TRACE(&t->uport, UART_TRACE_LEVEL_DATA, "%s: %d\n", __func__, count);
 	del_timer_sync(&t->tx_timer);
 
+	if (req->status == -TEGRA_DMA_REQ_ERROR_ABORTED) {
+	/* Aborted transfer.. can be either flush or stop.
+	   If circular buffer is not empty, update the tail.
+	   In both cases, uart spin lock is already held.
+	 */
+		if (!uart_circ_empty(xmit))
+			xmit->tail =
+				(xmit->tail + count) & (UART_XMIT_SIZE - 1);
+		t->tx_in_progress = 0;
+		return;
+	}
+
 	spin_lock_irqsave(&t->uport.lock, flags);
 	xmit->tail = (xmit->tail + count) & (UART_XMIT_SIZE - 1);
 	t->tx_in_progress = 0;
@@ -730,8 +740,7 @@ static void tegra_tx_dma_complete_callback(struct tegra_dma_req *req)
 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
 		uart_write_wakeup(&t->uport);
 
-	if (req->status != -TEGRA_DMA_REQ_ERROR_ABORTED)
-		tegra_start_next_tx(t);
+	tegra_start_next_tx(t);
 
 	spin_unlock_irqrestore(&t->uport.lock, flags);
 }
@@ -804,6 +813,7 @@ static irqreturn_t tegra_uart_isr(int irq, void *data)
 
 	/* Modem is down; disable UART interrupts. */
 	pr_warning("%s: modem is down; IER=0x%08X\n", __func__, t->ier_shadow);
+	t->ier_at_death = t->ier_shadow;
 	t->ier_shadow = 0;
 	uart_writeb(t, 0, UART_IER);
 
@@ -984,7 +994,8 @@ static void tegra_uart_config_gpio(struct tegra_uart_port *t)
 
 		// set falling edge for interrupt
 		set_irq_type(t->uart_irq, IRQ_TYPE_EDGE_FALLING);
-		err = request_irq(t->uart_irq, tegra_ipc_uart_irq_handler, IRQ_TYPE_EDGE_FALLING, "uart_wake_host", t);
+		err = request_irq(t->uart_irq, tegra_ipc_uart_irq_handler,
+		    IRQF_DISABLED | IRQ_TYPE_EDGE_FALLING, "uart_wake_host", t);
 		if ( err < 0) {
 			pr_err("%s Failed to register UART BP AP WAKE interrupt handler., errno = %d\n", __func__, -err);
 			goto err_gpio_config_failed;
@@ -1019,6 +1030,13 @@ static void tegra_uart_handle_peer_startup(void *context)
 	printk("%s: enabling IRQ %d\n", __func__, t->uart_irq);
 	t->uart_peer_is_dead = false;
 	enable_irq(t->uart_irq);
+
+	/* Attempt to restore IER...this may not go well. */
+	if (t->ier_at_death) {
+		t->ier_shadow = t->ier_at_death;
+		t->ier_at_death = 0;
+		uart_writeb(t, t->ier_shadow, UART_IER);
+	}
 }
 
 static void tegra_uart_handle_peer_shutdown(void *context)
@@ -1215,7 +1233,8 @@ static int tegra_uart_init_rx_dma(struct tegra_uart_port *t)
 	void *rx_dma_virt;
 
 	memset(&t->rx_dma_req, 0, sizeof(t->rx_dma_req));
-	t->rx_dma = tegra_dma_allocate_channel(TEGRA_DMA_MODE_CONTINUOUS);
+	t->rx_dma = tegra_dma_allocate_channel(TEGRA_DMA_MODE_CONTINUOUS,
+		"uart_rx_%d", t->uport.line);
 	if (IS_ERR_OR_NULL(t->rx_dma))
 		return -ENODEV;
 
@@ -1346,7 +1365,8 @@ static int tegra_startup(struct uart_port *u)
 	memset(&t->tx_dma_req, 0, sizeof(t->tx_dma_req));
 	t->use_tx_dma = false;
 	if (!t->use_pio) {
-		t->tx_dma = tegra_dma_allocate_channel(TEGRA_DMA_MODE_ONESHOT);
+		t->tx_dma = tegra_dma_allocate_channel(TEGRA_DMA_MODE_ONESHOT,
+			"uart_tx_%d", u->line);
 		if (!IS_ERR_OR_NULL(t->tx_dma))
 			t->use_tx_dma = true;
 		if (t->use_tx_dma) {
@@ -1557,8 +1577,8 @@ static void tegra_stop_tx(struct uart_port *u)
 
 	if ((t->use_tx_dma) && !IS_ERR_OR_NULL(t->tx_dma))
 		tegra_dma_dequeue_req(t->tx_dma, &t->tx_dma_req);
-	del_timer_sync(&t->tx_timer);
 	t->tx_in_progress  = 0;
+	del_timer_sync(&t->tx_timer);
 	return;
 }
 

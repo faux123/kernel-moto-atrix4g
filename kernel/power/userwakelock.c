@@ -143,7 +143,7 @@ ssize_t wake_lock_show(
 	s += scnprintf(s, end - s, "\n");
 
 	mutex_unlock(&tree_lock);
-	return (s - buf);
+	return s - buf;
 }
 
 ssize_t wake_lock_store(
@@ -191,7 +191,7 @@ ssize_t wake_unlock_show(
 	s += scnprintf(s, end - s, "\n");
 
 	mutex_unlock(&tree_lock);
-	return (s - buf);
+	return s - buf;
 }
 
 ssize_t wake_unlock_store(

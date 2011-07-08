@@ -48,8 +48,10 @@ struct mdm_ctrl_platform_data {
 	unsigned int bp_flash_en1_gpio;
 	unsigned int bp_flash_en2_gpio;
 	const char *usb_regulator;
+	bool bp_resout_quirk;
 	void (*on_bp_startup)(void);
 	void (*on_bp_shutdown)(void);
+	void (*on_bp_change)(int, int);
 };
 
 typedef int (*mdm_ctrl_peer_register_t)(void (*peer_startup)(void*),
@@ -58,6 +60,11 @@ typedef int (*mdm_ctrl_peer_register_t)(void (*peer_startup)(void*),
 
 
 int mdm_ctrl_force_shutdown(void);
+
+
+struct mdm6600_agent_platform_data {
+	int (*mdm_ctrl_agent_register)(void (*change)(int, int));
+};
 
 #endif  /* _LINUX_MACH_MDM_CTRL_H__ */
 

@@ -50,7 +50,7 @@
 #include <linux/completion.h>
 #include <linux/bio.h>
 
-#include "apanic.h"
+#include <linux/apanic.h>
 
 
 #define DRVNAME "apanic_report_block: "

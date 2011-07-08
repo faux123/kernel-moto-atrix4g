@@ -66,6 +66,9 @@ struct tegra_touch_driver_data
 	NvU32			MinY;
 	int			shutdown;
 	struct early_suspend	early_suspend;
+	/* wait_queue needed for kernel thread freeze support */
+	wait_queue_head_t	ts_wait;
+	NvBool bIsSuspended;
 };
 
 #define NVODM_TOUCH_NAME "nvodm_touch"
@@ -80,6 +83,13 @@ static void tegra_touch_early_suspend(struct early_suspend *es)
 
 	if (touch && touch->hTouchDevice) {
 		NvOdmTouchPowerOnOff(touch->hTouchDevice, NV_FALSE);
+		if (!touch->bIsSuspended) {
+			touch->bIsSuspended = NV_TRUE;
+			if (!touch->bPollingMode) {
+				/* allow touch thread to call wake_event_freezer */
+				NvOdmOsSemaphoreSignal(touch->semaphore);
+			}
+		}
 	}
 	else {
 		pr_err("tegra_touch_early_suspend: NULL handles passed\n");
@@ -93,19 +103,38 @@ static void tegra_touch_late_resume(struct early_suspend *es)
 
 	if (touch && touch->hTouchDevice) {
 		NvOdmTouchPowerOnOff(touch->hTouchDevice, NV_TRUE);
+		if (touch->bIsSuspended) {
+			touch->bIsSuspended = NV_FALSE;
+			wake_up(&touch->ts_wait);
+		}
 	}
 	else {
 		pr_err("tegra_touch_late_resume: NULL handles passed\n");
 	}
 }
 #else
+/*
+ * If early suspend touch handlers are disabled only then platform
+ * driver suspend implementations are to be used
+ */
 static int tegra_touch_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct tegra_touch_driver_data *touch = platform_get_drvdata(pdev);
 
 	if (touch && touch->hTouchDevice) {
 		NvOdmTouchPowerOnOff(touch->hTouchDevice, NV_FALSE);
-		return 0;
+		if (!touch->bIsSuspended) {
+			touch->bIsSuspended = NV_TRUE;
+			if (!touch->bPollingMode) {
+				/* allow touch thread to call wake_event_freezer */
+				NvOdmOsSemaphoreSignal(touch->semaphore);
+			}
+			return 0;
+		}
+		else {
+			/* device is already suspended */
+			return 0;
+		}
 	}
 	pr_err("tegra_touch_suspend: NULL handles passed\n");
 	return -1;
@@ -117,7 +146,14 @@ static int tegra_touch_resume(struct platform_device *pdev)
 
 	if (touch && touch->hTouchDevice) {
 		NvOdmTouchPowerOnOff(touch->hTouchDevice, NV_TRUE);
-		return 0;
+		if (touch->bIsSuspended) {
+			touch->bIsSuspended = NV_FALSE;
+			wake_up(&touch->ts_wait);
+			return 0;
+		}
+		else {
+			return 0;
+		}
 	}
 	pr_err("tegra_touch_resume: NULL handles passed\n");
 	return -1;
@@ -140,11 +176,22 @@ static int tegra_touch_thread(void *pdata)
 	/* touch event thread should be frozen before suspend */
 	set_freezable_with_signal();
 
-	for (;;) {
+	while (!kthread_should_stop()) {
 		if (touch->bPollingMode)
 			msleep(touch->pollingIntervalMS);
 		else
 			NvOdmOsSemaphoreWait(touch->semaphore);
+		if (touch->bIsSuspended) {
+			/*
+			 * kernel threads need to wait on event freezable in order
+			 * to be freezable.
+			 * Refer kernel Documentation power->freezing-of-tasks
+			 */
+			wait_event_freezable(touch->ts_wait,
+				!touch->bIsSuspended ||
+				kthread_should_stop());
+			continue;
+		}
 
 		bKeepReadingSamples = NV_TRUE;
 		while (bKeepReadingSamples) {
@@ -311,6 +358,7 @@ static int __init tegra_touch_probe(struct platform_device *pdev)
 		err = -1;
 		goto err_kthread_create_failed;
 	}
+	init_waitqueue_head(&touch->ts_wait);
 	wake_up_process( touch->task );
 
 	touch->input_dev = input_dev;
@@ -408,14 +456,14 @@ static int __init tegra_touch_probe(struct platform_device *pdev)
         touch->early_suspend.resume = tegra_touch_late_resume;
         register_early_suspend(&touch->early_suspend);
 #endif
-	printk(KERN_INFO NVODM_TOUCH_NAME 
+	printk(KERN_INFO NVODM_TOUCH_NAME
 		": Successfully registered the ODM touch driver %x\n", (NvU32)touch->hTouchDevice);
 	return 0;
 
 err_input_register_device_failed:
 	NvOdmTouchDeviceClose(touch->hTouchDevice);
 err_kthread_create_failed:
-	/* FIXME How to destroy the thread? Maybe we should use workqueues? */
+	kthread_stop(touch->task);
 err_open_failed:
 	NvOdmOsSemaphoreDestroy(touch->semaphore);
 err_semaphore_create_failed:
@@ -432,10 +480,9 @@ static int tegra_touch_remove(struct platform_device *pdev)
         unregister_early_suspend(&touch->early_suspend);
 #endif
         touch->shutdown = 1;
-	/* FIXME How to destroy the thread? Maybe we should use workqueues? */
+	kthread_stop(touch->task);
 	input_unregister_device(touch->input_dev);
-	/* NvOsSemaphoreDestroy(touch->semaphore); */
-	input_unregister_device(touch->input_dev);
+	NvOdmOsSemaphoreDestroy(touch->semaphore);
 	kfree(touch);
 	return 0;
 }
@@ -443,7 +490,10 @@ static int tegra_touch_remove(struct platform_device *pdev)
 static struct platform_driver tegra_touch_driver = {
 	.probe	  = tegra_touch_probe,
 	.remove	 = tegra_touch_remove,
-#ifndef CONFIG_HAS_EARLYSUSPEND
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	.suspend = NULL,
+	.resume	 = NULL,
+#else
 	.suspend = tegra_touch_suspend,
 	.resume	 = tegra_touch_resume,
 #endif

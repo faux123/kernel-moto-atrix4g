@@ -25,6 +25,7 @@
 #include <linux/platform_device.h>
 #include <linux/irq.h>
 #include <linux/gpio.h>
+#include <linux/regulator/consumer.h>
 
 #include <mach/usb-hcd.h>
 #include <mach/nvrm_linux.h>
@@ -179,8 +180,18 @@ static void tegra_ehci_restart (struct usb_hcd *hcd, int state)
 
 	/* Enable the root Port Power */
 	if (HCS_PPC (ehci->hcs_params)) {
+		int err = 0;
 		temp = ehci_readl(ehci, &ehci->regs->port_status[0]);
 		ehci_writel(ehci, temp | PORT_POWER, &ehci->regs->port_status[0]);
+		/* Flush those writes */
+		ehci_readl(ehci, &ehci->regs->command);
+		/* wait 20 msec after port power enable, before we enable the interupts*/
+		msleep(20);
+		err = handshake (ehci, &ehci->regs->port_status[0],
+			PORT_CONNECT, PORT_CONNECT, 20 * 1000);
+			if (err) {
+				 printk("port connect detection error: err=%d \n", err);
+			}
 	}
 
 	down_write(&ehci_cf_port_reset_rwsem);
@@ -577,6 +588,19 @@ static int tegra_ehci_probe(struct platform_device *pdev)
 
 	INIT_WORK(&pdata->work, tegra_ehci_busy_hint_work);
 
+	if (pdata->regulator_str != NULL) {
+		struct regulator *vbus_reg = regulator_get(NULL,
+							pdata->regulator_str);
+		if (IS_ERR(vbus_reg)) {
+			pr_err("%s: Unable to acquire %s regulator %ld\n",
+			__func__, pdata->regulator_str, PTR_ERR(vbus_reg));
+		} else {
+			if (regulator_enable(vbus_reg))
+				pr_err("%s regulator was not enabled\n",
+					__func__);
+		}
+	}
+
 	/* Init the tegra USB phy */
 	if (NvDdkUsbPhyOpen(s_hRmGlobal, pdata->instance,
 			    &pdata->hUsbPhy) != NvSuccess) {
@@ -747,7 +771,7 @@ static int tegra_ehci_resume(struct platform_device * pdev)
 		tegra_ehci_power_up(hcd);
 		if (pdata->otg_mode)
 			tegra_ehci_restart(hcd, HC_STATE_RUNNING);
-		else
+		else if (!pdata->fast_wakeup)
 			tegra_ehci_restart(hcd, hcd->state);
 	}
 

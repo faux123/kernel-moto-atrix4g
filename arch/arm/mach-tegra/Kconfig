@@ -159,6 +159,33 @@ config MACH_MOT
 	default n
 	bool "Motorola AP20 Products"
 
+config MOT_TIMER_FIQ_DEBUG_LOCKUP
+	depends on FIQ
+	default n
+	bool "Use timer 0 FIQ handler as watchdog to detect software lockup"
+
+config MOT_WIMAX
+	depends on MACH_MOT
+	default n
+	bool "WiMAX for Motorola AP20 products"
+
+config INPUT_MOT_WEBTOP
+	tristate "Input Motorola Webtop Devices"
+	default n
+	help
+	  This driver is for a virtual touch pad devices used in Mobile
+	  View application to translate mouse clicks into touchscreen
+	  events or a virutal keyboard and mouse event.  This depends
+	  on which module is used as two get created.
+
+	  aev is for writing touch screen events
+
+	  evfwd is for writing standard mouse and keyboard events
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here
+
 config TEGRA_USB_VBUS_DETECT_BY_PMU
 	boolean "VBUS detection by PMU"
 	help
@@ -198,7 +225,7 @@ config TEGRA_LP2POLICY_IGNORE_LC
 	  wake interrupt regardless of DVFS clock activities
 
 endchoice
-	
+
 if TEGRA_ODM_KIT
 source "arch/arm/mach-tegra/odm_kit/Kconfig"
 endif
@@ -209,15 +236,4 @@ config PM_DEEPSLEEP
 	help
 	  after enabling this feature, when PM state is set to DEEPSLEEP, the kerne
 	  ignore all key press except long press power key.
-
-config AVP_OVERCLOCK
-	bool "AVP Overclocking"
-	depends on ARCH_TEGRA
-	default n
-
-config STOCK_VOLTAGE
-	bool "stock voltage values"
-	depends on ARCH_TEGRA
-	default n
-
 endif

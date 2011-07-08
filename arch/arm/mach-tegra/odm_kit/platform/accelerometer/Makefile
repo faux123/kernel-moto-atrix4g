@@ -16,6 +16,7 @@ obj-$(CONFIG_TEGRA_ODM_VENTANA)		+= nvodm_priv_accelerometer.o
 obj-$(CONFIG_TEGRA_ODM_VENTANA)		+= nvodm_accelerometer_bma150.o
 obj-$(CONFIG_TEGRA_ODM_VENTANA)		+= nvodm_accelerometer_kxtf9.o
 obj-$(CONFIG_TEGRA_ODM_OLYMPUS) += nvodm_accelerometer_adi340.o
+obj-$(CONFIG_TEGRA_ODM_AROWANA) += nvodm_accelerometer_adi340.o
 obj-$(CONFIG_TEGRA_ODM_ETNA) += nvodm_accelerometer_adi340.o
 
 obj-$(CONFIG_TEGRA_ODM_DAYTONA) += nvodm_accelerometer_adi340.o

@@ -27,6 +27,8 @@
 #define ECM_TYPE_FLAG         0x40
 #define RNDIS_TYPE_FLAG       0x80
 #define ACM1_TYPE_FLAG        0x100
+#define ACM2_TYPE_FLAG        0x200
+#define ACM3_TYPE_FLAG        0x400
 
 void usb_interface_enum_cb(int flag);
 void usb_data_transfer_callback(void);

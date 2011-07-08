@@ -159,8 +159,10 @@ static int suspend_enter(suspend_state_t state)
 
 	error = sysdev_suspend(PMSG_SUSPEND);
 	if (!error) {
-		if (!suspend_test(TEST_CORE))
+		if (!suspend_test(TEST_CORE) && pm_check_wakeup_events()) {
 			error = suspend_ops->enter(state);
+			events_check_enabled = false;
+		}
 		sysdev_resume();
 	}
 
@@ -264,9 +266,21 @@ int enter_state(suspend_state_t state)
 	if (!mutex_trylock(&pm_mutex))
 		return -EBUSY;
 
+/*
+ *      This is causing no end of trouble.
+ *	The sys_sync can hang out indefinitely long, and user may chose
+ *	to wake the device before it is completed.
+ *	Pending sync will block the resume workqueue, causing all sorts
+ *	of issues.
+ *	It is only actually needed if we plan to hibernate. Otherwise
+ *	it sort of helps to reduce probability of data loss, but does not
+ *	guarantee anything anyway
+ */
+#ifndef CONFIG_MACH_MOT
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	sys_sync();
 	printk("done.\n");
+#endif
 
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare();

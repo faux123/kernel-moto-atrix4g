@@ -87,7 +87,7 @@ static void gpio_to_name(int nr_gpio, char name[12])
 		char c = (port) % 26;
 		*b++ = 'A' + c;
 		port -= 26;
-	} while (port >= 26);
+	} while (port >= 0);
 
 	*b++ = '.';
 	*b++ = '0' + pin;

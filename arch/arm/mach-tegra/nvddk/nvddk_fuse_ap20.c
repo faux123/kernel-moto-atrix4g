@@ -43,6 +43,8 @@
 #include "nvodm_query_discovery.h"
 #include "nvodm_services.h"
 #include "nvrm_pmu.h"
+#include "apbio.h"
+#include <mach/iomap.h>
 
 // Set below macro to 0, to disable voltage required for Fuse programming.
 #define ENABLE_FUSE_VOLTAGE 1
@@ -271,6 +273,17 @@ static void fusememcpy(void* Destination, void* Source, NvU32 size)
 {
     NvOsMemcpy(Destination, Source, size);
 }
+
+u32 fuse_read(unsigned long offset)
+{
+    return tegra_apb_readl(TEGRA_FUSE_BASE + offset);
+}
+
+void fuse_write(unsigned long offset, u32 value)
+{
+    tegra_apb_writel(value, TEGRA_FUSE_BASE + offset);
+}
+
 /**
  * Reports whether any of the SBK fuses are set (burned)
  *
@@ -282,10 +295,10 @@ static void fusememcpy(void* Destination, void* Source, NvU32 size)
 static NvBool NvDdkFuseIsSbkSet(void)
 {
     NvU32 AllKeysOred;
-    AllKeysOred  = FUSE_NV_READ32(FUSE_PRIVATE_KEY0_NONZERO_0);
-    AllKeysOred |= FUSE_NV_READ32(FUSE_PRIVATE_KEY1_NONZERO_0);
-    AllKeysOred |= FUSE_NV_READ32(FUSE_PRIVATE_KEY2_NONZERO_0);
-    AllKeysOred |= FUSE_NV_READ32(FUSE_PRIVATE_KEY3_NONZERO_0);
+    AllKeysOred  = fuse_read(FUSE_PRIVATE_KEY0_NONZERO_0);
+    AllKeysOred |= fuse_read(FUSE_PRIVATE_KEY1_NONZERO_0);
+    AllKeysOred |= fuse_read(FUSE_PRIVATE_KEY2_NONZERO_0);
+    AllKeysOred |= fuse_read(FUSE_PRIVATE_KEY3_NONZERO_0);
     if (AllKeysOred)
         return NV_TRUE;
     else
@@ -305,7 +318,7 @@ static NvBool IsSbkOrDkSet(void)
     NvU32 AllKeysOred;
 
     AllKeysOred  = NvDdkFuseIsSbkSet();
-    AllKeysOred |= FUSE_NV_READ32(FUSE_PRIVATE_KEY4_NONZERO_0);
+    AllKeysOred |= fuse_read(FUSE_PRIVATE_KEY4_NONZERO_0);
 
     if (AllKeysOred)
         return NV_TRUE;
@@ -327,7 +340,7 @@ static NvBool IsSbkOrDkSet(void)
 static NvBool NvDdkFuseIsOdmProductionModeFuseSet(void)
 {
     NvU32 RegValue;
-    RegValue = FUSE_NV_READ32(FUSE_SECURITY_MODE_0);
+    RegValue = fuse_read(FUSE_SECURITY_MODE_0);
     if (RegValue)
     {
         return NV_TRUE;
@@ -350,7 +363,7 @@ static NvBool NvDdkFuseIsOdmProductionModeFuseSet(void)
 static NvBool NvDdkPrivIsDisableRegProgramSet(void)
 {
     NvU32 RegValue;
-    RegValue = FUSE_NV_READ32(FUSE_DISABLEREGPROGRAM_0);
+    RegValue = fuse_read(FUSE_DISABLEREGPROGRAM_0);
     if (RegValue)
     {
         return NV_TRUE;
@@ -374,7 +387,7 @@ static NvU32 NvDdkFuseGetSecBootDeviceRaw(void)
 {
     NvU32 RegData;
 
-    RegData = FUSE_NV_READ32(FUSE_RESERVED_SW_0);
+    RegData = fuse_read(FUSE_RESERVED_SW_0);
     RegData = NV_DRF_VAL(FUSE, RESERVED_SW, BOOT_DEVICE_SELECT, RegData);
     if (RegData >= (NvU32) FuseBootDev_Max)
     {
@@ -599,7 +612,7 @@ static void FuseCopyBytes(NvU32 RegAddress, NvU8 *pByte, const NvU32 nBytes)
     {
         if ((i&3) == 0)
         {
-            RegData = FUSE_NV_READ32(RegAddress);
+            RegData = fuse_read(RegAddress);
             RegAddress += 4;
         }
         pByte[i] = RegData & 0xFF;
@@ -628,7 +641,7 @@ static void WaitForFuseIdle(void)
 
     do
     {
-        RegData = FUSE_NV_READ32(FUSE_FUSECTRL_0);
+        RegData = fuse_read(FUSE_FUSECTRL_0);
     } while (NV_DRF_VAL(FUSE, FUSECTRL, FUSECTRL_STATE, RegData) !=
              FUSE_FUSECTRL_0_FUSECTRL_STATE_STATE_IDLE);
 }
@@ -639,7 +652,7 @@ static void StartRegulator(void)
 {
     NvU32 RegData;
     RegData = NV_DRF_DEF(FUSE, PWR_GOOD_SW, PWR_GOOD_SW_VAL, PWR_GOOD_OK);
-    FUSE_NV_WRITE32(FUSE_PWR_GOOD_SW_0, RegData);
+    fuse_write(FUSE_PWR_GOOD_SW_0, RegData);
     /*
      * Wait for at least 150ns. In HDEFUSE_64X32_E2F2R2_L1_A.pdf,
      * this is found on p.11 as TSUP_PWRGD.
@@ -653,7 +666,7 @@ static void StopRegulator(void)
     NvU32 RegData;
 
     RegData = NV_DRF_DEF(FUSE, PWR_GOOD_SW, PWR_GOOD_SW_VAL, PWR_GOOD_NOT_OK);
-    FUSE_NV_WRITE32(FUSE_PWR_GOOD_SW_0, RegData);
+    fuse_write(FUSE_PWR_GOOD_SW_0, RegData);
 
     /*
      * Wait for at least 150ns. In HDEFUSE_64X32_E2F2R2_L1_A.pdf,
@@ -672,17 +685,17 @@ static NvU32 ReadFuseWord(NvU32 Addr)
     NvU32 RegData;
 
     // Prepare the data
-    FUSE_NV_WRITE32(FUSE_FUSEADDR_0, Addr);
+    fuse_write(FUSE_FUSEADDR_0, Addr);
 
     // Trigger the read
-    RegData = FUSE_NV_READ32(FUSE_FUSECTRL_0);
+    RegData = fuse_read(FUSE_FUSECTRL_0);
     RegData = NV_FLD_SET_DRF_DEF(FUSE, FUSECTRL, FUSECTRL_CMD, READ, RegData);
-    FUSE_NV_WRITE32(FUSE_FUSECTRL_0, RegData);
+    fuse_write(FUSE_FUSECTRL_0, RegData);
 
     // Wait for completion (state machine goes idle).
     WaitForFuseIdle();
 
-    RegData = FUSE_NV_READ32(FUSE_FUSERDATA_0);
+    RegData = fuse_read(FUSE_FUSERDATA_0);
 
     return RegData;
 }
@@ -699,13 +712,13 @@ static void WriteFuseWord(NvU32 Addr, NvU32 Data)
     if (Data == 0) return;
 
     // Prepare the data
-    FUSE_NV_WRITE32(FUSE_FUSEADDR_0,  Addr);
-    FUSE_NV_WRITE32(FUSE_FUSEWDATA_0, Data);
+    fuse_write(FUSE_FUSEADDR_0,  Addr);
+    fuse_write(FUSE_FUSEWDATA_0, Data);
 
     // Trigger the write
-    RegData = FUSE_NV_READ32(FUSE_FUSECTRL_0);
+    RegData = fuse_read(FUSE_FUSECTRL_0);
     RegData = NV_FLD_SET_DRF_DEF(FUSE, FUSECTRL, FUSECTRL_CMD, WRITE, RegData);
-    FUSE_NV_WRITE32(FUSE_FUSECTRL_0, RegData);
+    fuse_write(FUSE_FUSECTRL_0, RegData);
 
     // Wait for completion (state machine goes idle).
     WaitForFuseIdle();
@@ -716,13 +729,13 @@ static void SenseFuseArray(void)
 {
     NvU32 RegData;
 
-    RegData = FUSE_NV_READ32(FUSE_FUSECTRL_0);
+    RegData = fuse_read(FUSE_FUSECTRL_0);
     RegData = NV_FLD_SET_DRF_DEF(FUSE,
                                  FUSECTRL,
                                  FUSECTRL_CMD,
                                  SENSE_CTRL,
                                  RegData);
-    FUSE_NV_WRITE32(FUSE_FUSECTRL_0, RegData);
+    fuse_write(FUSE_FUSECTRL_0, RegData);
 
     // Wait for completion (state machine goes idle).
     WaitForFuseIdle();
@@ -788,7 +801,7 @@ NvDdkFuseProgramFuseArray(
                              FUSETIME_PGM2,
                              FUSETIME_PGM2_TWIDTH_PGM,
                              TProgramCycles);
-        FUSE_NV_WRITE32(FUSE_FUSETIME_PGM2_0, RegData);
+        fuse_write(FUSE_FUSETIME_PGM2_0, RegData);
     }
     /* FuseWord0 and FuseWord1 should be left with only the Fuse Enable fuse
      * set to 1, and then only if this fuse has not yet been burned.
@@ -849,7 +862,7 @@ NvDdkFuseProgramFuseArray(
     }
     // Read all data into the chip options
     RegData = NV_DRF_NUM(FUSE, PRIV2INTFC_START, PRIV2INTFC_START_DATA, 0x1);
-    FUSE_NV_WRITE32(FUSE_PRIV2INTFC_START_0, RegData);
+    fuse_write(FUSE_PRIV2INTFC_START_0, RegData);
     /*
      * Not sure if still needs to be set back to 0
      * we wait a little bit, then set it back to 0, then loop on state
@@ -858,14 +871,14 @@ NvDdkFuseProgramFuseArray(
     NvFuseUtilWaitUS(1);
 
     RegData = NV_DRF_NUM(FUSE, PRIV2INTFC_START, PRIV2INTFC_START_DATA, 0x0);
-    FUSE_NV_WRITE32(FUSE_PRIV2INTFC_START_0, RegData);
+    fuse_write(FUSE_PRIV2INTFC_START_0, RegData);
     /*
       * Wait until done (polling)
       * this one needs to use fuse_sense done, the FSM follows a periodic
       * sequence that includes idle
       */
     do {
-        RegData = FUSE_NV_READ32(FUSE_FUSECTRL_0);
+        RegData = fuse_read(FUSE_FUSECTRL_0);
   } while (NV_DRF_VAL(FUSE, FUSECTRL, FUSECTRL_FUSE_SENSE_DONE, RegData) != 0x1);
 }
 
@@ -1096,13 +1109,13 @@ NvError NvDdkFuseGet(NvDdkFuseDataType Type, void *pData, NvU32 *pSize)
              * since cpu is little-endian and client treats data as an NvU32,
              * perform byte swapping here
              */
-            RegData = FUSE_NV_READ32(FUSE_PRIVATE_KEY4_0);
-            //SWAP_BYTES_NVU32(RegData); byte swapping removed by hcv867
+            RegData = fuse_read(FUSE_PRIVATE_KEY4_0);
+                //SWAP_BYTES_NVU32(RegData); byte swapping removed by hcv867
             *((NvU32*)pData) = RegData;
             break;
 
         case NvDdkFuseDataType_JtagDisable:
-            RegData = FUSE_NV_READ32(FUSE_ARM_DEBUG_DIS_0);
+            RegData = fuse_read(FUSE_ARM_DEBUG_DIS_0);
             *((NvBool*)pData) = RegData ? NV_TRUE : NV_FALSE;
             break;
 
@@ -1115,7 +1128,7 @@ NvError NvDdkFuseGet(NvDdkFuseDataType Type, void *pData, NvU32 *pSize)
             break;
 
         case NvDdkFuseDataType_SecBootDeviceConfig:
-            RegData = FUSE_NV_READ32(FUSE_BOOT_DEVICE_INFO_0);
+            RegData = fuse_read(FUSE_BOOT_DEVICE_INFO_0);
             RegData = NV_DRF_VAL(FUSE,
                             BOOT_DEVICE_INFO,
                             BOOT_DEVICE_CONFIG,
@@ -1143,17 +1156,17 @@ NvError NvDdkFuseGet(NvDdkFuseDataType Type, void *pData, NvU32 *pSize)
             break;
 
         case NvDdkFuseDataType_Sku:
-            *((NvU32*)pData) = FUSE_NV_READ32(FUSE_SKU_INFO_0);
+            *((NvU32*)pData) = fuse_read(FUSE_SKU_INFO_0);
             break;
 
         case NvDdkFuseDataType_SwReserved:
-            RegData = FUSE_NV_READ32(FUSE_RESERVED_SW_0);
+            RegData = fuse_read(FUSE_RESERVED_SW_0);
             RegData = NV_DRF_VAL(FUSE, RESERVED_SW, SW_RESERVED, RegData);
             *((NvU32*)pData) = RegData;
             break;
 
         case NvDdkFuseDataType_SkipDevSelStraps:
-            RegData = FUSE_NV_READ32(FUSE_RESERVED_SW_0);
+            RegData = fuse_read(FUSE_RESERVED_SW_0);
             RegData = NV_DRF_VAL(FUSE, RESERVED_SW, SKIP_DEV_SEL_STRAPS, RegData);
             *((NvU32*)pData) = RegData;
             break;
@@ -1655,7 +1668,7 @@ void NvDdkDisableFuseProgram(void)
     }
     NvOsMutexLock(s_pFuseRec->Mutex);
     RegData = NV_DRF_DEF(FUSE, DISABLEREGPROGRAM, DISABLEREGPROGRAM_VAL, ENABLE);
-    FUSE_NV_WRITE32(FUSE_DISABLEREGPROGRAM_0, RegData);
+    fuse_write(FUSE_DISABLEREGPROGRAM_0, RegData);
     NvOsMutexUnlock(s_pFuseRec->Mutex);
 }
 

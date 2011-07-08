@@ -147,6 +147,10 @@ EXPORT_SYMBOL_GPL(ehci_cf_port_reset_rwsem);
 #define HUB_DEBOUNCE_STEP	  25
 #define HUB_DEBOUNCE_STABLE	 100
 
+#ifdef CONFIG_USB_PNX6718_MODEM
+extern void modem_preresume(void);
+extern void modem_presuspend(void);
+#endif
 
 static int usb_reset_and_verify_device(struct usb_device *udev);
 
@@ -1771,6 +1775,7 @@ int usb_new_device(struct usb_device *udev)
 	/* Tell the world! */
 	announce_device(udev);
 
+	device_enable_async_suspend(&udev->dev);
 	/* Register the device.  The device driver is responsible
 	 * for configuring the device and invoking the add-device
 	 * notifier chain (used by usbfs and possibly others).
@@ -2153,6 +2158,9 @@ int usb_port_suspend(struct usb_device *udev, pm_message_t msg)
 				(msg.event & PM_EVENT_AUTO ? "auto-" : ""));
 		usb_set_device_state(udev, USB_STATE_SUSPENDED);
 		msleep(10);
+#ifdef CONFIG_USB_PNX6718_MODEM
+		modem_presuspend();
+#endif
 	}
 	return status;
 }
@@ -2285,6 +2293,9 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 	// dev_dbg(hub->intfdev, "resume port %d\n", port1);
 
 	set_bit(port1, hub->busy_bits);
+#ifdef CONFIG_USB_PNX6718_MODEM
+	modem_preresume();
+#endif
 
 	/* see 7.1.7.7; affects power usage, but not budgeting */
 	status = clear_port_feature(hub->hdev,
@@ -2297,6 +2308,16 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 		dev_dbg(&udev->dev, "usb %sresume\n",
 				(msg.event & PM_EVENT_AUTO ? "auto-" : ""));
 		msleep(25);
+
+#ifdef CONFIG_USB_PNX6718_MODEM
+		/* Fix me: usb ipc often disconnect after AP resume bus.
+		 * It's difficult to judge which side cause issue, software or 
+		 * hardward, ap or bp. Before find root cause, I'll change K signal
+		 * to 100ms when resume bus.
+		 */
+		msleep(25);
+printk("[%s]: myfunc 25ms\n", __func__);
+#endif
 
 		/* Virtual root hubs can trigger on GET_PORT_STATUS to
 		 * stop resume signaling.  Then finish the resume

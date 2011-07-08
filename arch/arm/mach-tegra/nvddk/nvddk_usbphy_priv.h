@@ -56,6 +56,11 @@ extern "C"
 #endif
 
 /**
+ * Minimum emc frequency required for USB to work in High speed mode
+ */
+enum {USB_HW_MIN_EMC_FREQ_KH = 150000};
+
+/**
  * Minimum system frequency required for USB to work in High speed mode
  */
 enum {USB_HW_MIN_SYSTEM_FREQ_KH = 100000};
@@ -66,9 +71,9 @@ enum {USB_HW_MIN_SYSTEM_FREQ_KH = 100000};
 enum {USB_HW_MIN_CPU_FREQ_KH = 300000};
 
 /**
- * Wait time(1 second) for controller H/W status to change before giving up.
+ * Wait time (500 msec) for controller H/W status to change before giving up.
  */
-enum {USB_PHY_HW_TIMEOUT_US = 1000000};
+enum {USB_PHY_HW_TIMEOUT_US = 500000};
 
 /**
  *  Maximum elements in the controller context

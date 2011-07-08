@@ -85,7 +85,6 @@ static void ecryptfs_destroy_inode(struct inode *inode)
 		if (lower_dentry->d_inode) {
 			fput(inode_info->lower_file);
 			inode_info->lower_file = NULL;
-			d_drop(lower_dentry);
 		}
 	}
 	ecryptfs_destroy_crypt_stat(&inode_info->crypt_stat);
@@ -194,6 +193,8 @@ static int ecryptfs_show_options(struct seq_file *m, struct vfsmount *mnt)
 		seq_printf(m, ",ecryptfs_encrypted_view");
 	if (mount_crypt_stat->flags & ECRYPTFS_UNLINK_SIGS)
 		seq_printf(m, ",ecryptfs_unlink_sigs");
+	if (mount_crypt_stat->flags & ECRYPTFS_NO_NEW_ENCRYPTED)
+		seq_printf(m, ",no_new_encrypted");
 
 	return 0;
 }

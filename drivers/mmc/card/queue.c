@@ -17,6 +17,7 @@
 
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
+#include <linux/mmc/mmc.h>
 #include "queue.h"
 
 #define MMC_QUEUE_BOUNCESZ	65536
@@ -129,6 +130,22 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card, spinlock_t *lock
 	blk_queue_prep_rq(mq->queue, mmc_prep_request);
 	blk_queue_ordered(mq->queue, QUEUE_ORDERED_DRAIN, NULL);
 	queue_flag_set_unlocked(QUEUE_FLAG_NONROT, mq->queue);
+
+	/* Set max discard size, << 11 converts to megabytes in sectors */
+	blk_queue_max_discard_sectors(mq->queue, 16 << 11);
+
+	if (card->csd.cmdclass & CCC_ERASE)
+		queue_flag_set_unlocked(QUEUE_FLAG_DISCARD,
+					mq->queue);
+
+	/*
+	 * Calculating a correct span is way to messy if this
+	 * assumption is broken, so remove the erase support
+	 */
+	if (unlikely(mmc_card_blockaddr(card) &&
+			(card->csd.erase_size % 512)))
+		queue_flag_clear_unlocked(QUEUE_FLAG_DISCARD,
+					  mq->queue);
 
 #ifdef CONFIG_MMC_BLOCK_BOUNCE
 	if (host->max_hw_segs == 1) {

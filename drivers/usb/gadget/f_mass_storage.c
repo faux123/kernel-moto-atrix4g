@@ -720,7 +720,14 @@ static int fsg_function_setup(struct usb_function *f,
 				break;
 			}
 			VDBG(fsg, "get max LUN\n");
+#ifdef CONFIG_USB_MOT_MSC_CDROM
+			if (!cdrom_enable && (fsg->nluns > 1))
+				*(u8 *)cdev->req->buf = fsg->nluns - 2;
+			else
+				*(u8 *)cdev->req->buf = fsg->nluns - 1;
+#else
 			*(u8 *)cdev->req->buf = fsg->nluns - 1;
+#endif
 			value = 1;
 			break;
 		}
@@ -3308,6 +3315,7 @@ int mass_storage_bind_config(struct usb_configuration *c)
 	fsg->function.setup = fsg_function_setup;
 	fsg->function.set_alt = fsg_function_set_alt;
 	fsg->function.disable = fsg_function_disable;
+	fsg->function.hidden = 1;
 
 #ifdef CONFIG_USB_MOT_ANDROID
 	fsg->function.strings = usbmsc_strings;

@@ -73,7 +73,7 @@ struct isl29030_platform_data {
 	void (*exit)(void);
 	int  (*power_on)(void);
 	int  (*power_off)(void);
-	int  (*getIrqStatus)(void);
+	int	 (*getIrqStatus)(void);
 
 	u8	configure;
 	u8	interrupt_cntrl;

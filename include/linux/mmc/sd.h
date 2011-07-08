@@ -21,6 +21,10 @@
   /* class 10 */
 #define SD_SWITCH                 6   /* adtc [31:0] See below   R1  */
 
+  /* class 5 */
+#define SD_ERASE_WR_BLK_START    32   /* ac   [31:0] data addr   R1  */
+#define SD_ERASE_WR_BLK_END      33   /* ac   [31:0] data addr   R1  */
+
   /* Application commands */
 #define SD_APP_SET_BUS_WIDTH      6   /* ac   [1:0] bus width    R1  */
 #define SD_APP_SEND_NUM_WR_BLKS  22   /* adtc                    R1  */

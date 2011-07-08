@@ -89,7 +89,13 @@ struct usb_ether_platform_data {
 	const char *vendorDescr;
 };
 
-extern void android_usb_set_connected(int on);
+/* Platform data for ACM driver. */
+struct acm_platform_data {
+	u8	num_inst;
+	u8	use_iads;
+};
+
+extern void android_usb_set_connected(int on, unsigned int accy);
 
 extern void android_register_function(struct android_usb_function *f);
 

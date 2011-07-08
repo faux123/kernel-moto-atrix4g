@@ -643,12 +643,16 @@ int tegra_pm_notifier(struct notifier_block *nb,
 #ifdef CONFIG_HAS_EARLYSUSPEND
 void tegra_display_off(struct early_suspend *h)
 {
+    printk(KERN_INFO "%s: power off notification\n", __func__);
     notify_daemon(STRING_PM_DISPLAY_OFF);
+    printk(KERN_INFO "%s: done...\n", __func__);
 }
 
 void tegra_display_on(struct early_suspend *h)
 {
+    printk(KERN_INFO "%s: power ON notification\n", __func__);
     notify_daemon(STRING_PM_DISPLAY_ON);
+    printk(KERN_INFO "%s: done...\n", __func__);
 }
 
 static struct early_suspend tegra_display_power =
@@ -686,6 +690,33 @@ nvrm_lp2policy_store(struct kobject *kobj, struct kobj_attribute *attr,
 static struct kobj_attribute nvrm_lp2policy_attribute =
               __ATTR(lp2policy, 0644, nvrm_lp2policy_show, nvrm_lp2policy_store);
 
+/*
+ * NVRM lowest power state run-time selection
+ */
+static ssize_t
+nvrm_core_lock_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return sprintf(buf, "%u\n", core_lock_on);
+}
+
+static ssize_t
+nvrm_core_lock_store(struct kobject *kobj, struct kobj_attribute *attr,
+			const char *buf, size_t count)
+{
+	unsigned int n, lock;
+
+	n = sscanf(buf, "%u", &lock);
+	if (n != 1)
+		return -1;
+
+	core_lock_on = (bool)lock;
+	return count;
+}
+
+static struct kobj_attribute nvrm_core_lock_attribute =
+	__ATTR(core_lock, 0666, nvrm_core_lock_show, nvrm_core_lock_store);
+
 #endif
 
 static int __init nvrm_init(void)
@@ -705,10 +736,14 @@ static int __init nvrm_init(void)
 
     // Create /sys/power/nvrm/notifier.
     nvrm_kobj = kobject_create_and_add("nvrm", power_kobj);
+    sysfs_create_file(nvrm_kobj, &nvrm_core_lock_attribute.attr);
     sysfs_create_file(nvrm_kobj, &nvrm_lp2policy_attribute.attr);
     sysfs_create_file(nvrm_kobj, &nvrm_notifier_attribute.attr);
     sys_nvrm_notifier = NULL;
     init_waitqueue_head(&sys_nvrm_notifier_wait);
+
+    /* Do not perform VT switch on suspend/resume. */
+    pm_set_vt_switch(0);
     #endif
 
     // Register NvRm platform driver.

@@ -38,6 +38,13 @@
 #define CPCAP_WDT_RAMWRITE_RETRIES	5
 #define CPCAP_WDT_MAX_TIMER		0xFFFF
 
+#define DBG_CPCAP_WATCHDOG_JIFFIES_COUNT 1
+#if DBG_CPCAP_WATCHDOG_JIFFIES_COUNT
+static unsigned long cpcap_watchdog_start_timer = 0;
+static unsigned long cpcap_watchdog_start_wq = 0;
+static unsigned long cpcap_watchdog_end_wq = 0;
+#endif
+
 struct cpcap_wdt {
 	struct cpcap_device *cpcap;
 	struct device *dev;
@@ -332,6 +339,9 @@ static void cpcap_wdt_handle_kicktimer(unsigned long data){
 	if (!wdt)
 		return;
 
+#if DBG_CPCAP_WATCHDOG_JIFFIES_COUNT
+	cpcap_watchdog_start_timer = jiffies;
+#endif
 	/* queue the work to kick the watchdog */
 	queue_work(wdt->working_queue, &wdt->kick_work);
 
@@ -348,10 +358,17 @@ static void kick_wdt_work(struct work_struct *work)
 	if (!wdt)
 		return;
 
+#if DBG_CPCAP_WATCHDOG_JIFFIES_COUNT
+	cpcap_watchdog_start_wq = jiffies;
+#endif
 	if (cpcap_wdt_ping(wdt))
 	{
 		dev_err(wdt->dev, "Unable to kick watchdog\n");
 	}
+
+#if DBG_CPCAP_WATCHDOG_JIFFIES_COUNT
+	cpcap_watchdog_end_wq = jiffies;
+#endif
 }
 
 static void cpcap_wdt_panic(enum cpcap_irqs irq, void *data)
@@ -363,6 +380,10 @@ static void cpcap_wdt_panic(enum cpcap_irqs irq, void *data)
 
 	dev_err(wdt->dev, "Host watchdog timeout.  Panicing\n");
 
+#if DBG_CPCAP_WATCHDOG_JIFFIES_COUNT
+	dev_err(wdt->dev, "cpcap watchdog jiffies count: start timer at 0x%x,start wq at 0x%x, end wq at 0x%x \n",
+		 cpcap_watchdog_start_timer, cpcap_watchdog_start_wq, cpcap_watchdog_end_wq);
+#endif
 	/* now panic and reboot the system */
 	BUG();
 }

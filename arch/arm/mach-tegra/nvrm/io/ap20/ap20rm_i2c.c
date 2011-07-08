@@ -84,6 +84,7 @@
         } while(0);
                     
 
+#define UNUSED_SLAVE_ADD 0xFC
 #define DEBUG_SEND_PROCESS 0
 #define DEBUG_READ_PROCESS 0
 #define DEBUG_TRACE_PROCESS 0
@@ -357,9 +358,6 @@ static void UseDvcI2cNewSlave(NvRmI2cControllerHandle hRmI2cCont)
     NvU32 RegVal = 0;
     RegVal = NV_DRF_DEF(I2C, I2C_SL_CNFG, NEWSL, ENABLE);
     I2C2_REGW(hRmI2cCont, I2C_SL_CNFG, RegVal);
-    
-    RegVal = NV_DRF_NUM(I2C, I2C_SL_ADDR1, SL_ADDR0, 0xF);
-    I2C2_REGW(hRmI2cCont, I2C_SL_ADDR1, RegVal);
 }
 
 static void 
@@ -439,6 +437,7 @@ static void StartI2cPacketMode(NvRmI2cControllerHandle hRmI2cCont)
     // PACKET_MODE_TRANSFER_EN field of I2C Controller configuration Register
     I2cConfig = NV_DRF_DEF(I2C, I2C_CNFG, NEW_MASTER_FSM, ENABLE);
     I2cConfig = NV_FLD_SET_DRF_DEF(I2C, I2C_CNFG, PACKET_MODE_EN, GO, I2cConfig);
+    I2cConfig = NV_FLD_SET_DRF_NUM(I2C, I2C_CNFG, DEBOUNCE_CNT, 2, I2cConfig);
     I2C_REGW(hRmI2cCont, I2C_CNFG, I2cConfig);
 
     // Configuring the new slave to avoid any instability when doing
@@ -449,6 +448,10 @@ static void StartI2cPacketMode(NvRmI2cControllerHandle hRmI2cCont)
         I2cSlaveConfig = NV_FLD_SET_DRF_DEF(I2C, I2C_SL_CNFG, NEWSL, ENABLE, I2cSlaveConfig);
         I2C2_REGW(hRmI2cCont, I2C_SL_CNFG, I2cSlaveConfig);
     }
+
+    // Set the address to some default
+    I2C2_REGW(hRmI2cCont, I2C_SL_ADDR1, UNUSED_SLAVE_ADD);
+    I2C2_REGW(hRmI2cCont, I2C_SL_ADDR2, 0x0);
 }
 
 static void 
@@ -1220,7 +1223,10 @@ AP20RmI2cReceive(
     DEBUG_I2C_TRACE(1, ("AP20RmI2cReceive()++ 0x%08x and add 0x%02x\n", pTransaction->NumBytes, pTransaction->Address));
 
     if (hRmI2cCont->ModuleId == NvRmModuleID_Dvc)
+    {
         DoDvcI2cControlInitialization(hRmI2cCont);
+        UseDvcI2cNewSlave(hRmI2cCont);
+    }
         
     // Clear interrupt mask register to avoid any false interrupts.
     I2C_REGW(hRmI2cCont, INTERRUPT_MASK_REGISTER, 0);
@@ -1251,7 +1257,10 @@ AP20RmI2cSend(
     DEBUG_I2C_TRACE(1, ("AP20RmI2cSend()++ 0x%08x and 0x%02x\n", pTransaction->NumBytes, pTransaction->Address));
 
     if (hRmI2cCont->ModuleId == NvRmModuleID_Dvc)
+    {
         DoDvcI2cControlInitialization(hRmI2cCont);
+        UseDvcI2cNewSlave(hRmI2cCont);
+    }
 
     // Clear interrupt mask register to avoid any false interrupts.
     I2C_REGW(hRmI2cCont, INTERRUPT_MASK_REGISTER, 0);

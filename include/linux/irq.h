@@ -277,6 +277,9 @@ static inline int irq_balancing_disabled(unsigned int irq)
 	return desc->status & IRQ_NO_BALANCING_MASK;
 }
 
+/* Useful for debugging IRQ recent history */
+void dump_irq_history(void);
+
 /* Handle irq action chains: */
 extern irqreturn_t handle_IRQ_event(unsigned int irq, struct irqaction *action);
 

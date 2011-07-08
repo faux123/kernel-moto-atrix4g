@@ -23,7 +23,11 @@
  */
 #define NR_UNIX98_PTY_DEFAULT	4096      /* Default maximum for Unix98 ptys */
 #define NR_UNIX98_PTY_MAX	(1 << MINORBITS) /* Absolute limit */
+#ifdef CONFIG_TEGRA_ODM_AROWANA
+#define NR_LDISCS		22
+#else
 #define NR_LDISCS		21
+#endif
 
 /* line disciplines */
 #define N_TTY		0
@@ -49,6 +53,9 @@
 
 #define N_V253		19	/* Codec control over voice modem */
 #define N_TS2710	20	/* 3GPP TS 27.010 MUX */
+#ifdef CONFIG_TEGRA_ODM_AROWANA
+#define N_TS2710_USB	21	/* 3GPP TS 27.010 MUX over USB */
+#endif
 /*
  * This character is the same as _POSIX_VDISABLE: it cannot be used as
  * a c_cc[] character, but indicates that a particular special character

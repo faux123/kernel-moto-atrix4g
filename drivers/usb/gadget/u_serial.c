@@ -18,11 +18,13 @@
 /* #define VERBOSE_DEBUG */
 
 #include <linux/kernel.h>
+#include <linux/sched.h>
 #include <linux/interrupt.h>
 #include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
+#include <linux/slab.h>
 
 #include "u_serial.h"
 
@@ -116,7 +118,7 @@ struct gs_port {
 };
 
 /* increase N_PORTS if you need more */
-#define N_PORTS		4
+#define N_PORTS		8
 static struct portmaster {
 	struct mutex	lock;			/* protect open/close */
 	struct gs_port	*port;
@@ -535,17 +537,11 @@ recycle:
 		list_move(&req->list, &port->read_pool);
 	}
 
-	/* Push from tty to ldisc; this is immediate with low_latency, and
-	 * may trigger callbacks to this driver ... so drop the spinlock.
+	/* Push from tty to ldisc; without low_latency set this is handled by
+	 * a workqueue, so we won't get callbacks and can hold port_lock
 	 */
 	if (tty && do_push) {
-		spin_unlock_irq(&port->port_lock);
 		tty_flip_buffer_push(tty);
-		wake_up_interruptible(&tty->read_wait);
-		spin_lock_irq(&port->port_lock);
-
-		/* tty may have been closed */
-		tty = port->port_tty;
 	}
 
 
@@ -783,11 +779,6 @@ static int gs_open(struct tty_struct *tty, struct file *file)
 	port->open_count = 1;
 	port->openclose = false;
 
-	/* low_latency means ldiscs work in tasklet context, without
-	 * needing a workqueue schedule ... easier to keep up.
-	 */
-	tty->low_latency = 1;
-
 	/* if connected, start the I/O stream */
 	if (port->port_usb) {
 		struct gserial	*gser = port->port_usb;
@@ -999,10 +990,51 @@ static int gs_break_ctl(struct tty_struct *tty, int duration)
 	return status;
 }
 
+#ifdef CONFIG_USB_MOT_ANDROID
+/* Add TIOCMSET which is used by ATCMD */
+static int gs_tiocmset(struct tty_struct *tty, struct file *file,
+	unsigned int set, unsigned int clear)
+{
+	struct gs_port  *port = tty->driver_data;
+	int             status = 0;
+	struct gserial  *gser;
+
+	pr_vdebug("gs_tiocmset: ttyGS%d, set = (%d), clear = (%d) \n",
+			port->port_num, set, clear);
+	spin_lock_irq(&port->port_lock);
+	gser = port->port_usb;
+	if (gser && gser->tiocmset)
+		status = gser->tiocmset(gser, set, clear);
+	spin_unlock_irq(&port->port_lock);
+
+	return status;
+}
+
+static int gs_tiocmget(struct tty_struct *tty, struct file *file)
+{
+	struct gs_port  *port = tty->driver_data;
+	int             status = 0;
+	struct gserial  *gser;
+
+	pr_vdebug("gs_tiocmget: ttyGS%d\n", port->port_num);
+	spin_lock_irq(&port->port_lock);
+	gser = port->port_usb;
+	if (gser && gser->tiocmget)
+		status = gser->tiocmget(gser);
+	spin_unlock_irq(&port->port_lock);
+
+	return status;
+}
+#endif
+
 static const struct tty_operations gs_tty_ops = {
 	.open =			gs_open,
 	.close =		gs_close,
 	.write =		gs_write,
+#ifdef CONFIG_USB_MOT_ANDROID
+	.tiocmset =             gs_tiocmset,
+	.tiocmget =             gs_tiocmget,
+#endif
 	.put_char =		gs_put_char,
 	.flush_chars =		gs_flush_chars,
 	.write_room =		gs_write_room,
@@ -1194,6 +1226,7 @@ void gserial_cleanup(void)
 	n_ports = 0;
 
 	tty_unregister_driver(gs_tty_driver);
+	put_tty_driver(gs_tty_driver);
 	gs_tty_driver = NULL;
 
 	pr_debug("%s: cleaned up ttyGS* support\n", __func__);

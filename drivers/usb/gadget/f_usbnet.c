@@ -199,6 +199,18 @@ static struct usb_descriptor_header *hs_function[] = {
 	if (context && context->gadget)					\
 		dev_dbg(&(context->gadget->dev) , fmt , ## args)
 
+static const char *usb_description = "Motorola BLAN Interface";
+
+static ssize_t usbnet_desc_show(struct device *dev,
+				 struct device_attribute *attr, char *buff)
+{
+	ssize_t status = 0;
+	status = sprintf(buff, "%s\n", usb_description);
+	return status;
+}
+
+static DEVICE_ATTR(description, S_IRUGO, usbnet_desc_show, NULL);
+
 static int usbnet_enable_open(struct inode *ip, struct file *fp)
 {
 	/* Empty Function For Now */
@@ -349,7 +361,7 @@ static void usbnet_if_config(struct work_struct *work)
 
 	memset(&ifr, 0, sizeof(ifr));
 	sin = (void *) &(ifr.ifr_ifru.ifru_addr);
-	strncpy(ifr.ifr_ifrn.ifrn_name, "lan0", strlen("lan0") + 1);
+	strncpy(ifr.ifr_ifrn.ifrn_name, "usb0", strlen("usb0") + 1);
 	sin->sin_family = AF_INET;
 
 	sin->sin_addr.s_addr = g_usbnet_ifc.ip_addr;
@@ -368,7 +380,7 @@ static void usbnet_if_config(struct work_struct *work)
 			  SIOCSIFBRDADDR, &ifr);
 
 	memset(&ifr, 0, sizeof(ifr));
-	strncpy(ifr.ifr_ifrn.ifrn_name, "lan0", strlen("lan0") + 1);
+	strncpy(ifr.ifr_ifrn.ifrn_name, "usb0", strlen("usb0") + 1);
 	if (g_usbnet_ifc.iff_flag & IFF_UP)
 		ifr.ifr_flags = ((g_usbnet_ifc.usbnet_config_dev->flags) |
 			g_usbnet_ifc.iff_flag);
@@ -413,6 +425,9 @@ static void usb_ether_setup(struct net_device *dev)
 static void usbnet_cleanup(void)
 {
 	if (g_net_dev) {
+		if (g_usbnet_context)
+			device_remove_file(&(g_usbnet_context->dev->dev),
+					&dev_attr_description);
 		unregister_netdev(g_net_dev);
 		free_netdev(g_net_dev);
 		g_net_dev = NULL;
@@ -610,7 +625,8 @@ static int usbnet_bind(struct usb_configuration *c,
 		spin_unlock_irqrestore(&g_usbnet_context->lock, flags);
 	}
 
-	usb_gadget_set_selfpowered(cdev->gadget);
+	/*Do Not report Self Powered as WHQL tests fail on Win 7 */
+	/* usb_gadget_set_selfpowered(cdev->gadget); */
 	return 0;
 
 autoconf_fail:
@@ -807,7 +823,7 @@ int usbnet_bind_config(struct usb_configuration *c)
 	}
 
 	g_net_dev = alloc_netdev(sizeof(struct usbnet_context),
-			   "lan%d", usb_ether_setup);
+			   "usb%d", usb_ether_setup);
 	if (!g_net_dev) {
 		printk(KERN_INFO "%s: alloc_netdev error\n", __func__);
 		return -EINVAL;
@@ -818,10 +834,18 @@ int usbnet_bind_config(struct usb_configuration *c)
 		printk(KERN_INFO "%s: register_netdev error\n", __func__);
 		free_netdev(g_net_dev);
 		return -EINVAL;
-	} else {
-		INIT_WORK(&g_usbnet_ifc.usbnet_config_wq, usbnet_if_config);
-		g_usbnet_context = netdev_priv(g_net_dev);
 	}
+
+	ret = device_create_file(&g_net_dev->dev, &dev_attr_description);
+	if (ret < 0) {
+		printk(KERN_ERR "%s: sys file creation error\n", __func__);
+		unregister_netdev(g_net_dev);
+		free_netdev(g_net_dev);
+		return -EINVAL;
+	}
+
+	INIT_WORK(&g_usbnet_ifc.usbnet_config_wq, usbnet_if_config);
+	g_usbnet_context = netdev_priv(g_net_dev);
 
 	g_usbnet_context->config = 0;
 

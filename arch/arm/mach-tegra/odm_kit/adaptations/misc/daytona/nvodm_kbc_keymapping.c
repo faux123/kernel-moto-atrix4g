@@ -40,12 +40,13 @@
  */
 #include "nvodm_kbc_keymapping.h"
 #include <linux/input.h>
+#include "hwrev.h"
 
 /* The total number of soc scan codes will be (first - last) */
 #define NV_SOC_NORMAL_KEY_SCAN_CODE_TABLE_FIRST    0
 #define NV_SOC_NORMAL_KEY_SCAN_CODE_TABLE_LAST     11
 
-static NvU32 KbcLayOutVirtualKey[] =
+static NvU32 KbcLayOutVirtualKey_P1C[] =
 {
  KEY_VOLUMEUP,
  KEY_HP, //211   - CAMERA  FOCUS  
@@ -61,22 +62,45 @@ static NvU32 KbcLayOutVirtualKey[] =
  0,
 };
 
+/* P1D and newer hw*/
+static NvU32 KbcLayOutVirtualKey[] =
+{
+ KEY_VOLUMEUP,
+ KEY_HP, //211   - CAMERA  FOCUS
+ 0,
+ KEY_VOLUMEDOWN,
+ KEY_CAMERA,
+ 0,
+ KEY_BACK,
+ KEY_SEARCH,
+ KEY_HOME,
+ 0,
+ KEY_MENU,
+ 0,
+};
+
 static struct NvOdmKeyVirtTableDetail s_ScvkKeyMap =
 {
     NV_SOC_NORMAL_KEY_SCAN_CODE_TABLE_FIRST,    // scan code start
     NV_SOC_NORMAL_KEY_SCAN_CODE_TABLE_LAST,     // scan code end
-    KbcLayOutVirtualKey          // Normal Qwerty keyboard
+    KbcLayOutVirtualKey          		// Normal Qwerty keyboard
 };
 
 
-static const struct NvOdmKeyVirtTableDetail *s_pVirtualKeyTables[] =
-     {&s_ScvkKeyMap};
-     
+static const struct NvOdmKeyVirtTableDetail *s_pVirtualKeyTables[] = {
+    &s_ScvkKeyMap
+    };
+
 
 NvU32 
 NvOdmKbcKeyMappingGetVirtualKeyMappingList(
     const struct NvOdmKeyVirtTableDetail ***pVirtKeyTableList)
 {
+
+   if (HWREV_REV(system_rev) <= HWREV_REV_1C)
+	s_ScvkKeyMap.pVirtualKeyTable = KbcLayOutVirtualKey_P1C;
+
+
    *pVirtKeyTableList = s_pVirtualKeyTables;
    return NV_ARRAY_SIZE(s_pVirtualKeyTables);
 }

@@ -195,6 +195,7 @@
 /* Buffer sizes */
 #define AES1750_MAX_BUFFER_SIZE (1024)
 #define AES1750_RESET_BUFFER_SIZE (261)
+#define AES1750_IDLE_BUFFER_SIZE (2)
 
 #define AES1750_NOP (0xFF)
 
@@ -232,6 +233,10 @@
 
 /* This ioctl tells the driver that a swipe occurred (any type of swipe) */
 #define AES1750_IOCTL_SWIPE _IOW(AES1750_IOCTL_MAGIC, 6, __u64)
+
+/* This is an ioctl with which am2server queries the driver about
+suspend/resume state after receiving a signal */
+#define AUTH_IOCTL_OS_SUSPENDSTATE _IOR(AES1750_IOCTL_MAGIC, 7, __u32)
 
 #define AES1750_NIBBLE_TO_ASCII(n) ((n) > 9 ? (n)-10+'a' : (n)+'0')
 
@@ -306,6 +311,8 @@ struct aes1750 {
 
 	unsigned char *reset_command;
 	int reset_command_len;
+
+	unsigned char idle_command[AES1750_IDLE_BUFFER_SIZE];
 
 	atomic_t is_suspended;
 
@@ -643,7 +650,7 @@ static int aes1750_reset(struct aes1750 *aes1750)
 	struct spi_message *m;
 	struct spi_transfer *t;
 
-	aes1750_info("%s\n", __func__);
+	aes1750_info("enter\n");
 
 	/* Allocate the message and transfer. */
 	m = kzalloc(sizeof(struct spi_message) +
@@ -657,8 +664,13 @@ static int aes1750_reset(struct aes1750 *aes1750)
 
 	INIT_LIST_HEAD(&m->transfers);
 	t->rx_buf = NULL;
+	/*
 	t->tx_buf = aes1750->reset_command;
 	t->len = aes1750->reset_command_len;
+	*/
+	/* Send Idle command instead to go into LP state */
+	t->tx_buf = aes1750->idle_command;
+	t->len = AES1750_IDLE_BUFFER_SIZE;
 	t->bits_per_word = 8;
 
 	spi_message_add_tail(t, m);
@@ -1024,6 +1036,16 @@ static int aes1750_ioctl(struct inode *inode, struct file *file,
 	}
 
 	switch (cmd) {
+	case AUTH_IOCTL_OS_SUSPENDSTATE: {
+		u32 tmp = atomic_read(&aes1750->is_suspended);
+		aes1750_info("AUTH_IOCTL_OS_SUSPENDSTATE: %d\n", tmp);
+		status = __put_user(tmp, (__u32 __user *) arg);
+		if (status != 0) {
+			aes1750_warn("AUTH_IOCTL_OS_SUSPENDSTATE: __put_user error %d\n",
+				status);
+		}
+		break;
+	}
 	case AES1750_IOCTL_SWIPE:{
 		aes1750_trace_request("AES1750_IOCTL_SWIPE\n");
 		if (aes1750->input_dev) {
@@ -1332,6 +1354,10 @@ static int __devinit aes1750_probe(struct spi_device *spi)
 	}
 	aes1750->reset_command[0] = AES1750_NOP;
 
+	/* Fill in IDLE command */
+	aes1750->idle_command[0] = 0x0D;
+	aes1750->idle_command[1] = 0x0D;
+
 	/* GPIO */
 	aes1750->gpio_int = *(int *)spi->dev.platform_data;
 	aes1750_info("gpio_int: %d\n", aes1750->gpio_int);
@@ -1444,7 +1470,9 @@ static int aes1750_suspend(struct spi_device *spi, pm_message_t mesg)
 	aes1750_reset(aes1750);
 
 	aes1750_send_user_signal(aes1750, AES1750_SIGNAL_SUSPEND);
+	disable_irq(aes1750->spi->irq);
 	atomic_set(&aes1750->is_suspended, 1);
+	aes1750_info("finished\n");
 
 	return 0;
 }
@@ -1453,10 +1481,12 @@ static int aes1750_resume(struct spi_device *spi)
 {
 	struct aes1750 *aes1750 = spi_get_drvdata(spi);
 
-	aes1750_info("%d:%d\n", current->pid, current->tgid);
+	aes1750_info("started\n");
 
 	atomic_set(&aes1750->is_suspended, 0);
+	enable_irq(aes1750->spi->irq);
 	aes1750_send_user_signal(aes1750, AES1750_SIGNAL_RESUME);
+	aes1750_info("finished\n");
 
 	return 0;
 }
@@ -1481,9 +1511,9 @@ static void aes1750_late_resume(struct early_suspend *handler)
 	aes1750 = container_of(handler, struct aes1750,
 			early_suspend);
 
-	aes1750_info("%d:%d\n", current->pid, current->tgid);
-
+	aes1750_info("started\n");
 	aes1750_resume(aes1750->spi);
+	aes1750_info("finished\n");
 }
 #endif
 

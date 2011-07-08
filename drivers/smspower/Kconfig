@@ -1,0 +1,11 @@
+menu "CMMB_POWER"
+
+comment "SMSx186 power"
+
+config CMMB_POWER
+	bool "enable CMMB Power"
+	depends on TEGRA_ODM_AROWANA
+	default y
+	---help---
+	  Choose y or m here if you want to build-in or make it as module.
+endmenu

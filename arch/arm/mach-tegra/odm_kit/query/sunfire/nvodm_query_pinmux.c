@@ -71,7 +71,7 @@ static const NvU32 s_NvOdmPinMuxConfig_Ulpi[] = {
 
 static const NvU32 s_NvOdmPinMuxConfig_Sdio[] = {
     NvOdmSdioPinMap_Config1,    /* Wifi */
-    0,
+    NvOdmSdioPinMap_Config1,
     NvOdmSdioPinMap_Config2,
     NvOdmSdioPinMap_Config2,
 };
@@ -168,7 +168,7 @@ static const NvU32 s_NvOdmPinMuxConfig_PciExpress[] = {
 
 static const NvU32 s_NvOdmClockLimit_Sdio[] = {
     50000,// WLAN Dima temporary speed limit for Whistler
-    32000,
+    50000,
     50000,
     50000,
 };

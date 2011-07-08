@@ -380,7 +380,7 @@ NvOdmQueryPinAttributes(const NvOdmPinAttrib** pPinAttributes)
 NvBool NvOdmQueryGetPmuProperty(NvOdmPmuProperty* pPmuProperty)
 {
     pPmuProperty->IrqConnected = NV_FALSE;
-    pPmuProperty->PowerGoodCount = 0x7E7E;
+    pPmuProperty->PowerGoodCount = 0x0732;
     pPmuProperty->IrqPolarity = NvOdmInterruptPolarity_Low;
     pPmuProperty->CorePowerReqPolarity = NvOdmCorePowerReqPolarity_Low;
     pPmuProperty->SysClockReqPolarity = NvOdmSysClockReqPolarity_High;

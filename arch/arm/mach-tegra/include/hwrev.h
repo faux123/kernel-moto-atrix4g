@@ -49,5 +49,10 @@
 #define HWREV_REV_2C     0x02C0
 #define HWREV_REV_3      0x0300
 #define HWREV_REV_3B     0x03B0
+#define HWREV_REV_4      0x0400
+#define HWREV_REV_4A     0x04A0
+#define HWREV_REV_4B     0x04B0
+#define HWREV_REV_4F0    0x04F0
+#define HWREV_REV_4FB    0x04FB
 
 #endif

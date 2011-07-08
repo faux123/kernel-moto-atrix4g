@@ -43,10 +43,7 @@
 #define MDM_CTRL_STATE_OFF	1
 #define MDM_CTRL_STATE_ON	2
 
-#define MDM_CTRL_BP_PU_NORMAL_MODE 1
-#define MDM_CTRL_BP_PU_FLASH_MODE  2
-
-#define BP_STARTUP_POLL_INTERVAL    5000 /* ms */
+#define BP_STARTUP_POLL_INTERVAL    8000 /* ms */
 #define BP_SHUTDOWN_POLL_INTERVAL   5000 /* ms */
 #define BP_STATUS_POLL_INTERVAL     50   /* ms */
 #define BP_STATUS_DEBOUNCE_INTERVAL 5    /* ms */
@@ -56,12 +53,16 @@
 
 #define MDM_CTRL_BP_STATUS_DONTCARE -2
 
-#define AP_EXPECTS_BP(s)(s == MDM_CTRL_AP_STATUS_NO_BYPASS || \
-                         s == MDM_CTRL_AP_STATUS_FLASH_MODE)
-#define BP_UP(s)	(s == MDM_CTRL_BP_STATUS_AWAKE || \
-			 s == MDM_CTRL_BP_STATUS_ASLEEP)
-#define BP_READY(s)	(s == MDM_CTRL_BP_STATUS_AWAKE || \
-                         s == MDM_CTRL_BP_STATUS_RDL)
+#define AP_EXPECTS_BP(s) \
+	((s == MDM_CTRL_AP_STATUS_NO_BYPASS) || \
+	 (s == MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC) || \
+	 (s == MDM_CTRL_AP_STATUS_FLASH_MODE))
+#define BP_UP(s) \
+	(s == MDM_CTRL_BP_STATUS_AWAKE || \
+	 s == MDM_CTRL_BP_STATUS_ASLEEP)
+#define BP_READY(s) \
+	(s == MDM_CTRL_BP_STATUS_AWAKE || \
+	s == MDM_CTRL_BP_STATUS_RDL)
 
 
 /* structure to keep track of gpio, irq, and irq enabled info */
@@ -81,6 +82,7 @@ struct clientinfo {
 	int open;
 	int mask;
 	int bp_status;
+	bool usb_ipc_enabled;
 	wait_queue_head_t wq;
 };
 #define MAX_CLIENTS 4
@@ -108,32 +110,11 @@ enum bpgpio {
 	GPIO_COUNT
 };
 
-char *ap_status_string[8] = {
-	"unknown",
-	"up: data bypass",
-	"up: full bypass",
-	"up",
-	"shutdown request",
-	"undefined",
-	"flash mode",
-	"panic acknowledge"
-};
-
-char *bp_status_string[8] = {
-	"off",
-	"panic wait",
-	"core dump",
-	"flash mode",
-	"awake",
-	"asleep",
-	"shutdown acknowledge",
-	"panic"
-};
-
 /* Internal representation of the mdm_ctrl driver. */
 struct mdm_ctrl_info {
 	struct gpioinfo gpios[GPIO_COUNT];
 	struct clientinfo clients[MAX_CLIENTS];
+	bool bp_status_trigger_enabled;
 	int bp_status_triggered_mask;
 	struct mutex lock;
 	struct workqueue_struct *working_queue;
@@ -143,9 +124,12 @@ struct mdm_ctrl_info {
 	atomic_t state;
 	atomic_t pu_state;
 	bool kernel_is_atomic;
+	bool usb_ipc_count;
 	bool force_status_logs;
+	bool bp_resout_quirk;
 	void (*on_bp_startup)(void);
 	void (*on_bp_shutdown)(void);
+	void (*on_bp_change)(int, int);
 };
 
 /* Driver operational structure */
@@ -214,6 +198,17 @@ int get_bp_status(void)
 
 static char *str_bp_status(int status)
 {
+	static char * const bp_status_string[8] = {
+		"off",
+		"panic wait",
+		"core dump",
+		"flash mode",
+		"awake",
+		"asleep",
+		"shutdown acknowledge",
+		"panic"
+	};
+
 	if (status < 0 || status > 7)
 		return "";
 
@@ -223,6 +218,7 @@ static char *str_bp_status(int status)
 static void mdm_ctrl_set_gpio_irq(int index, int enable)
 {
 	if (mdm_ctrl.gpios[index].gpio == MDM_GPIO_INVALID ||
+	    mdm_ctrl.gpios[index].irq < 0 ||
 	    mdm_ctrl.gpios[index].irq_enabled == enable)
 		return;
 
@@ -340,26 +336,83 @@ static int get_ap_status(void)
 	return ((status[2] << 2) | (status[1] << 1) | status[0]);
 }
 
-/* Set the AP->BP status */
-static void set_ap_status(int status)
+/* Map the requested status based on the requested USB IPC value.
+ * If any of the open clients have requested ipc usb, then it
+ * must remain enabled.  This means mapping MDM_CTRL_AP_STATUS_NO_BYPASS
+ * to MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC. */
+static int map_ap_status(int status)
 {
-	if (mdm_ctrl.gpios[AP_STATUS0].gpio != MDM_GPIO_INVALID)
-		gpio_set_value(mdm_ctrl.gpios[AP_STATUS0].gpio,
-				   (status & 0x1));
-	if (mdm_ctrl.gpios[AP_STATUS1].gpio != MDM_GPIO_INVALID)
-		gpio_set_value(mdm_ctrl.gpios[AP_STATUS1].gpio,
-				   ((status >> 1) & 0x1));
-	if (mdm_ctrl.gpios[AP_STATUS2].gpio != MDM_GPIO_INVALID)
-		gpio_set_value(mdm_ctrl.gpios[AP_STATUS2].gpio,
-				   ((status >> 2) & 0x1));
+	unsigned int i;
+
+	switch (status) {
+	case MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC:
+		status = MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC;
+		break;
+
+	case MDM_CTRL_AP_STATUS_NO_BYPASS:
+		/* If the kernel has requested USB IPC, keep it on. */
+		if (mdm_ctrl.usb_ipc_count) {
+			status = MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC;
+		} else {
+			/* If any other file handles have requested USB IPC,
+			   keep it on. */
+			for (i = 0; i < MAX_CLIENTS; i++)
+				if ((mdm_ctrl.clients[i].open) &&
+					(mdm_ctrl.clients[i].usb_ipc_enabled)) {
+					status = MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC;
+					break;
+				}
+		}
+		break;
+	}
+	return status;
 }
 
-char *str_ap_status(int status)
+/* Set the AP->BP status. */
+static void set_ap_status(int status)
 {
-	if (status < 0 || status > 7)
-		return "";
+	static int last_status = MDM_CTRL_AP_STATUS_MAX;
 
-	return ap_status_string[status];
+	pr_info("mdm_ctrl: %s(%x)\n", __func__, status);
+	status = map_ap_status(status);
+	if (status != last_status) {
+		if (mdm_ctrl.gpios[AP_STATUS0].gpio != MDM_GPIO_INVALID)
+			gpio_set_value(mdm_ctrl.gpios[AP_STATUS0].gpio,
+						   (status & 0x1));
+		if (mdm_ctrl.gpios[AP_STATUS1].gpio != MDM_GPIO_INVALID)
+			gpio_set_value(mdm_ctrl.gpios[AP_STATUS1].gpio,
+						   ((status >> 1) & 0x1));
+		if (mdm_ctrl.gpios[AP_STATUS2].gpio != MDM_GPIO_INVALID)
+			gpio_set_value(mdm_ctrl.gpios[AP_STATUS2].gpio,
+						   ((status >> 2) & 0x1));
+		last_status = status;
+	}
+}
+
+static char *str_ap_status(int status)
+{
+	static char * const ap_status_strings[MDM_CTRL_AP_STATUS_MAX] = {
+		/* MDM_CTRL_AP_STATUS_UNKNOWN */
+		"unknown",
+		/* MDM_CTRL_AP_STATUS_DATA_BYPASS */
+		"up: data bypass",
+		/* MDM_CTRL_AP_STATUS_FULL_BYPASS */
+		"up: full bypass",
+		/* MDM_CTRL_AP_STATUS_NO_BYPASS */
+		"up: usb ipc disabled",
+		/* MDM_CTRL_AP_STATUS_BP_SHUTDOWN */
+		"shutdown request",
+		/* MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC */
+		"up: usb ipc enabled",
+		/* MDM_CTRL_AP_STATUS_FLASH_MODE */
+		"flash mode",
+		/* MDM_CTRL_AP_STATUS_BP_PANIC_ACK */
+		"panic acknowledge"
+	};
+
+	if (status >= 0 || status < MDM_CTRL_AP_STATUS_MAX)
+		return ap_status_strings[status];
+	return "";
 }
 
 static void bp_update_state(void)
@@ -368,10 +421,12 @@ static void bp_update_state(void)
 	     gpio_get_value(mdm_ctrl.gpios[BP_RESOUT].gpio)) ||
 	    mdm_ctrl.gpios[BP_RESOUT].irq_type & IRQ_TYPE_LEVEL_HIGH) {
 		atomic_set(&mdm_ctrl.state, MDM_CTRL_STATE_ON);
+		pr_info("%s: modem control state ON\n", __func__);
 		if (mdm_ctrl.on_bp_startup)
 			mdm_ctrl.on_bp_startup();
 	} else {
 		atomic_set(&mdm_ctrl.state, MDM_CTRL_STATE_OFF);
+		pr_info("%s: modem control state OFF\n", __func__);
 		if (mdm_ctrl.on_bp_shutdown)
 			mdm_ctrl.on_bp_shutdown();
 	}
@@ -401,10 +456,28 @@ static void bp_set_flash_pins(int value)
 static int bp_startup(int bp_mode)
 {
 	int bp_status = 0;
-        int pu_result = -1;
+	int pu_result = -1;
+	int poll_status = MDM_CTRL_BP_STATUS_AWAKE;
 
 	pr_info("%s: powering up modem...\n", __func__);
-	bp_set_flash_pins(bp_mode == MDM_CTRL_BP_PU_FLASH_MODE ? 0x03 : 0x00);
+
+	/* Check to see if the modem is already powered on */
+	if (atomic_read(&mdm_ctrl.state) != MDM_CTRL_STATE_OFF) {
+		pr_info("%s: modem already powered on\n", __func__);
+		return 0;
+	}
+
+	/* Re-enable the BP_RESOUT on bad hardware */
+	if (mdm_ctrl.bp_resout_quirk) {
+		pr_info("%s: re-enable BP_RESOUT irq\n", __func__);
+		mdm_ctrl.gpios[BP_RESOUT].irq_type = IRQ_TYPE_LEVEL_HIGH;
+		enable_irq(mdm_ctrl.gpios[BP_RESOUT].irq);
+	}
+
+	bp_set_flash_pins(bp_mode == MDM_CTRL_BP_PU_MODE_FLASH ? 0x03 : 0x00);
+
+	if (bp_mode == MDM_CTRL_BP_PU_MODE_FLASH)
+		poll_status = MDM_CTRL_BP_STATUS_RDL;
 
 	/* Request BP startup */
 	set_ap_status(MDM_CTRL_AP_STATUS_NO_BYPASS);
@@ -419,7 +492,7 @@ static int bp_startup(int bp_mode)
 	gpio_set_value(mdm_ctrl.gpios[BP_PWRON].gpio, 0);
 
 	/* Wait for the modem to acknowledge powerup */
-	bp_status = poll_for_bp_status(MDM_CTRL_BP_STATUS_AWAKE,
+	bp_status = poll_for_bp_status(poll_status,
 	                               BP_STARTUP_POLL_INTERVAL);
 
 	if (bp_status == MDM_CTRL_BP_STATUS_AWAKE) {
@@ -458,9 +531,10 @@ static int bp_shutdown(int force)
 	/* Disable hardware interrupts for status changes. */
 	set_bp_status_irq(0);
 
-	/* Disable client interrupts for BP_RESOUT so that the panic daemon
-	 * doesn't think the BP has gone down unexpectedly. */
+	/* Disable client interrupts for BP_RESOUT and BP_STATUS so that the
+	 * panic daemon doesn't think the BP has gone down unexpectedly. */
 	mdm_ctrl.gpios[BP_RESOUT].irq_enabled = 0;
+	mdm_ctrl.bp_status_trigger_enabled = false;
 
 	/* If the BP is not up, it's not going to respond to polite requests */
 	if (!BP_UP(get_bp_status()))
@@ -526,8 +600,13 @@ force_shutdown:
 			pr_err("%s: modem failed to power down\n", __func__);
 	}
 
-	/* Re-enable client interrupts for BP_RESOUT. */
-        mdm_ctrl_set_gpio_irq(BP_RESOUT, 1);
+	/* Interrupts were disabled, so force a change callback. */
+	if (mdm_ctrl.on_bp_change)
+		mdm_ctrl.on_bp_change(atomic_read(&mdm_ctrl.state), bp_status);
+
+	/* Re-enable client interrupts for BP_RESOUT and BP_STATUS. */
+	mdm_ctrl.bp_status_trigger_enabled = true;
+	mdm_ctrl.gpios[BP_RESOUT].irq_enabled = 1;
 
 	/* Re-enable hardware interrupts for status changes. */
 	set_bp_status_irq(1);
@@ -535,7 +614,7 @@ force_shutdown:
 	/* Make errno's negative. */
 	if (pd_result > 0)
 		pd_result *= -1;
-	
+
 	return pd_result;
 }
 
@@ -638,7 +717,8 @@ static void bp_irq(struct work_struct *work)
 					&mdm_ctrl.clients[i].wq);
 				wake_client = true;
 			}
-			if (bp_status != bp_status_prev &&
+			if (mdm_ctrl.bp_status_trigger_enabled &&
+			    bp_status != bp_status_prev &&
 			    bp_status == mdm_ctrl.clients[i].bp_status) {
 				mdm_ctrl.bp_status_triggered_mask |= mask;
 				wake_client = true;
@@ -658,16 +738,21 @@ static void bp_irq(struct work_struct *work)
 		gpio->irq_type |= IRQ_TYPE_LEVEL_HIGH;
 		set_irq_type(gpio->irq, gpio->irq_type);
 
-		/* ...unless it's BP_RESOUT... */
-		if (gpio == &mdm_ctrl.gpios[BP_RESOUT]) {
+		/* ...unless it's BP_RESOUT on buggy HW... */
+		if (mdm_ctrl.bp_resout_quirk &&
+		    gpio == &mdm_ctrl.gpios[BP_RESOUT]) {
 			gpio->irq_type = IRQ_TYPE_NONE;
 			/* Seems to be the only way to avoid stuck interrupt. */
 			set_irq_type(gpio->irq, IRQ_TYPE_EDGE_RISING);
-			pr_debug("%s: disable IRQ %d\n", __func__, gpio->irq);
+			pr_debug("%s: bad BP_RESOUT signal; clobber IRQ %d\n",
+				__func__, gpio->irq);
 		}
 	}
 
 	mutex_unlock(&mdm_ctrl.lock);
+
+	if (mdm_ctrl.on_bp_change)
+		mdm_ctrl.on_bp_change(atomic_read(&mdm_ctrl.state), bp_status);
 
 	bp_status_prev = bp_status;
 
@@ -698,6 +783,24 @@ irqreturn_t irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+int mdm_ctrl_startup(int pu_mode)
+{
+	return bp_startup(pu_mode);
+}
+EXPORT_SYMBOL(mdm_ctrl_startup);
+
+int mdm_ctrl_shutdown(void)
+{
+	return bp_shutdown(0);
+}
+EXPORT_SYMBOL(mdm_ctrl_shutdown);
+
+int mdm_ctrl_get_bp_state(void)
+{
+	return atomic_read(&mdm_ctrl.state);
+}
+EXPORT_SYMBOL(mdm_ctrl_get_bp_state);
+
 int mdm_ctrl_get_bp_status(void)
 {
 	return get_bp_status();
@@ -710,6 +813,34 @@ void mdm_ctrl_set_ap_status(int status)
 	set_ap_status(status);
 }
 EXPORT_SYMBOL(mdm_ctrl_set_ap_status);
+
+void mdm_ctrl_set_usb_ipc(bool on)
+{
+	mutex_lock(&mdm_ctrl.lock);
+	if (on)
+		mdm_ctrl.usb_ipc_count++;
+	else if (mdm_ctrl.usb_ipc_count)
+		mdm_ctrl.usb_ipc_count--;
+	set_ap_status(mdm_ctrl.usb_ipc_count ?
+				  MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC :
+				  MDM_CTRL_AP_STATUS_NO_BYPASS);
+	mutex_unlock(&mdm_ctrl.lock);
+	pr_info("%s: usb ipc count is now: %d\n",
+			__func__, mdm_ctrl.usb_ipc_count);
+}
+EXPORT_SYMBOL(mdm_ctrl_set_usb_ipc);
+
+void mdm_ctrl_dump_log(void)
+{
+	/* Toggle BP_PWRON to trigger BP log dump */
+	gpio_set_value(mdm_ctrl.gpios[BP_PWRON].gpio, 1);
+	mdm_ctrl_msleep(100);
+	gpio_set_value(mdm_ctrl.gpios[BP_PWRON].gpio, 0);
+
+	/* Arbitrary delay */
+	mdm_ctrl_msleep(500);
+}
+EXPORT_SYMBOL(mdm_ctrl_dump_log);
 
 /* Called when a user opens a connection to the bp interface device.
  * Sets an open flag to indicate that no further connections to this
@@ -751,6 +882,7 @@ static int mdm_ctrl_release(struct inode *inode, struct file *filp)
 
 	/* Release the client structure */
 	cinfo->open = 0;
+	cinfo->usb_ipc_enabled = false;
 	filp->private_data = 0;
 
 	mutex_unlock(&mdm_ctrl.lock);
@@ -861,6 +993,20 @@ static void set_interrupt(struct gpioinfo *gpio, struct clientinfo *cinfo, int e
 	}
 }
 
+/* Set the ipc enabled status of based on the provided state. */
+static void ioctl_set_usb_state(int status, struct clientinfo *cinfo)
+{
+	switch (status) {
+	case MDM_CTRL_AP_STATUS_NO_BYPASS_USB_IPC:
+		cinfo->usb_ipc_enabled = true;
+		break;
+
+	case MDM_CTRL_AP_STATUS_NO_BYPASS:
+		cinfo->usb_ipc_enabled = false;
+		break;
+	}
+}
+
 /* Performs the appropriate action for the specified IOCTL command,
  * returning a failure code only if the IOCTL command was not recognized */
 static int mdm_ctrl_ioctl(struct inode *inode, struct file *filp,
@@ -910,6 +1056,7 @@ static int mdm_ctrl_ioctl(struct inode *inode, struct file *filp,
 		if (ret != 0)
 			break;
 
+		ioctl_set_usb_state(value, cinfo);
 		set_ap_status(value);
 		break;
 
@@ -1036,9 +1183,6 @@ static int __devinit mdm_ctrl_probe(struct platform_device *pdev)
 	struct mdm_ctrl_platform_data *pdata = pdev->dev.platform_data;
 	int ap_status, bp_status;
 
-	/* Initialize internal structures */
-	mutex_init(&mdm_ctrl.lock);
-
 	/* Initialize the client information */
 	memset(&mdm_ctrl.clients, 0,
 		sizeof(mdm_ctrl.clients));
@@ -1047,6 +1191,11 @@ static int __devinit mdm_ctrl_probe(struct platform_device *pdev)
 		mdm_ctrl.clients[i].mask = 1 << i;
 		mdm_ctrl.clients[i].bp_status = -1;
 	}
+
+	/* Need to take the lock since interrupts are configured and enabled
+	   sequentially, which might trigger bp_irq() before we are ready. */
+	mutex_init(&mdm_ctrl.lock);
+	mutex_lock(&mdm_ctrl.lock);
 
 	/* If level-triggered, this will be updated as soon as the interrupt
 	 * gets enabled below. */
@@ -1077,8 +1226,10 @@ static int __devinit mdm_ctrl_probe(struct platform_device *pdev)
 
 	/* Initialize the GPIOs */
 	memset(&mdm_ctrl.gpios, 0, sizeof(mdm_ctrl.gpios));
-	for (i = 0; i < GPIO_COUNT; i++)
+	for (i = 0; i < GPIO_COUNT; i++) {
 		mdm_ctrl.gpios[i].gpio = MDM_GPIO_INVALID;
+		mdm_ctrl.gpios[i].irq = -1;
+	}
 
 	/* Common */
 	mdm_ctrl.gpios[BP_PWRON].gpio = pdata->bp_pwron_gpio;
@@ -1116,7 +1267,7 @@ static int __devinit mdm_ctrl_probe(struct platform_device *pdev)
 	for (i = 0; i < MDM_GPIO_INTERRUPT_COUNT; i++) {
 		if (mdm_ctrl.gpios[i].gpio == MDM_GPIO_INVALID)
 			continue;
-		
+
 		mdm_ctrl.gpios[i].irq =
 			gpio_to_irq(mdm_ctrl.gpios[i].gpio);
 
@@ -1135,10 +1286,15 @@ static int __devinit mdm_ctrl_probe(struct platform_device *pdev)
 		mdm_ctrl.gpios[i].irq_enabled = 1;
 	}
 
+	mdm_ctrl.bp_status_trigger_enabled = true;
+
 	INIT_WORK(&mdm_ctrl.restart_work, bp_restart_work);
+
+	mdm_ctrl.bp_resout_quirk = pdata->bp_resout_quirk;
 
 	mdm_ctrl.on_bp_startup = pdata->on_bp_startup;
 	mdm_ctrl.on_bp_shutdown = pdata->on_bp_shutdown;
+	mdm_ctrl.on_bp_change = pdata->on_bp_change;
 
 	ret = misc_register(&mdm_ctrl_misc_device);
 	if (ret < 0) {
@@ -1160,12 +1316,14 @@ static int __devinit mdm_ctrl_probe(struct platform_device *pdev)
 		bp_set_flash_pins(0x03);
 	}
 
-        /* update bp power up state. used to track whether bp should power up
-           in normal or flash mode */
-        if (ap_status == MDM_CTRL_AP_STATUS_FLASH_MODE)
-                atomic_set(&mdm_ctrl.pu_state, MDM_CTRL_BP_PU_FLASH_MODE);
-        else
-                atomic_set(&mdm_ctrl.pu_state, MDM_CTRL_BP_PU_NORMAL_MODE);
+	/* update bp power up state. used to track whether bp should power up
+	   in normal or flash mode */
+	if (ap_status == MDM_CTRL_AP_STATUS_FLASH_MODE)
+		atomic_set(&mdm_ctrl.pu_state, MDM_CTRL_BP_PU_MODE_FLASH);
+	else
+		atomic_set(&mdm_ctrl.pu_state, MDM_CTRL_BP_PU_MODE_NORMAL);
+
+	mutex_unlock(&mdm_ctrl.lock);
 
 	if (AP_EXPECTS_BP(ap_status)) {
 		/* First just try sending a synchronous startup request. */
@@ -1196,7 +1354,7 @@ err_exit:
 }
 
 /* Destroys the bp driver interface device and clears up any pending IRQs */
-static int __devexit mdm_ctrl_remove(struct platform_device *pdev)
+static int __devexit mdm_ctrl_driver_remove(struct platform_device *pdev)
 {
 	atomic_set(&mdm_ctrl.state, MDM_CTRL_STATE_DISABLED);
 
@@ -1212,7 +1370,7 @@ static int __devexit mdm_ctrl_remove(struct platform_device *pdev)
 }
 
 /* Initiate modem power down */
-static void __devexit mdm_ctrl_shutdown(struct platform_device *pdev)
+static void __devexit mdm_ctrl_driver_shutdown(struct platform_device *pdev)
 {
 	pr_info("%s: shutdown requested by OS\n", __func__);
 	bp_shutdown(0);
@@ -1251,8 +1409,8 @@ static struct dev_pm_ops mdm_ctrl_pm_ops = {
 
 static struct platform_driver mdm_ctrl_driver = {
 	.probe = mdm_ctrl_probe,
-	.remove = __devexit_p(mdm_ctrl_remove),
-	.shutdown = __devexit_p(mdm_ctrl_shutdown),
+	.remove = __devexit_p(mdm_ctrl_driver_remove),
+	.shutdown = __devexit_p(mdm_ctrl_driver_shutdown),
 	.driver = {
 		   .name = MDM_CTRL_MODULE_NAME,
 		   .owner = THIS_MODULE,
