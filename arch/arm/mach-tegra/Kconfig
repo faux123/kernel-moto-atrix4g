@@ -225,7 +225,7 @@ config TEGRA_LP2POLICY_IGNORE_LC
 	  wake interrupt regardless of DVFS clock activities
 
 endchoice
-
+	
 if TEGRA_ODM_KIT
 source "arch/arm/mach-tegra/odm_kit/Kconfig"
 endif
@@ -236,4 +236,15 @@ config PM_DEEPSLEEP
 	help
 	  after enabling this feature, when PM state is set to DEEPSLEEP, the kerne
 	  ignore all key press except long press power key.
+
+config AVP_OVERCLOCK
+	bool "AVP Overclocking"
+	depends on ARCH_TEGRA
+	default n
+
+config STOCK_VOLTAGE
+	bool "stock voltage values"
+	depends on ARCH_TEGRA
+	default n
+
 endif
