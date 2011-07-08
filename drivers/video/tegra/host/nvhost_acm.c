@@ -26,7 +26,7 @@
 #include <linux/err.h>
 #include <linux/device.h>
 
-#include <nvhost_syncpt.h>
+#include "nvhost_syncpt.h"
 
 #define ACM_TIMEOUT_MSEC 50
 

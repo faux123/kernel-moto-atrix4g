@@ -27,7 +27,7 @@
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include <linux/clk.h>
-#include <../../arch/arm/mach-tegra/clock.h> /* for get_tegra_clock_by_name */
+#include "../../arch/arm/mach-tegra/clock.h" /* for get_tegra_clock_by_name */
 
 #include <mach/nvodmcam.h>
 #include <linux/nvodmcam.h>

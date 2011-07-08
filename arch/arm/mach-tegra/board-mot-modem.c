@@ -366,7 +366,6 @@ static void __init mot_setup_wrigley_host_wake(void)
 	}
 }
 
-#else
 int __init mot_pnx_ctrl_init(void);
 
 int __init mot_modem_init(void)
@@ -416,6 +415,8 @@ int __init mot_modem_init(void)
 #endif
 	return 0;
 }
+
+#else
 
 /*
  * Interim Wrigley host wake support.
