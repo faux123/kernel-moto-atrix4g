@@ -38,12 +38,11 @@
 #define WL_ERROR(x) printf x
 #define WL_TRACE(x)
 
-extern char bcm_wlan_mac[ETHER_ADDR_LEN];
-
 #ifdef CUSTOMER_HW
 extern  void bcm_wlan_power_off(int);
 extern  void bcm_wlan_power_on(int);
 extern  int bcm_wlan_get_irq(void);
+extern char bcm_wlan_mac[ETHER_ADDR_LEN];
 #endif /* CUSTOMER_HW */
 #ifdef CUSTOMER_HW2
 int wifi_set_carddetect(int on);
