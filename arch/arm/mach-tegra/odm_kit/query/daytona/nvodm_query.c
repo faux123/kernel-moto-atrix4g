@@ -1093,7 +1093,7 @@ NvOdmQuerySpiGetDeviceInfo(
 {
     /* SPI-1 CS0 is for BP IPC */
     static const NvOdmQuerySpiDeviceInfo s_Spi1Cs0Info =
-        {NvOdmQuerySpiSignalMode_0, NV_TRUE, NV_TRUE, NV_FALSE, 0, 0};
+        {NvOdmQuerySpiSignalMode_0, NV_TRUE, NV_TRUE, NV_FALSE, 0, 0, NV_TRUE};
 
     /* SPI-2 CS0 & CS1 used for CPCAP */
     static const NvOdmQuerySpiDeviceInfo s_Spi2Cs0Info =

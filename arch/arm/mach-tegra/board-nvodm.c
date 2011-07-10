@@ -210,18 +210,22 @@ static struct tegra_sdhci_platform_data tegra_sdhci_platform[] = {
 	[0] = {
 		.bus_width = 4,
 		.debounce = 5,
+		.max_power_class = 15,
 	},
 	[1] = {
 		.bus_width = 4,
 		.debounce = 5,
+		.max_power_class = 15,
 	},
 	[2] = {
 		.bus_width = 4,
 		.debounce = 5,
+		.max_power_class = 15,
 	},
 	[3] = {
 		.bus_width = 4,
 		.debounce = 5,
+		.max_power_class = 15,
 	},
 };
 static struct resource tegra_sdhci_resources[][2] = {

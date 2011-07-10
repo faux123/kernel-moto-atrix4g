@@ -348,6 +348,8 @@ skip_gpio_wp:
 		}
 	}
 
+	sdhost->max_power_class = plat->max_power_class;
+
 	ret = sdhci_add_host(sdhost);
 	if (ret)
 		goto fail;

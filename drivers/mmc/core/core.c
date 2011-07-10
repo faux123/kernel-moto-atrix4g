@@ -859,6 +859,63 @@ void mmc_set_timing(struct mmc_host *host, unsigned int timing)
 }
 
 /*
+ * Try to upgrade the power class to the maximum supported.  The maximum power
+ * class supported by a card is stored as 8 values in 4 EXT_CSD bytes.  The
+ * value that applies depends on the operating voltage, bus speed, and bus
+ * width.
+ */
+int mmc_set_power_class(struct mmc_host *host, unsigned int hz,
+                         unsigned int width)
+{
+	struct mmc_card *card = host->card;
+	int class_index = MMC_EXT_CSD_PWR_CL(EXT_CSD_PWR_CL_52_195);
+	u8 power_class = 0;
+	int err = 0;
+
+	/*
+	 * The spec is vague about what voltage threshold is used to determine
+	 * which class value to use, but they probably intend it for "low"
+	 * (1.7V-1.95V) versus "high" (2.7V-3.6V) voltage cards.
+	 */
+	if (host->ocr >= MMC_VDD_27_28)
+		class_index = MMC_EXT_CSD_PWR_CL(EXT_CSD_PWR_CL_52_360);
+
+	/*
+	 * More vagueness here.  Assume that the threshold is at 26MHz.
+	 */
+	if (hz <= 26000000)
+		class_index++;
+
+	power_class = card->ext_csd.power_class[class_index];
+	if (width == MMC_BUS_WIDTH_4)
+		power_class &= 0xF;
+	else if (width == MMC_BUS_WIDTH_8)
+		power_class = (power_class & 0xF0) >> 4;
+
+	if (power_class > host->max_power_class)
+		power_class = host->max_power_class;
+
+	if (power_class > 0) {
+		pr_debug("%s: power class %d (max %d), %u HZ, width %d, OCR=0x%08X\n",
+			mmc_hostname(card->host),
+			power_class,
+			host->max_power_class,
+			hz,
+			width,
+			card->host->ocr);
+
+		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
+			EXT_CSD_POWER_CLASS, power_class);
+		if (err) {
+			pr_warning("%s: switch power class failed (%d)\n",
+				mmc_hostname(card->host), err);
+		}
+	}
+
+	return err;
+}
+
+/*
  * Apply power to the MMC stack.  This is a two-stage process.
  * First, we enable power to the card without the clock running.
  * We then wait a bit for the power to stabilise.  Finally,

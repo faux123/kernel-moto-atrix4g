@@ -195,6 +195,7 @@
 /* Buffer sizes */
 #define AES1750_MAX_BUFFER_SIZE (1024)
 #define AES1750_RESET_BUFFER_SIZE (261)
+#define AES1750_IDLE_BUFFER_SIZE (1)
 
 #define AES1750_NOP (0xFF)
 
@@ -306,6 +307,8 @@ struct aes1750 {
 
 	unsigned char *reset_command;
 	int reset_command_len;
+
+	unsigned char idle_command[AES1750_IDLE_BUFFER_SIZE];
 
 	atomic_t is_suspended;
 
@@ -657,8 +660,13 @@ static int aes1750_reset(struct aes1750 *aes1750)
 
 	INIT_LIST_HEAD(&m->transfers);
 	t->rx_buf = NULL;
+	/*
 	t->tx_buf = aes1750->reset_command;
 	t->len = aes1750->reset_command_len;
+	*/
+	/* Send Idle command instead to go into LP state */
+	t->tx_buf = aes1750->idle_command;
+	t->len = AES1750_IDLE_BUFFER_SIZE;
 	t->bits_per_word = 8;
 
 	spi_message_add_tail(t, m);
@@ -1332,6 +1340,9 @@ static int __devinit aes1750_probe(struct spi_device *spi)
 	}
 	aes1750->reset_command[0] = AES1750_NOP;
 
+	/* Fill in IDLE command */
+	aes1750->idle_command[0] = 0x0A;
+
 	/* GPIO */
 	aes1750->gpio_int = *(int *)spi->dev.platform_data;
 	aes1750_info("gpio_int: %d\n", aes1750->gpio_int);
@@ -1444,6 +1455,7 @@ static int aes1750_suspend(struct spi_device *spi, pm_message_t mesg)
 	aes1750_reset(aes1750);
 
 	aes1750_send_user_signal(aes1750, AES1750_SIGNAL_SUSPEND);
+	disable_irq(aes1750->spi->irq);
 	atomic_set(&aes1750->is_suspended, 1);
 
 	return 0;
@@ -1456,6 +1468,7 @@ static int aes1750_resume(struct spi_device *spi)
 	aes1750_info("%d:%d\n", current->pid, current->tgid);
 
 	atomic_set(&aes1750->is_suspended, 0);
+	enable_irq(aes1750->spi->irq);
 	aes1750_send_user_signal(aes1750, AES1750_SIGNAL_RESUME);
 
 	return 0;

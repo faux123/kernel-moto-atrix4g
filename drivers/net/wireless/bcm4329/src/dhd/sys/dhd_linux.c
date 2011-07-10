@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_linux.c,v 1.65.4.9.2.12.2.104.4.37 2010/12/04 01:22:16 Exp $
+ * $Id: dhd_linux.c,v 1.65.4.9.2.12.2.104.4.39 2011/01/14 22:40:45 Exp $
  */
 
 #ifdef CONFIG_WIFI_CONTROL_FUNC
@@ -566,7 +566,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 		if (value && dhd->in_suspend) {
 
 				/* Kernel suspended */
-				DHD_TRACE(("%s: force extra Suspend setting \n", __FUNCTION__));
+				DHD_ERROR(("%s: force extra Suspend setting \n", __FUNCTION__));
 
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM,
 					(char *)&power_mode, sizeof(power_mode));
@@ -591,11 +591,20 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 					iovbuf, sizeof(iovbuf));
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 #endif /* ENABLE_ROAMING */
+				DHD_ERROR(("%s: force extra Suspend setting: done \n", __FUNCTION__));
 
 			} else {
 
 				/* Kernel resumed  */
-				DHD_TRACE(("%s: Remove extra suspend setting \n", __FUNCTION__));
+				DHD_ERROR(("%s: Remove extra suspend setting \n", __FUNCTION__));
+				// Begin IKNVSSW-1416
+				// Make sure we are not trying to talk to dead or disabed device
+				// delaying kernel resume
+				if (dhd->busstate != DHD_BUS_DATA) {
+					DHD_ERROR(("%s DONGLE_DOWN bus state %d\n", __FUNCTION__, dhd->busstate));
+					return -1;
+				}
+				// END IKNVSSW-1416
 
 				power_mode = PM_FAST;
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_PM, (char *)&power_mode,
@@ -615,6 +624,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 						 sizeof(iovbuf));
 				dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 #endif /* ENABLE_ROAMING */
+				DHD_ERROR(("%s: Remove extra suspend setting: done \n", __FUNCTION__));
 			}
 	}
 
@@ -775,7 +785,11 @@ static void
 _dhd_set_multicast_list(dhd_info_t *dhd, int ifidx)
 {
 	struct net_device *dev;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+	struct netdev_hw_addr *ha;
+#else
 	struct dev_mc_list *mclist;
+#endif
 	uint32 allmulti, cnt;
 
 	wl_ioctl_t ioc;
@@ -785,8 +799,14 @@ _dhd_set_multicast_list(dhd_info_t *dhd, int ifidx)
 
 	ASSERT(dhd && dhd->iflist[ifidx]);
 	dev = dhd->iflist[ifidx]->net;
-	mclist = dev->mc_list;
+
+	NETIF_ADDR_LOCK(dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+	cnt = netdev_mc_count(dev);
+#else
 	cnt = dev->mc_count;
+#endif
+	NETIF_ADDR_UNLOCK(dev);
 
 	/* Determine initial value of allmulti flag */
 	allmulti = (dev->flags & IFF_ALLMULTI) ? TRUE : FALSE;
@@ -808,10 +828,22 @@ _dhd_set_multicast_list(dhd_info_t *dhd, int ifidx)
 	memcpy(bufp, &cnt, sizeof(cnt));
 	bufp += sizeof(cnt);
 
-	for (cnt = 0; mclist && (cnt < dev->mc_count); cnt++, mclist = mclist->next) {
+	NETIF_ADDR_LOCK(dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+	netdev_for_each_mc_addr(ha, dev) {
+		if (!cnt)
+			break;
+		memcpy(bufp, ha->addr, ETHER_ADDR_LEN);
+		bufp += ETHER_ADDR_LEN;
+		cnt--;
+	}
+#else
+	for (mclist = dev->mc_list; (mclist && (cnt > 0)); cnt--, mclist = mclist->next) {
 		memcpy(bufp, (void *)mclist->dmi_addr, ETHER_ADDR_LEN);
 		bufp += ETHER_ADDR_LEN;
 	}
+#endif
+	NETIF_ADDR_UNLOCK(dev);
 
 	memset(&ioc, 0, sizeof(ioc));
 	ioc.cmd = WLC_SET_VAR;
@@ -1412,12 +1444,13 @@ dhd_watchdog_thread(void *data)
 				WAKE_LOCK(&dhd->pub, WAKE_LOCK_WATCHDOG);
 				/* Call the bus module watchdog */
 				dhd_bus_watchdog(&dhd->pub);
+
 				/* Count the tick for reference */
-			dhd->pub.tickcnt++;
-			/* Reschedule the watchdog */
+				dhd->pub.tickcnt++;
+				/* Reschedule the watchdog */
 				if (dhd->wd_timer_valid)
 					mod_timer(&dhd->timer, \
-					jiffies + dhd_watchdog_ms * HZ / 1000);
+							  jiffies + dhd_watchdog_ms * HZ / 1000);
 				WAKE_UNLOCK(&dhd->pub, WAKE_LOCK_WATCHDOG);
 			}
 			dhd_os_sdunlock(&dhd->pub);
@@ -1816,12 +1849,13 @@ dhd_ioctl_entry(struct net_device *net, struct ifreq *ifr, int cmd)
 	/* send to dongle (must be up, and wl) */
 	if (
 			(dhd->pub.busstate != DHD_BUS_DATA)) {
-		DHD_ERROR(("%s DONGLE_DOWN,__FUNCTION__\n", __FUNCTION__));
+		DHD_ERROR(("%s DONGLE_DOWN bus state %d\n", __FUNCTION__, dhd->pub.busstate));
 		bcmerror = BCME_DONGLE_DOWN;
 		goto done;
 	}
 
 	if (!dhd->pub.iswl) {
+		DHD_ERROR(("%s DONGLE_DOWN is not wl\n", __FUNCTION__));
 		bcmerror = BCME_DONGLE_DOWN;
 		goto done;
 	}
@@ -1899,12 +1933,12 @@ dhd_open(struct net_device *net)
 	ifidx = dhd_net2idx(dhd, net);
 
 	DHD_TRACE(("%s: ifidx %d\n", __FUNCTION__, ifidx));
-/*
+
 	if ((dhd->iflist[ifidx]) && (dhd->iflist[ifidx]->state == WLC_E_IF_DEL)) {
 		DHD_ERROR(("%s: Error: called when IF already deleted\n", __FUNCTION__));
 		return -1;
 	}
-*/
+
 	if (ifidx == 0) { /* do it only for primary eth0 */
 
 		atomic_set(&dhd->pend_8021x_cnt, 0);
@@ -2524,7 +2558,7 @@ dhd_detach(dhd_pub_t *dhdp)
 static void __exit
 dhd_module_cleanup(void)
 {
-	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
+	DHD_ERROR(("%s: Enter\n", __FUNCTION__));
 
 	dhd_bus_unregister();
 #if defined(CUSTOMER_HW2) && defined(CONFIG_WIFI_CONTROL_FUNC)
@@ -2532,6 +2566,7 @@ dhd_module_cleanup(void)
 #endif
 	/* Call customer gpio to turn off power with WL_REG_ON signal */
 	dhd_customer_gpio_wlan_ctrl(WLAN_POWER_OFF);
+	DHD_ERROR(("%s: Done\n", __FUNCTION__));
 }
 
 
@@ -2703,9 +2738,9 @@ dhd_os_wd_timer(void *bus, uint wdtick)
 
 	/* don't start the wd until fw is loaded */
 	if (pub->busstate != DHD_BUS_DOWN) {
-	if (wdtick) {
-		dhd_watchdog_ms = (uint) wdtick;
-		dhd->wd_timer_valid = TRUE;
+		if (wdtick) {
+			dhd_watchdog_ms = (uint)wdtick;
+			dhd->wd_timer_valid = TRUE;
 			/* Re arm the timer, at last watchdog period */
 			mod_timer(&dhd->timer, jiffies + dhd_watchdog_ms * HZ / 1000);
 		} else if (dhd->wd_timer_valid == TRUE) {
@@ -3068,12 +3103,12 @@ int net_os_send_hang_message(struct net_device *dev)
 	return ret;
 }
 
-void dhd_bus_country_set(struct net_device *dev, char *country_code)
+void dhd_bus_country_set(struct net_device *dev, wl_country_t *cspec)
 {
 	dhd_info_t *dhd = *(dhd_info_t **)netdev_priv(dev);
 
 	if (dhd && dhd->pub.up)
-		strncpy(dhd->pub.country_code, country_code, WLC_CNTRY_BUF_SZ);
+			memcpy(&dhd->pub.dhd_cspec, cspec, sizeof(wl_country_t));
 }
 
 
@@ -3115,7 +3150,7 @@ void dhd_os_spin_unlock(dhd_pub_t *pub, unsigned long flags)
 	if (dhd)
 		spin_unlock_irqrestore(&dhd->dhd_lock, flags);
 }
-#endif 
+#endif /* SOFTAP */
 
 static int
 dhd_get_pend_8021x_cnt(dhd_info_t *dhd)

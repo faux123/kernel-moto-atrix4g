@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_iw.c,v 1.51.4.9.2.6.4.142.4.69 2010/12/21 03:00:08 Exp $
+ * $Id: wl_iw.c,v 1.51.4.9.2.6.4.142.4.70 2011/01/14 22:25:05 Exp $
  */
 
 #include <wlioctl.h>
@@ -665,7 +665,6 @@ wl_iw_get_macaddr(
 }
 
 
-
 static int
 wl_iw_set_country(
 	struct net_device *dev,
@@ -679,8 +678,12 @@ wl_iw_set_country(
 	char *p = extra;
 	int country_offset;
 	int country_code_size;
+	wl_country_t cspec = {{0}, 0, {0}};
+	char smbuf[WLC_IOCTL_SMLEN];
 
+	cspec.rev = -1;
 	memset(country_code, 0, sizeof(country_code));
+	memset(smbuf, 0, sizeof(smbuf));
 
 	
 	country_offset = strcspn(extra, " ");
@@ -690,20 +693,27 @@ wl_iw_set_country(
 	if (country_offset != 0) {
 		strncpy(country_code, extra + country_offset +1,
 			MIN(country_code_size, sizeof(country_code)));
-#ifdef DISABLE_DFS_IN_US
-//		if (strnicmp(country_code, "US", strlen("US")) == 0)
-//			snprintf(country_code, 3, "Q2");
-#endif
-		if ((error = dev_wlc_ioctl(dev, WLC_SET_COUNTRY,
-			&country_code, sizeof(country_code))) >= 0) {
-			p += snprintf(p, MAX_WX_STRING, "OK");
-			WL_TRACE(("%s: set country %s OK\n", __FUNCTION__, country_code));
-			dhd_bus_country_set(dev, &country_code[0]);
-			goto exit;
+
+
+		memcpy(cspec.country_abbrev, country_code, WLC_CNTRY_BUF_SZ);
+		memcpy(cspec.ccode, country_code, WLC_CNTRY_BUF_SZ);
+
+		get_customized_country_code((char *)&cspec.country_abbrev, &cspec);
+
+		
+		if ((error = dev_iw_iovar_setbuf(dev, "country", &cspec, \
+				sizeof(cspec), smbuf, sizeof(smbuf))) >= 0) {
+				p += snprintf(p, MAX_WX_STRING, "OK");
+				WL_TRACE(("%s: set country for %s as %s rev %d is OK\n", \
+					__FUNCTION__, country_code, cspec.ccode, cspec.rev));
+				dhd_bus_country_set(dev, &cspec);
+				goto exit;
 		}
 	}
 
-	WL_ERROR(("%s: set country %s failed code %d\n", __FUNCTION__, country_code, error));
+	WL_ERROR(("%s: set country for %s as %s rev %d failed\n", \
+			__FUNCTION__, country_code, cspec.ccode, cspec.rev));
+
 	p += snprintf(p, MAX_WX_STRING, "FAIL");
 
 exit:
@@ -775,25 +785,32 @@ wl_iw_set_power_mode(
 bool btcoex_is_sco_active(struct net_device *dev)
 {
 	int ioc_res = 0;
-	bool res = false;
-	int temp = 0;
+        bool res = false;
+        int sco_id_cnt = 0;
+        int param27;
+        int i;
 
-	ioc_res = dev_wlc_intvar_get_reg(dev, "btc_params", 4, &temp);
+	for (i = 0; i < 12; i++) {
 
-	if (ioc_res == 0) {
-		WL_TRACE_COEX(("%s: read btc_params[4] = %x\n",
-			__FUNCTION__, temp));
+                ioc_res = dev_wlc_intvar_get_reg(dev, "btc_params", 27, &param27);
+		WL_ERROR(("%s, sample[%d], btc params: 27:%x\n", __FUNCTION__, i, param27));
 
-		if ((temp > 0xea0) && (temp < 0xed8)) {
-			WL_ERROR(("%s: BT SCO/eSCO is ACTIVE \n", __FUNCTION__));
-			res = true;
-		} else {
-			WL_ERROR(("%s: BT SCO/eSCO is NOT detected\n", __FUNCTION__));
+		if (ioc_res < 0) {
+			WL_ERROR(("%s ioc read btc params error\n", __FUNCTION__));
+		        break;
 		}
-	} else {
-		WL_ERROR(("%s ioc read btc params error\n", __FUNCTION__));
-	}
-	return res;
+		if ((param27 & 0x6) == 2) { /* count both sco & esco  */
+		           sco_id_cnt++;
+	        }
+		if (sco_id_cnt > 2) {
+                           WL_ERROR(("%s, sco/esco detected, pkt id_cnt:%d  samples:%d\n",
+			    __FUNCTION__, sco_id_cnt, (i+1)));
+			   res = true;
+		           break;
+                }
+		msleep(5);
+      }
+     return res;
 }
 
 #if defined(BT_DHCP_eSCO_FIX)
@@ -919,7 +936,7 @@ wl_iw_set_btcoex_dhcp(
 	static uint32 saved_reg68;
 	static bool saved_status = FALSE;
 
-	char buf_flag7_default[8] =   { 7, 00, 00, 00, 0x0, 0x00, 0x00, 0x00}; 
+	char buf_flag7_default[8] =   { 7, 00, 00, 00, 0x0, 0x00, 0x00, 0x00};
 
 	
 #ifdef  CUSTOMER_HW2
@@ -952,28 +969,28 @@ wl_iw_set_btcoex_dhcp(
 			
 				dev_wlc_ioctl(dev, WLC_SET_PM, &pm_local, sizeof(pm_local));
 #endif
-
-
+				
+				
 				if (btcoex_is_sco_active(dev)) {
-				
-				dev_wlc_bufvar_set(dev, "btc_params", \
-					(char *)&buf_reg66va_dhcp_on[0], \
+					
+					dev_wlc_bufvar_set(dev, "btc_params", \
+						(char *)&buf_reg66va_dhcp_on[0], \
 						 sizeof(buf_reg66va_dhcp_on));
-				
-				dev_wlc_bufvar_set(dev, "btc_params", \
-					(char *)&buf_reg41va_dhcp_on[0], \
+					
+					dev_wlc_bufvar_set(dev, "btc_params", \
+						(char *)&buf_reg41va_dhcp_on[0], \
 						 sizeof(buf_reg41va_dhcp_on));
-				
-				dev_wlc_bufvar_set(dev, "btc_params", \
-					(char *)&buf_reg68va_dhcp_on[0], \
+					
+					dev_wlc_bufvar_set(dev, "btc_params", \
+						(char *)&buf_reg68va_dhcp_on[0], \
 						 sizeof(buf_reg68va_dhcp_on));
 					saved_status = TRUE;
-				
-						g_bt->bt_state = BT_DHCP_START;
-						g_bt->timer_on = 1;
-						mod_timer(&g_bt->timer, g_bt->timer.expires);
-						WL_TRACE_COEX(("%s enable BT DHCP Timer\n", \
-							__FUNCTION__));
+
+					g_bt->bt_state = BT_DHCP_START;
+					g_bt->timer_on = 1;
+					mod_timer(&g_bt->timer, g_bt->timer.expires);
+					WL_TRACE_COEX(("%s enable BT DHCP Timer\n", \
+					__FUNCTION__));
 				}
 		}
 		else if (saved_status == TRUE) {
@@ -1832,7 +1849,7 @@ int init_ap_profile_from_string(char *param_str, struct ap_profile *ap_cfg)
 	get_parmeter_from_string(&str_ptr, "HIDDEN=",
 		PTYPE_INTDEC,  &ap_cfg->closednet, 5);
 
-
+	
 	get_parmeter_from_string(&str_ptr, "COUNTRY=",
 		PTYPE_STRING,  &ap_cfg->country_code, 3);
 
@@ -6522,30 +6539,22 @@ static int set_ap_cfg(struct net_device *dev, struct ap_profile *ap)
 
 
 	if (strlen(ap->country_code)) {
-		int error = 0;
-		if ((error = dev_wlc_ioctl(dev, WLC_SET_COUNTRY,
-			ap->country_code, sizeof(ap->country_code))) >= 0) {
-			WL_SOFTAP(("%s: set country %s OK\n",
-				__FUNCTION__, ap->country_code));
-			dhd_bus_country_set(dev, &ap->country_code[0]);
-		} else {
-			WL_ERROR(("%s: ERROR:%d setting country %s\n",
-				__FUNCTION__, error, ap->country_code));
-		}
+		WL_ERROR(("%s: Igonored: Country MUST be specified \
+				  COUNTRY command with \n",	__FUNCTION__));
 	} else {
 		WL_SOFTAP(("%s: Country code is not specified,"
 			" will use Radio's default\n",
 			__FUNCTION__));
+
 	}
-		
-		iolen = wl_bssiovar_mkbuf("closednet",
-			bsscfg_index,  &ap->closednet, sizeof(ap->closednet)+4,
-			buf, sizeof(buf), &mkvar_err);
-		ASSERT(iolen);
-		if ((res = dev_wlc_ioctl(dev, WLC_SET_VAR, buf, iolen)) < 0) {
-			WL_ERROR(("%s failed to set 'closednet'for apsta \n", __FUNCTION__));
-			goto fail;
-		}
+	iolen = wl_bssiovar_mkbuf("closednet",
+		bsscfg_index,  &ap->closednet, sizeof(ap->closednet)+4,
+		buf, sizeof(buf), &mkvar_err);
+	ASSERT(iolen);
+	if ((res = dev_wlc_ioctl(dev, WLC_SET_VAR, buf, iolen)) < 0) {
+		WL_ERROR(("%s failed to set 'closednet'for apsta \n", __FUNCTION__));
+		goto fail;
+	}
 
 	
 	if ((ap->channel == 0) && (get_softap_auto_channel(dev, ap) < 0)) {
@@ -6597,10 +6606,10 @@ static int set_ap_cfg(struct net_device *dev, struct ap_profile *ap)
 		res, __FUNCTION__));
 		goto fail;
 	}
-		
+
 	if (ap_cfg_running == FALSE) {
 		 init_completion(&ap_cfg_exited);
-
+		 
 		ap_cfg_pid = kernel_thread(thr_wait_for_2nd_eth_dev, dev, 0);
 	} else {
 		ap_cfg_pid = -1;
@@ -7167,8 +7176,8 @@ set_ap_mac_list(struct net_device *dev, void *buf)
 	int ioc_res = 0;
 	ap_macmode = mac_list_set->mode;  
 
-		
-		bzero(&ap_black_list, sizeof(struct mflist));
+	
+	bzero(&ap_black_list, sizeof(struct mflist));
 
 	if (mac_mode == MACLIST_MODE_DISABLED) {
 		
@@ -7211,9 +7220,9 @@ set_ap_mac_list(struct net_device *dev, void *buf)
 		
 		if (assoc_maclist->count)
 			for (i = 0; i < assoc_maclist->count; i++) {
-			int j;
+				int j;
 				bool assoc_mac_matched = false;
-
+				
 				WL_SOFTAP(("\n Cheking assoc STA: "));
 				print_buf(&assoc_maclist->ea[i], 6, 7);
 				WL_SOFTAP(("with the b/w list:"));
@@ -7221,12 +7230,12 @@ set_ap_mac_list(struct net_device *dev, void *buf)
 				for (j = 0; j < maclist->count; j++)
 					if (!bcmp(&assoc_maclist->ea[i], &maclist->ea[j],
 						ETHER_ADDR_LEN)) {
-
+						
 						assoc_mac_matched = true;
 						break;
 					}
 
-
+				
 				if (((mac_mode == MACLIST_MODE_ALLOW) && !assoc_mac_matched) ||
 					((mac_mode == MACLIST_MODE_DENY) && assoc_mac_matched)) {
 
@@ -7242,9 +7251,9 @@ set_ap_mac_list(struct net_device *dev, void *buf)
 								"ioctl ERROR:",
 								__FUNCTION__, __LINE__);
 
-						} else {
+				} else {
 					WL_SOFTAP((" no b/w list hits, let it be\n"));
-			} 
+				}
 		} else {
 			WL_SOFTAP(("No ASSOC CLIENTS\n"));
 		} 

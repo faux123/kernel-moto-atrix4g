@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_common.c,v 1.5.6.8.2.6.6.69.4.20 2010/12/20 23:37:28 Exp $
+ * $Id: dhd_common.c,v 1.5.6.8.2.6.6.69.4.21 2011/01/14 22:40:46 Exp $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -1252,14 +1252,14 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 #endif  /* GET_CUSTOM_MAC_ENABLE */
 
 	/* Set Country code */
-	if (dhd->country_code[0] != 0) {
-		if (dhdcdc_set_ioctl(dhd, 0, WLC_SET_COUNTRY,
-			dhd->country_code, sizeof(dhd->country_code)) < 0) {
+	if (dhd->dhd_cspec.ccode[0] != 0) {
+		bcm_mkiovar("country", (char *)&dhd->dhd_cspec, \
+			sizeof(wl_country_t), iovbuf, sizeof(iovbuf));
+		if ((ret = dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf))) < 0)
 			DHD_ERROR(("%s: country code setting failed\n", __FUNCTION__));
-		}
 	}
 
-	/* query for 'ver' to get version info from firmware */
+	/* Set Listen Interval */
 	bcm_mkiovar("assoc_listen", (char *)&listen_interval, 4, iovbuf, sizeof(iovbuf));
 	if ((ret = dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf))) < 0)
 		DHD_ERROR(("%s assoc_listen failed %d\n", __FUNCTION__, ret));

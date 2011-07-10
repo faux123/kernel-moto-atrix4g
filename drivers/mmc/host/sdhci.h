@@ -308,6 +308,9 @@ struct sdhci_host {
 	unsigned int		data_width;	/* Width of data transfers */
 
 	struct regulator	*regulator;
+
+	unsigned int		max_power_class;
+
 	unsigned long		private[0] ____cacheline_aligned;
 };
 

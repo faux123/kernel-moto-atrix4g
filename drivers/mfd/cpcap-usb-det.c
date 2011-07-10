@@ -200,7 +200,7 @@ static const char *accy_devices[] = {
 
 
 /* Expects values from 0 to 2: 0=no_log, 1=basic_log, 2=max_log */
-static int cpcap_usb_det_debug = 1;
+static int cpcap_usb_det_debug = 0;
 module_param(cpcap_usb_det_debug, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
 

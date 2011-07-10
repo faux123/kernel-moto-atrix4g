@@ -134,6 +134,7 @@ char *bp_status_string[8] = {
 struct mdm_ctrl_info {
 	struct gpioinfo gpios[GPIO_COUNT];
 	struct clientinfo clients[MAX_CLIENTS];
+	bool bp_status_trigger_enabled;
 	int bp_status_triggered_mask;
 	struct mutex lock;
 	struct workqueue_struct *working_queue;
@@ -458,9 +459,10 @@ static int bp_shutdown(int force)
 	/* Disable hardware interrupts for status changes. */
 	set_bp_status_irq(0);
 
-	/* Disable client interrupts for BP_RESOUT so that the panic daemon
-	 * doesn't think the BP has gone down unexpectedly. */
+	/* Disable client interrupts for BP_RESOUT and BP_STATUS so that the
+	 * panic daemon doesn't think the BP has gone down unexpectedly. */
 	mdm_ctrl.gpios[BP_RESOUT].irq_enabled = 0;
+	mdm_ctrl.bp_status_trigger_enabled = false;
 
 	/* If the BP is not up, it's not going to respond to polite requests */
 	if (!BP_UP(get_bp_status()))
@@ -526,7 +528,8 @@ force_shutdown:
 			pr_err("%s: modem failed to power down\n", __func__);
 	}
 
-	/* Re-enable client interrupts for BP_RESOUT. */
+	/* Re-enable client interrupts for BP_RESOUT and BP_STATUS. */
+	mdm_ctrl.bp_status_trigger_enabled = true;
         mdm_ctrl_set_gpio_irq(BP_RESOUT, 1);
 
 	/* Re-enable hardware interrupts for status changes. */
@@ -638,7 +641,8 @@ static void bp_irq(struct work_struct *work)
 					&mdm_ctrl.clients[i].wq);
 				wake_client = true;
 			}
-			if (bp_status != bp_status_prev &&
+			if (mdm_ctrl.bp_status_trigger_enabled &&
+			    bp_status != bp_status_prev &&
 			    bp_status == mdm_ctrl.clients[i].bp_status) {
 				mdm_ctrl.bp_status_triggered_mask |= mask;
 				wake_client = true;
@@ -1134,6 +1138,8 @@ static int __devinit mdm_ctrl_probe(struct platform_device *pdev)
 		enable_irq_wake(mdm_ctrl.gpios[i].irq);
 		mdm_ctrl.gpios[i].irq_enabled = 1;
 	}
+
+	mdm_ctrl.bp_status_trigger_enabled = true;
 
 	INIT_WORK(&mdm_ctrl.restart_work, bp_restart_work);
 

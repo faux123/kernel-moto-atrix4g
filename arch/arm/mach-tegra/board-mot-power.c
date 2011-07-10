@@ -135,7 +135,7 @@ void mot_system_power_off(void)
 #define CPCAP_REG_WLAN2_INDEX 19  /* The index of the VWLAN2 entry, which differs per hardware revision. */
 
 struct cpcap_spi_init_data tegra_cpcap_spi_init[] = {
-	{CPCAP_REG_S1C1,      0x4820},   /* Set SW1 to AMS/AMS 1.0v. */
+	{CPCAP_REG_S1C1,      0x4822},   /* Set SW1 to AMS/AMS 1.025v. */
 	{CPCAP_REG_S2C1,      0x4830},   /* Set SW2 to AMS/AMS 1.2v. */
 	{CPCAP_REG_S3C,       0x043d},   /* Set SW3 to Pulse Skip/PFM. */
 	{CPCAP_REG_S4C1,      0x4930},   /* Set SW4 to PFM/PFM 1.2v. */
@@ -144,7 +144,7 @@ struct cpcap_spi_init_data tegra_cpcap_spi_init[] = {
 									    this can be On/Off. */
 	{CPCAP_REG_S6C,       0x0000},   /* Set SW6 to Off/Off. */
 	{CPCAP_REG_VCAMC,     0x0030},   /* Set VCAM to Off/Off. */
-	{CPCAP_REG_VCSIC,     0x0017},   /* Set VCSI to AMS/Off 1.8v. */
+	{CPCAP_REG_VCSIC,     0x0007},   /* Set VCSI to AMS/Off 1.2v. */
 	{CPCAP_REG_VDACC,     0x0000},
 	{CPCAP_REG_VDIGC,     0x0000},
 	{CPCAP_REG_VFUSEC,    0x0000},

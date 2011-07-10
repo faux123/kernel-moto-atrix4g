@@ -1,4 +1,5 @@
 nvhost-objs = \
+	debug.o \
 	nvhost_acm.o \
 	nvhost_syncpt.o \
 	nvhost_cdma.o \

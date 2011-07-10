@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_iw.h,v 1.5.34.1.6.36.4.15 2010/11/17 03:13:51 Exp $
+ * $Id: wl_iw.h,v 1.5.34.1.6.36.4.16 2011/01/14 22:25:05 Exp $
  */
 
 
@@ -60,6 +60,12 @@
 typedef struct wl_iw_extra_params {
 	int 	target_channel; 
 } wl_iw_extra_params_t;
+
+struct cntry_locales_custom {
+	char iso_abbrev[WLC_CNTRY_BUF_SZ];	
+	char custom_locale[WLC_CNTRY_BUF_SZ];	
+	int32 custom_locale_rev;		
+};
 
 #define SOFTAP 1
 
@@ -197,6 +203,7 @@ extern int net_os_set_suspend_disable(struct net_device *dev, int val);
 extern int net_os_set_suspend(struct net_device *dev, int val);
 extern int net_os_set_dtim_skip(struct net_device *dev, int val);
 extern int net_os_set_packet_filter(struct net_device *dev, int val);
+extern void get_customized_country_code(char *country_iso_code, wl_country_t *cspec);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
 #define IWE_STREAM_ADD_EVENT(info, stream, ends, iwe, extra) \
@@ -223,7 +230,7 @@ extern int dhd_dev_pno_set(struct net_device *dev, wlc_ssid_t* ssids_local, \
 				 int nssid, ushort  scan_fr);
 extern int dhd_dev_pno_enable(struct net_device *dev,  int pfn_enabled);
 extern int dhd_dev_get_pno_status(struct net_device *dev);
-void	dhd_bus_country_set(struct net_device *dev, char *country_code);
+void	dhd_bus_country_set(struct net_device *dev, wl_country_t *cspec);
 extern int dhd_get_dtim_skip(dhd_pub_t *dhd);
 
 #define PNO_TLV_PREFIX			'S'

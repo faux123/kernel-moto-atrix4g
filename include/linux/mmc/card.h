@@ -44,6 +44,8 @@ struct mmc_csd {
 struct mmc_ext_csd {
 	u8			rev;
 	u8			rel_wr_sec_c;
+	u8			power_class[4];
+#define MMC_EXT_CSD_PWR_CL(b)	(b - EXT_CSD_PWR_CL_52_195)
 	unsigned int		sa_timeout;		/* Units: 100ns */
 	unsigned int		hs_max_dtr;
 	unsigned int		sectors;

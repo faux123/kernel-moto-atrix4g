@@ -179,8 +179,18 @@ static void tegra_ehci_restart (struct usb_hcd *hcd, int state)
 
 	/* Enable the root Port Power */
 	if (HCS_PPC (ehci->hcs_params)) {
+		int err = 0;
 		temp = ehci_readl(ehci, &ehci->regs->port_status[0]);
 		ehci_writel(ehci, temp | PORT_POWER, &ehci->regs->port_status[0]);
+		/* Flush those writes */
+		ehci_readl(ehci, &ehci->regs->command);
+		/* wait 20 msec after port power enable, before we enable the interupts*/
+		msleep(20);
+		err = handshake (ehci, &ehci->regs->port_status[0],
+			PORT_CONNECT, PORT_CONNECT, 20 * 1000);
+			if (err) {
+				 printk("port connect detection error: err=%d \n", err);
+			}
 	}
 
 	down_write(&ehci_cf_port_reset_rwsem);

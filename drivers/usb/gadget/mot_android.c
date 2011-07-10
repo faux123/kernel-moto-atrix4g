@@ -532,7 +532,8 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 		device_desc.bcdDevice = __constant_cpu_to_le16(0x9999);
 	}
 
-	usb_gadget_set_selfpowered(gadget);
+	/* Do not Set Self Powered as WHQL tests are failing on Win7 */
+	/*usb_gadget_set_selfpowered(gadget); */
 	dev->cdev = cdev;
 	product_id = get_product_id(dev);
 	device_desc.idProduct = __constant_cpu_to_le16(product_id);

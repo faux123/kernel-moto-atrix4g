@@ -138,13 +138,19 @@ static struct kobj_attribute sec_nvfuse_FuseVoltage_attribute =
 #ifdef SYSFS_RAM_INFO
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
+#include <linux/apanic.h>
 #include "nvrm_hardware_access.h"
 #include "nvrm_module.h"
 #include <ap20/aremc.h>
 
 #define SEC_UNKNOWN         "unknown"
-#define SEC_RAM_MAN_ELPIDA  "Elpida"
-#define SEC_RAM_MAN_HYNIX   "Hynix"
+#define SEC_RAM_MAN_ELPIDA  "Elpida-"
+#define SEC_RAM_MAN_HYNIX   "Hynix-"
+#define SEC_RAM_MAN_MICRON  "Micron"
+#define SEC_RAM_ELPIDA_40NM "40nm"
+#define SEC_RAM_ELPIDA_50NM "50nm"
+#define SEC_RAM_HYNIX_44NM  "44nm"
+#define SEC_RAM_HYNIX_54NM  "54nm"
 #define SEC_RAM_TYPE_DDR1   "DDR1"
 #define SEC_RAM_TYPE_DDR2   "DDR2"
 #define SEC_RAM_TYPE_LPDDR2 "LPDDR2"
@@ -161,12 +167,15 @@ static const char *sec_ram_type         = SEC_UNKNOWN;
 static const char *sec_ram_manufacturer = SEC_UNKNOWN;
 static const char *sec_ram_io           = SEC_UNKNOWN;
 static const char *sec_ram_stype        = SEC_UNKNOWN;
+static const char *sec_ram_lithography  = NULL;
 static u32 sec_ram_size   =  0;
 static u32 sec_ram_serial =  0;
 static int sec_ram_manid  = -1;
 
 #define SEC_NV_REGR(reg)         NV_REGR(pDev, NvRmPrivModuleID_ExternalMemoryController, 0, reg)
 #define SEC_NV_REGW(reg,val)     NV_REGW(pDev, NvRmPrivModuleID_ExternalMemoryController, 0, reg, val)
+
+static int ram_info_apanic_annotate(void);
 
 static void smart_hw_write(NvRmDeviceHandle pDev, u32 value)
 {
@@ -217,11 +226,20 @@ static int get_ram_info(void)
         reg = smart_hw_read (pDev);
         SEC_DBG ("%s: MR5 read %x\n",__file__, reg);
 
-        sec_ram_manid = (reg&0xFF);
+        sec_ram_manid = (reg & 0xFF);
 
-        switch (reg&0xFF) {
-         case 3 : sec_ram_manufacturer = SEC_RAM_MAN_ELPIDA; break;
-         case 5 : sec_ram_manufacturer = SEC_RAM_MAN_HYNIX; break;
+        switch (sec_ram_manid) {
+         case 3  : sec_ram_manufacturer = SEC_RAM_MAN_ELPIDA;
+                   // read lithography for Elpida
+                   smart_hw_write (pDev, (1<<30)|(6<<16));
+                   reg = smart_hw_read (pDev);
+                   SEC_DBG ("%s: MR6 read %x\n",__file__, reg);
+                   if ((reg & 0xFF))    // 1 for 40nm
+                            sec_ram_lithography = SEC_RAM_ELPIDA_40NM;
+                   else     sec_ram_lithography = SEC_RAM_ELPIDA_50NM;
+                        break;
+         case 6   : sec_ram_manufacturer = SEC_RAM_MAN_HYNIX; break;
+         case 255 : sec_ram_manufacturer = SEC_RAM_MAN_MICRON; break;
          default: sec_ram_manufacturer = SEC_UNKNOWN;
         }
 
@@ -277,6 +295,9 @@ static int get_ram_info(void)
         } else
             SEC_ERR ("Ambiguous RAM configuration!!!");
 
+        if (sec_ram_manid == 6)
+            sec_ram_lithography = (sec_ram_size >= 8) ? SEC_RAM_HYNIX_54NM : SEC_RAM_HYNIX_44NM;
+
         // set RAM size
         SEC_DBG ("%s: RAM chunks %d, size 0x%x\n",__file__, sec_ram_size, sec_ram_size*SEC_RAM_128MB);
 	}
@@ -297,8 +318,9 @@ static ssize_t sysfsram_serial_show(struct kobject *kobj, struct kobj_attribute 
 }
 
 static ssize_t sysfsram_info_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) {
-    return ((ssize_t)sprintf (buf, "%s:%s:%s:%s:%u%s\n",
+    return ((ssize_t)sprintf (buf, "%s%s:%s:%s:%s:%u%s\n",
             sec_ram_manufacturer,
+            sec_ram_lithography ? sec_ram_lithography : "",
             sec_ram_type,
             sec_ram_io,
             sec_ram_stype,
@@ -314,6 +336,18 @@ static const struct kobj_attribute sec_ram_size_attribute =
     __ATTR(size, 0444, sysfsram_size_show, NULL);
 static const struct kobj_attribute sec_ram_serial_attribute =
     __ATTR(serial, 0444, sysfsram_serial_show, NULL);
+
+static int ram_info_apanic_annotate(void)
+{
+#ifdef CONFIG_APANIC_MMC
+	char buf[80] = "RAM: ";
+
+	sysfsram_info_show(NULL, NULL, buf + 5);
+	return apanic_annotate(buf);
+#else
+	return 0;
+#endif
+}
 #endif
 
 #ifdef NV_DDK_FUSE_API_AVAIL
@@ -544,6 +578,7 @@ static int __devinit sec_probe(struct platform_device *pdev)
     sysfs_create_file (sec_ram_kobj, &sec_ram_size_attribute.attr);
     sysfs_create_file (sec_ram_kobj, &sec_ram_type_attribute.attr);
     sysfs_create_file (sec_ram_kobj, &sec_ram_serial_attribute.attr);
+    ram_info_apanic_annotate();
 #endif
 	// init regulator
 	result = SecFuseInit();

@@ -277,9 +277,15 @@ static int mmc_read_ext_csd(struct mmc_card *card)
 					1 << ext_csd[EXT_CSD_S_A_TIMEOUT];
 	}
 
-	if (card->ext_csd.rev >= 5)
-		card->ext_csd.rel_wr_sec_c = ext_csd[EXT_CSD_REL_WR_SEC_C];
+	if (card->ext_csd.rev >= 5) {
+		int i;
+		for (i = EXT_CSD_PWR_CL_52_195;
+		     i <= EXT_CSD_PWR_CL_26_360; i++)
+			card->ext_csd.power_class[MMC_EXT_CSD_PWR_CL(i)] =
+			                                           ext_csd[i];
 
+		card->ext_csd.rel_wr_sec_c = ext_csd[EXT_CSD_REL_WR_SEC_C];
+	}
 out:
 	kfree(ext_csd);
 
@@ -496,6 +502,15 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 			bus_width = MMC_BUS_WIDTH_4;
 		}
 
+		err = mmc_set_power_class(host, max_dtr, bus_width);
+
+		if (err && err != -EBADMSG)
+			goto free_card;
+
+		/*
+		 * Some cards don't honor power class but will support wide
+		 * bus anyway.
+		 */
 		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
 				 EXT_CSD_BUS_WIDTH, ext_csd_bit);
 

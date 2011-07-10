@@ -2008,6 +2008,8 @@ int sdhci_add_host(struct sdhci_host *host)
 	 */
 	mmc->max_blk_count = (host->quirks & SDHCI_QUIRK_NO_MULTIBLOCK) ? 1 : 65535;
 
+	mmc->max_power_class = host->max_power_class;
+
 	/*
 	 * Init tasklets.
 	 */
