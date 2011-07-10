@@ -69,6 +69,8 @@ EXTRA_CFLAGS = \
 	-DMMC_SDIO_ABORT \
 	-DGET_CUSTOM_MAC_ENABLE \
 	-DCONFIG_FIRST_SCAN \
+	-DCSCAN \
+	-DCUSTOMER_HW \
 
 #	\
 	-fshort-wchar \
@@ -77,6 +79,9 @@ EXTRA_CFLAGS = \
 	-Iinclude/asm/mach-default \
 	-DBCMEMBEDIMAGE="<dongle/rte/wl/builds/4325b0/sdio-g-cdc-reclaim-idsup-wme/rtecdc.h>" \
 
+ifeq ($(CONFIG_WIRELESS_EXT),y)
+EXTRA_CFLAGS += -DCONFIG_WIRELESS_EXT
+endif
 ifeq ($(CONFIG_BRCM_WL_PKTFILTER),y)
 EXTRA_CFLAGS += -DPKT_FILTER_SUPPORT
 endif
@@ -85,6 +90,9 @@ EXTRA_CFLAGS += -DARP_OFFLOAD_SUPPORT
 endif
 ifeq ($(CONFIG_BRCM_USE_SOFTAP),y)
 EXTRA_CFLAGS += -DSOFTAP
+endif
+ifeq ($(CONFIG_BCM4329_DEBUG),y)
+EXTRA_CFLAGS += -DDHD_DEBUG -DSDTEST -DSRCBASE="\"$(SRCROOT)\""
 endif
 
 
