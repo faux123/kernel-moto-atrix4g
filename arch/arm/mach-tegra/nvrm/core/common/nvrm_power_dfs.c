@@ -52,7 +52,7 @@
 #include "ap20/ap20rm_power_dfs.h"
 #include "ap20/ap20rm_clocks.h"
 
-#define USE_FAKE_SHMOO
+//#define USE_FAKE_SHMOO
 #ifdef USE_FAKE_SHMOO
 #include <linux/kernel.h>
 

@@ -32,7 +32,7 @@
 #define dprintk(msg...) cpufreq_debug_printk(CPUFREQ_DEBUG_CORE, \
 						"cpufreq-core", msg)
 
-#define USE_FAKE_SHMOO
+//#define USE_FAKE_SHMOO
 #ifdef USE_FAKE_SHMOO
 #include "../nvrm/core/common/nvrm_clocks_limits_private.h"
 #include "../nvrm/core/common/nvrm_power_dfs.h"
