@@ -27,8 +27,6 @@
 #include "board-mot.h"
 #include "gpio-names.h"
 
-#define CONFIG_WIFI_CONTROL_EXPORT
-
 #define WLAN_RESET_GPIO 	TEGRA_GPIO_PU2
 #define WLAN_REG_ON_GPIO 	TEGRA_GPIO_PU3
 #define WLAN_IRQ_GPIO 		TEGRA_GPIO_PU5
@@ -43,14 +41,6 @@
 #define WLAN_SECTION_SIZE_3     (PREALLOC_WLAN_NUMBER_OF_BUFFERS * 1024)
 
 #define WLAN_SKB_BUF_NUM        16
-
-#ifdef CONFIG_WIFI_CONTROL_EXPORT
-typedef struct chip_ctrls_nvodm {
-	int ready;
-} chip_ctrl;
-
-static chip_ctrl wlan_ctrl = {0};
-#endif
 
 static struct sk_buff *wlan_static_skb[WLAN_SKB_BUF_NUM];
 char mot_wlan_mac[6] = {0x00, 0x90, 0xC3, 0x00, 0x00, 0x00};
@@ -206,11 +196,6 @@ static struct resource mot_wifi_resources[] = {
 		pr_err("%s: Err %d gpio_direction irq\n", __func__, ret);
 		return -1;
 	}
-
-#ifdef CONFIG_WIFI_CONTROL_EXPORT
-	wlan_ctrl.ready = 1;
-#endif
-
 	return 0;
  }
 
