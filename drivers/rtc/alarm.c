@@ -85,10 +85,15 @@ unsigned int alarm_wakeup_timer_nseconds;
 static void update_timer_locked(struct alarm_queue *base, bool head_removed)
 {
 	struct alarm *alarm;
+
+#ifdef CONFIG_SUPPORT_ALARM_POWERON
 	bool is_wakeup = base == &alarms[ANDROID_ALARM_RTC_WAKEUP] ||
 			base == &alarms[ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP] ||
 			base == &alarms[ANDROID_ALARM_POWEROFF_WAKEUP];
-
+#else
+	bool is_wakeup = base == &alarms[ANDROID_ALARM_RTC_WAKEUP] ||
+			base == &alarms[ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP];
+#endif
 	if (base->stopped) {
 		pr_alarm(FLOW, "changed alarm while setting the wall time\n");
 		return;
@@ -485,7 +490,9 @@ static int alarm_suspend(struct platform_device *pdev, pm_message_t state)
 	hrtimer_cancel(&alarms[ANDROID_ALARM_RTC_WAKEUP].timer);
 	hrtimer_cancel(&alarms[
 			ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP_MASK].timer);
+#ifdef CONFIG_SUPPORT_ALARM_POWERON
 	hrtimer_cancel(&alarms[ANDROID_ALARM_POWEROFF_WAKEUP].timer);
+#endif
 
 	tmp_queue = &alarms[ANDROID_ALARM_RTC_WAKEUP];
 	if (tmp_queue->first)
@@ -581,7 +588,9 @@ static int alarm_resume(struct platform_device *pdev)
 	update_timer_locked(&alarms[ANDROID_ALARM_RTC_WAKEUP], false);
 	update_timer_locked(&alarms[ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP],
 									false);
+#ifdef	CONFIG_SUPPORT_ALARM_POWERON
 	update_timer_locked(&alarms[ANDROID_ALARM_POWEROFF_WAKEUP], false);							
+#endif
 	spin_unlock_irqrestore(&alarm_slock, flags);
 
 	return 0;

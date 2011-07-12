@@ -99,8 +99,10 @@ static struct notifier_block extra_panic_blk;
 extern struct tegra_nand_platform tegra_nand_plat;
 extern int tegra_sdhci_boot_device;
 extern struct platform_device tegra_sdhci_devices[];
+#ifdef CONFIG_TEGRA_ODM_AROWANA
 static int arowana_panic_notifier(struct notifier_block *this,
 		unsigned long event, void *ptr);
+#endif
 
 int apanic_mmc_init(void)
 {
@@ -179,6 +181,8 @@ void mot_panic_notifier_init(void)
 	return;
 }
 #endif
+
+#ifdef CONFIG_TEGRA_ODM_AROWANA
 static int arowana_panic_notifier(struct notifier_block *this,
 		unsigned long event, void *ptr)
 {
@@ -191,6 +195,7 @@ static int arowana_panic_notifier(struct notifier_block *this,
 	gpio_direction_output(TEGRA_GPIO_PD0, 1);
 	return 0;
 }
+#endif
 void mot_set_hsj_mux(short hsj_mux_gpio)
 {
 	/* set pin M 2 to 1 to route audio onto headset or 0 to route console uart */
