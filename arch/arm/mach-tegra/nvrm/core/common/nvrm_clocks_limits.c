@@ -81,15 +81,16 @@ NvU32 FakeShmooVmaxIndex = 6; // Max voltage index in the voltage tab (size-1)
 
 #ifndef CONFIG_STOCK_VOLTAGE
 
-#define MAX_OVERCLOCK (1200000)
+#define MAX_OVERCLOCK (1100000)
 
 NvU32 FakeShmooVoltages[] = {
     770,
     800,
+    825,
     850,
+    900,
     950,
     1050,
-    1150,
 };
 
 NvRmScaledClkLimits FakepScaledCpuLimits = {
@@ -98,12 +99,13 @@ NvRmScaledClkLimits FakepScaledCpuLimits = {
     32, // FakepScaledCpuLimits.MinKHz
     // Clock table
     {
-	300000,
-    	500000,
+	216000,
+    	456000,
+    	608000,
     	750000,
-    	1000000,
+	912000,
+	1000000,
 	1100000,
-	1200000,
     }
 };
 
@@ -115,6 +117,7 @@ NvU32 FakeShmooVoltages[] = {
     800,
     850,
     900,
+    950,
     1000,
     1100,
 };
@@ -125,11 +128,12 @@ NvRmScaledClkLimits FakepScaledCpuLimits = {
     32, // FakepScaledCpuLimits.MinKHz
     // Clock table
     {
-	300000,
-    	500000,
+	216000,
+    	456000,
+    	608000,
     	750000,
-    	900000,
-    	1000000,
+    	912000,
+	1000000,
 	1100000,
     }
 };
@@ -325,6 +329,7 @@ NvRmPrivClockLimitsInit(NvRmDeviceHandle hRmDevice)
 
     // Set upper clock boundaries for devices on CPU bus (CPU, Mselect,
     // CMC) with combined Absolute/Scaled limits
+
 #ifdef USE_FAKE_SHMOO
 	CpuMaxKHz = MAX_OVERCLOCK;
 #else
