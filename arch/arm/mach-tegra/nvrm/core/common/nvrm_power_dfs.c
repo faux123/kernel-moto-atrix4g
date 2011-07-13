@@ -840,6 +840,9 @@ static void DfsParametersInit(NvRmDfs* pDfs)
 #endif // CONFIG_STOCK_VOLTAGE
 #endif // FAKE_SHMOO
 
+    // test OC faux123
+    pDfs->HighCornerKHz.Domains[NvRmDfsClockId_Cpu] = 1200000;
+
     pDfs->CpuCornersShadow.MinKHz =
         pDfs->LowCornerKHz.Domains[NvRmDfsClockId_Cpu];
     pDfs->CpuCornersShadow.MaxKHz =

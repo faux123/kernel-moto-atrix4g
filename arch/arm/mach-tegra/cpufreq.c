@@ -64,13 +64,13 @@ extern atomic_t hotplug_policy;
    frequencies must be ascending*/
 static struct cpufreq_frequency_table freq_table_1000[] = {
 	{ 0, 216000 },
-	{ 1, 312000 },
-	{ 2, 456000 },
-	{ 3, 608000 },
-	{ 4, 750000 },
-	{ 5, 912000 },
-	{ 6, 1000000 },
-	{ 7, 1100000 },
+	{ 1, 456000 },
+	{ 2, 608000 },
+	{ 3, 750000 },
+	{ 4, 912000 },
+	{ 5, 1000000 },
+	{ 6, 1100000 },
+	{ 7, 1200000 },
 	{ 8, CPUFREQ_TABLE_END },
 };
 
