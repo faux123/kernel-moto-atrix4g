@@ -52,8 +52,7 @@
 #include "ap20/ap20rm_power_dfs.h"
 #include "ap20/ap20rm_clocks.h"
 
-//#define USE_FAKE_SHMOO
-#ifdef USE_FAKE_SHMOO
+#ifdef CONFIG_FAKE_SHMOO
 #include <linux/kernel.h>
 
 /* 
@@ -64,7 +63,7 @@ extern NvRmCpuShmoo fake_CpuShmoo; // Pointer to fake CpuShmoo
 extern int *FakeShmoo_UV_mV_Ptr; // Stored voltage table from cpufreq sysfs
 NvRmDfs *fakeShmoo_Dfs; // Used to get temp from cpufreq
 
-#endif // USE_FAKE_SHMOO
+#endif // CONFIG_FAKE_SHMOO
 
 /*****************************************************************************/
 
@@ -831,7 +830,8 @@ static void DfsParametersInit(NvRmDfs* pDfs)
         pDfs->HighCornerKHz.Domains[i] = pDfs->DfsParameters[i].MaxKHz;
     }
 
-#ifdef USE_FAKE_SHMOO
+#ifdef CONFIG_FAKE_SHMOO
+	// Set maximum scaling frequency to 1100mhz at boot
 #ifndef CONFIG_STOCK_VOLTAGE
 	// Set maximum scaling frequency to 1100mhz at boot
 	pDfs->HighCornerKHz.Domains[NvRmDfsClockId_Cpu] = 1100000;
@@ -1813,7 +1813,7 @@ NvError NvRmPrivDfsInit(NvRmDeviceHandle hRmDeviceHandle)
     NvRmDfsFrequencies DfsKHz;
     NvRmDfs* pDfs = &s_Dfs;
 
-#ifdef USE_FAKE_SHMOO
+#ifdef CONFIG_FAKE_SHMOO
     fakeShmoo_Dfs = &s_Dfs; // Crappy way to get temp ?!
 #endif
 
@@ -2199,7 +2199,7 @@ DvsChangeCpuVoltage(
     NvRmDvs* pDvs,
     NvRmMilliVolts TargetMv)
 {
-#ifdef USE_FAKE_SHMOO
+#ifdef CONFIG_FAKE_SHMOO
 	// Voltage hack
 	int i = 0;
 	if( FakeShmoo_UV_mV_Ptr != NULL )
@@ -2213,7 +2213,7 @@ DvsChangeCpuVoltage(
 			}
 		}
 	}
-#endif // USE_FAKE_SHMOO
+#endif // CONFIG_FAKE_SHMOO
     NV_ASSERT(TargetMv >= pDvs->MinCpuMv);
     NV_ASSERT(TargetMv <= pDvs->NominalCpuMv);
 
@@ -2221,7 +2221,7 @@ DvsChangeCpuVoltage(
     {
         NvRmPmuSetVoltage(hRm, pDvs->CpuRailAddress, TargetMv, NULL);
         pDvs->CurrentCpuMv = TargetMv;
-#ifdef USE_FAKE_SHMOO
+#ifdef CONFIG_FAKE_SHMOO
 	//printk( "*** fakeShmoo **** -> CurrentCpuMv : %i\n", TargetMv );
 #endif
     }

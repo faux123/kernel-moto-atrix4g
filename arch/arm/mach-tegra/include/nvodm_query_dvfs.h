@@ -272,7 +272,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix512M44nmEmcConfigTable[] 
     },
     {
                   0x20,   /* Rev 2.0 */
-                300000,   /* SDRAM frquency */
+CONFIG_DDR2_SDRAM_FREQ,   /* SDRAM frquency */
                   1200,   /* EMC core voltage */
                     46,   /* Number of EMC parameters below */
         {
@@ -600,7 +600,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M50nmEmcConfigTable[]
     },
     {
                   0x20,   /* Rev 2.0 */
-                300000,   /* SDRAM frquency */
+CONFIG_DDR2_SDRAM_FREQ,   /* SDRAM frquency */
                   1200,   /* EMC core voltage */
                     46,   /* Number of EMC parameters below */
         {
@@ -928,7 +928,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M40nmEmcConfigTable[]
     },
     {
                   0x20,   /* Rev 2.0 */
-                300000,   /* SDRAM frquency */
+CONFIG_DDR2_SDRAM_FREQ,   /* SDRAM frquency */
                   1200,   /* EMC core voltage */
                     46,   /* Number of EMC parameters below */
         {
@@ -1256,7 +1256,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix1G54nmEmcConfigTable[] =
     },
     {
                   0x20,   /* Rev 2.0 */
-                300000,   /* SDRAM frquency */
+CONFIG_DDR2_SDRAM_FREQ,   /* SDRAM frquency */
                   1200,   /* EMC core voltage */
                     46,   /* Number of EMC parameters below */
         {
@@ -1584,7 +1584,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G50nmEmcConfigTable[] =
     },
     {
                   0x20,   /* Rev 2.0 */
-                300000,   /* SDRAM frquency */
+CONFIG_DDR2_SDRAM_FREQ,   /* SDRAM frquency */
                   1200,   /* EMC core voltage */
                     46,   /* Number of EMC parameters below */
         {
@@ -1912,7 +1912,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G40nmEmcConfigTable[] =
     },
     {
                   0x20,   /* Rev 2.0 */
-                300000,   /* SDRAM frequency */
+CONFIG_DDR2_SDRAM_FREQ,   /* SDRAM frequency */
                   1200,   /* EMC core voltage */
                     46,   /* Number of EMC parameters below */
         {
@@ -2240,7 +2240,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmMicron1GEmcConfigTable[] =
     },
     {
                   0x01,   /* Rev ?.? */
-                300000,   /* SDRAM frquency */
+CONFIG_DDR2_SDRAM_FREQ,   /* SDRAM frquency */
                   1200,   /* EMC core voltage */
                     46,   /* Number of EMC parameters below */
         {

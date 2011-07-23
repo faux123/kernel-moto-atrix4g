@@ -70,8 +70,7 @@ static struct cpufreq_frequency_table freq_table_1000[] = {
 	{ 4, 912000 },
 	{ 5, 1000000 },
 	{ 6, 1100000 },
-	{ 7, 1200000 },
-	{ 8, CPUFREQ_TABLE_END },
+	{ 7, CPUFREQ_TABLE_END },
 };
 
 static struct cpufreq_frequency_table freq_table_750[] = {
