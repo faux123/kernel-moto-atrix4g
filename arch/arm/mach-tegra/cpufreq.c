@@ -332,12 +332,29 @@ static int tegra_cpufreq_driver_init(struct cpufreq_policy *pol)
 		 __func__, usage.MinKHz, usage.MaxKHz, usage.CurrentKHz);
 
 	pol->min = usage.LowCornerKHz;
+#ifndef CONFIG_FAKE_SHMOO
 	pol->max = usage.HighCornerKHz;
-	pol->cur = usage.CurrentKHz;
+#else
+#ifdef CONFIG_STOCK_VOLTAGE
+        pol->max = 1100000;
+#else
+        pol->max = 1100000;
+#endif //CONFIG_STOCK_VOLTAGE
+#endif //CONFIG_FAKE_SHMOO
+
+//	pol->cur = usage.CurrentKHz;
+	pol->cur = 1000000;
 
 	pol->cpuinfo.min_freq = usage.MinKHz;
+#ifndef CONFIG_FAKE_SHMOO
 	pol->cpuinfo.max_freq = usage.MaxKHz;
-	pol->cpuinfo.transition_latency = 0;
+#else
+#ifdef CONFIG_STOCK_VOLTAGE
+        pol->cpuinfo.max_freq = 1100000;
+#else
+        pol->cpuinfo.max_freq = 1100000;
+#endif //CONFIG_STOCK_VOLTAGE
+#endif //CONFIG_FAKE_SHMOO	pol->cpuinfo.transition_latency = 0;
 
 	if (usage.MaxKHz >= 1000000)
 		freq_table = freq_table_1000;
