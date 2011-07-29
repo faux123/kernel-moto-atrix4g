@@ -58,7 +58,7 @@
 #define BOARD_REV_ALL ((NvU8)0xFF)
 
 #define NVODM_ENABLE_EMC_DVFS (1)
-#define NUM_LPDDR2_PARTS 7
+#define NUM_LPDDR2_PARTS 9
 
 // Function to auto-detect boards with external CPU power supply
 NvBool NvOdmIsCpuExtSupply(void);
@@ -124,9 +124,13 @@ static struct {
   const unsigned int entries;
 } lpddr2_tbl[NUM_LPDDR2_PARTS] = {
   {0x06, 0, 0, 0x14, s_NvOdmHynix512M44nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmHynix512M44nmEmcConfigTable)},
+  {0x06, 0, 1, 0x14, s_NvOdmHynix512M44nmEmcConfigTable,
+	 NV_ARRAY_SIZE(s_NvOdmHynix512M44nmEmcConfigTable)},
   {0x03, 0, 0, 0x14, s_NvOdmElpida512M50nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmElpida512M50nmEmcConfigTable)},
   {0x03, 1, 0, 0x14, s_NvOdmElpida512M40nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmElpida512M40nmEmcConfigTable)},
   {0x06, 0, 0, 0x54, s_NvOdmHynix1G54nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmHynix1G54nmEmcConfigTable)},
+  {0x06, 0, 1, 0x54, s_NvOdmHynix1G54nmEmcConfigTable,
+	NV_ARRAY_SIZE(s_NvOdmHynix1G54nmEmcConfigTable)},
   {0x03, 0, 0, 0x54, s_NvOdmElpida1G50nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmElpida1G50nmEmcConfigTable)},
   {0x03, 1, 0, 0x54, s_NvOdmElpida1G40nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmElpida1G40nmEmcConfigTable)},
   {0xFF, 0, 0, 0x54, s_NvOdmMicron1GEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmMicron1GEmcConfigTable)},
@@ -144,7 +148,7 @@ static NvOdmWakeupPadInfo s_NvOdmWakeupPadInfo[] =
     {NV_TRUE,   6, NvOdmWakeupPadPolarity_AnyEdge}, // Wake Event  6 - gp3_pu[5] (WLAN_HOST_WAKE) 
     {NV_TRUE,   7, NvOdmWakeupPadPolarity_AnyEdge}, // Wake Event  7 - gp3_pu[6] (BT_HOST_WAKE)
     {NV_FALSE,  8, NvOdmWakeupPadPolarity_AnyEdge}, // Wake Event  8 - gmi_wp_n (MICRO SD_CD)
-    {NV_TRUE,   9, NvOdmWakeupPadPolarity_High},    // Wake Event  9 - gp3_ps[2] (KB_COL10)
+    {NV_TRUE,   9, NvOdmWakeupPadPolarity_AnyEdge}, // Wake Event  9 - gp3_ps[2] (KB_COL10)
     {NV_FALSE, 10, NvOdmWakeupPadPolarity_High},    // Wake Event 10 - gmi_ad21 (Accelerometer_TH/TAP)
     {NV_FALSE, 11, NvOdmWakeupPadPolarity_Low},     // Wake Event 11 - spi2_cs2 (PEN_INT, AUDIO-IRQ)
     {NV_FALSE, 12, NvOdmWakeupPadPolarity_Low},     // Wake Event 12 - spi2_cs1 (HEADSET_DET, not used)
@@ -162,7 +166,7 @@ static NvOdmWakeupPadInfo s_NvOdmWakeupPadInfo[] =
     {NV_TRUE,  24, NvOdmWakeupPadPolarity_AnyEdge}, // Wake Event 24 - gp3_pv[2] (BP_RESOUT_N)
     {NV_FALSE, 25, NvOdmWakeupPadPolarity_High},    // Wake Event 25 - gp3_ps[4] (KB_COL12)
     {NV_FALSE, 26, NvOdmWakeupPadPolarity_High},    // Wake Event 26 - gp3_ps[5] (KB_COL10)
-    {NV_TRUE,  27, NvOdmWakeupPadPolarity_High},    // Wake Event 27 - gp3_ps[0] (KB_COL8)
+    {NV_TRUE,  27, NvOdmWakeupPadPolarity_AnyEdge}, // Wake Event 27 - gp3_ps[0] (KB_COL8)
     {NV_FALSE, 28, NvOdmWakeupPadPolarity_Low},     // Wake Event 28 - gp3_pq[6] (KB_ROW6)
     {NV_FALSE, 29, NvOdmWakeupPadPolarity_Low},     // Wake Event 29 - gp3_pq[7] (KB_ROW6)
     {NV_FALSE, 30, NvOdmWakeupPadPolarity_High}     // Wake Event 30 - dap1_dout (DAP1_DOUT)

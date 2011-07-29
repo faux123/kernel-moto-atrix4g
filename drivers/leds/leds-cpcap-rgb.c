@@ -36,7 +36,7 @@
 /* Number of initial requests logged */
 static unsigned trace_request_initial = 10;
 
-static unsigned trace_request = 1;
+static unsigned trace_request = 0;
 static unsigned trace_cpcap_access = 0;
 module_param(trace_request, uint, 0644);
 module_param(trace_request_initial, uint, 0444);
@@ -311,10 +311,7 @@ msg_ind_blink(struct device *dev, struct device_attribute *attr,
 		return -1;
 	}
     mutex_lock(&msg_ind_mutex);
-    printk_request ("%s: %ld, brightness(rgb)=(%ld/%ld/%ld).\n", __func__, led_blink,
-	msg_ind_data->msg_ind_red_class_dev.brightness,
-	msg_ind_data->msg_ind_green_class_dev.brightness,
-	msg_ind_data->msg_ind_blue_class_dev.brightness);
+    printk_request ("%s: %ld\n", __func__, led_blink);
 	if (led_blink > LED_OFF) {
 		msg_ind_set_blink(msg_ind_data, true);
     } else {

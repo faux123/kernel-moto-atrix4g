@@ -197,7 +197,7 @@ static void pwrkey_handler(enum cpcap_irqs irq, void *data)
 
 #ifdef CONFIG_PM_DEEPSLEEP
 	if (get_deepsleep_mode()) {
-		flush_delayed_work(&pwrkey_data->pwrkey_delayed_work);
+		cancel_delayed_work_sync(&pwrkey_data->pwrkey_delayed_work);
 		if (new_state == PWRKEY_RELEASE) {
 			hrtimer_cancel(&pwrkey_data->longPress_timer);
 			wake_lock_timeout(&pwrkey_data->wake_lock, 20);
@@ -218,7 +218,7 @@ static void pwrkey_handler(enum cpcap_irqs irq, void *data)
 	if ((new_state < PWRKEY_UNKNOWN) && (new_state != last_state)) {
 #endif
 		wake_lock_timeout(&pwrkey_data->wake_lock, 20);
-		flush_delayed_work(&pwrkey_data->pwrkey_delayed_work);
+		cancel_delayed_work_sync(&pwrkey_data->pwrkey_delayed_work);
 		cpcap_broadcast_key_event(cpcap, KEY_END, new_state);
 		pwrkey_data->state = new_state;
 	} else if ((last_state == PWRKEY_RELEASE) &&

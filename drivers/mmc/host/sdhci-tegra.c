@@ -119,11 +119,6 @@ static irqreturn_t card_detect_isr(int irq, void *dev_id)
 static bool tegra_sdhci_card_detect(struct sdhci_host *sdhost)
 {
 	struct tegra_sdhci *host = sdhci_priv(sdhost);
-#ifdef CONFIG_TEGRA_ODM_AROWANA
-	if (host->gpio_cd != -1)
-		host->card_present =
-			(gpio_get_value(host->gpio_cd)==host->gpio_polarity_cd);
-#endif
 	smp_rmb();
 	return host->card_present;
 }
@@ -286,7 +281,6 @@ int __init tegra_sdhci_probe(struct platform_device *pdev)
 			host->gpio_cd = -1;
 			goto skip_gpio_cd;
 		}
-#ifndef CONFIG_TEGRA_ODM_AROWANA
 		ret = request_irq(host->irq_cd, card_detect_isr,
 			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 			mmc_hostname(sdhost->mmc), sdhost);
@@ -297,7 +291,6 @@ int __init tegra_sdhci_probe(struct platform_device *pdev)
 			host->irq_cd = -1;
 			goto skip_gpio_cd;
 		}
-#endif
 		host->card_present =
 			(gpio_get_value(host->gpio_cd)==host->gpio_polarity_cd);
 	}

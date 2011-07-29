@@ -1041,22 +1041,6 @@ long work_on_cpu(unsigned int cpu, long (*fn)(void *), void *arg)
 EXPORT_SYMBOL_GPL(work_on_cpu);
 #endif /* CONFIG_SMP */
 
-void dump_workqueue_stack(struct workqueue_struct *queue)
-{
-	const struct cpumask *cpu_map = wq_cpu_map(queue);
-	int cpu;
-	struct cpu_workqueue_struct *cpu_wq;
-	if (queue) {
-		for_each_cpu(cpu, cpu_map) {
-			cpu_wq = wq_per_cpu(queue, cpu);
-			if (NULL != cpu_wq)
-				sched_show_task(cpu_wq->thread);
-		}
-	}
-
-}
-EXPORT_SYMBOL_GPL(dump_workqueue_stack);
-
 void __init init_workqueues(void)
 {
 	alloc_cpumask_var(&cpu_populated_map, GFP_KERNEL);

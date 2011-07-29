@@ -224,7 +224,7 @@ int execute_in_process_context(work_func_t fn, struct execute_work *);
 extern int flush_work(struct work_struct *work);
 
 extern int cancel_work_sync(struct work_struct *work);
-extern void dump_workqueue_stack(struct workqueue_struct *queue);
+
 /*
  * Kill off a pending schedule_delayed_work().  Note that the work callback
  * function may still be running on return from cancel_delayed_work(), unless

@@ -203,12 +203,7 @@ static const char *accy_devices[] = {
 };
 
 static DEFINE_MUTEX(switch_access);
-static enum cpcap_accy current_accy = CPCAP_ACCY_NONE;
-enum cpcap_accy cpcap_accy_get_crrent_accry(void)
-{
-	return current_accy;
-}
-EXPORT_SYMBOL(cpcap_accy_get_crrent_accry);
+
 /* Expects values from 0 to 2: 0=no_log, 1=basic_log, 2=max_log */
 static int cpcap_usb_det_debug = 1;
 module_param(cpcap_usb_det_debug, int, S_IRUGO | S_IWUSR | S_IWGRP);
@@ -643,7 +638,7 @@ static void notify_accy(struct cpcap_usb_det_data *data, enum cpcap_accy accy)
 		data->usb_accy = CPCAP_ACCY_USB_DEVICE;
 	else
 		data->usb_accy = accy;
-	current_accy = accy;
+
 	if (accy != CPCAP_ACCY_NONE) {
 		/* SMART dock needs to charge */
 		if (!data->usb_dev) {
@@ -969,6 +964,10 @@ static void detection_work(struct work_struct *work)
 			} else {
 				if (cpcap_usb_det_debug)
 					pr_info("cpcap_usb_det: Waiting for VBUS to drain before switching on RVRS CHRG\n");
+
+				/* Unmask the IDFLOAT irq in case the line is not floating by the
+				 * time we read the sense bits */
+				cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_IDFLOAT);
 			}
 		} else if (!isVBusValid) {
 			if (cpcap_usb_det_debug)
@@ -1373,7 +1372,6 @@ static int __exit cpcap_usb_det_remove(struct platform_device *pdev)
 	wake_lock_destroy(&data->wake_lock);
 
 	kfree(data);
-	current_accy = CPCAP_ACCY_NONE;
 	return 0;
 }
 

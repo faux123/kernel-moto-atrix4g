@@ -44,6 +44,7 @@
 #include "nvodm_pmu.h"
 #include "nvrm_clocks.h"
 #include "nvrm_module.h"
+#include "nvddk_fuse.h"
 
 static NvError
 NvRmPrivTvDcControl( NvRmDeviceHandle hDevice, NvBool enable, NvU32 inst,
@@ -218,49 +219,27 @@ NvRmAnalogGetTvDacConfiguration(
     NvRmDeviceHandle hDevice,
     NvRmAnalogTvDacType Type)
 {
-    NvU8 RetVal = 0;
-    NvU32 OldRegVal = 0;
-    NvU32 NewRegVal = 0;
+    NvU32 RetVal = 0;
+    NvError e=NvSuccess;
 
     NV_ASSERT(hDevice);
-    
-#if NV_USE_FUSE_CLOCK_ENABLE
-    // Enable fuse clock
-    NvRmPowerModuleClockControl(hDevice, NvRmModuleID_Fuse, 0, NV_TRUE);
-#endif    
-
-    // Enable fuse values to be visible before reading the fuses.
-    OldRegVal = NV_REGR(hDevice, NvRmPrivModuleID_ClockAndReset, 0, 
-        CLK_RST_CONTROLLER_MISC_CLK_ENB_0);
-    NewRegVal = NV_FLD_SET_DRF_NUM(CLK_RST_CONTROLLER, MISC_CLK_ENB, 
-        CFG_ALL_VISIBLE, 1, OldRegVal);
-    NV_REGW(hDevice, NvRmPrivModuleID_ClockAndReset, 0, 
-        CLK_RST_CONTROLLER_MISC_CLK_ENB_0, NewRegVal);
 
     switch (Type)
     {
         case NvRmAnalogTvDacType_CRT:
-            RetVal = NV_REGR(hDevice, NvRmModuleID_Fuse, 0, FUSE_DAC_CRT_CALIB_0);
+            e = NvDdkFuseReadOffset(FUSE_DAC_CRT_CALIB_0, &RetVal);
             break;
         case NvRmAnalogTvDacType_SDTV:
-            RetVal = NV_REGR(hDevice, NvRmModuleID_Fuse, 0, FUSE_DAC_SDTV_CALIB_0);
+            e = NvDdkFuseReadOffset(FUSE_DAC_SDTV_CALIB_0, &RetVal);
             break;
         case NvRmAnalogTvDacType_HDTV:
-            RetVal = NV_REGR(hDevice, NvRmModuleID_Fuse, 0, FUSE_DAC_HDTV_CALIB_0);
+            e = NvDdkFuseReadOffset(FUSE_DAC_HDTV_CALIB_0, &RetVal);
             break;
         default:
             NV_ASSERT(!"Unsupported this Dac type");
             break;
     }
+    NV_ASSERT(e == NV_SUCCESS);
 
-    // Disable fuse values visibility
-    NV_REGW(hDevice, NvRmPrivModuleID_ClockAndReset, 0, 
-        CLK_RST_CONTROLLER_MISC_CLK_ENB_0, OldRegVal);
-
-#if NV_USE_FUSE_CLOCK_ENABLE
-    // Disable fuse clock
-    NvRmPowerModuleClockControl(hDevice, NvRmModuleID_Fuse, 0, NV_FALSE);
-#endif
-
-    return RetVal; 
+    return (NvU8)RetVal;
 }

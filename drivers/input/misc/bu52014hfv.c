@@ -26,7 +26,7 @@
 #include <linux/platform_device.h>
 #include <linux/switch.h>
 #include <linux/workqueue.h>
-#include <linux/earlysuspend.h>
+#include <linux/mutex.h>
 #include <linux/bu52014hfv.h>
 
 struct bu52014hfv_info {
@@ -44,9 +44,10 @@ struct bu52014hfv_info {
 
 	unsigned int north_value;
 	unsigned int south_value;
-	unsigned int state;
 	void (*set_switch_func)(int state);
-	struct early_suspend early_suspend;
+	struct mutex lock;
+	unsigned int irq_north_type;
+	unsigned int irq_south_type;
 };
 
 enum {
@@ -73,32 +74,13 @@ static ssize_t print_name(struct switch_dev *sdev, char *buf)
 static int bu52014hfv_update(struct bu52014hfv_info *info, int gpio, int dock)
 {
 	int state = !gpio_get_value(gpio);
+
 	if ((info->set_switch_func))
-		info->set_switch_func(info->state = (state ? dock : NO_DOCK));
+		info->set_switch_func(state ? dock : NO_DOCK);
 	else
 		switch_set_state(&info->sdev, state ? dock : NO_DOCK);
 	return state;
 }
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-
-static void bu52014hfv_resume(struct early_suspend *handler)
-{
-	struct bu52014hfv_info *info;
-
-	info = container_of(handler, struct bu52014hfv_info,
-		early_suspend);
-	/* Check for dock state change */
-	if ((info->state == info->north_value) && gpio_get_value(info->gpio_north))
-		bu52014hfv_update(info, info->gpio_north, info->north_value);
-	if ((info->state == info->south_value) && gpio_get_value(info->gpio_south))
-		bu52014hfv_update(info, info->gpio_south, info->south_value);
-	if (!info->state && !gpio_get_value(info->gpio_north))
-		bu52014hfv_update(info, info->gpio_north, info->north_value);
-	if (!info->state && !gpio_get_value(info->gpio_south))
-		bu52014hfv_update(info, info->gpio_south, info->south_value);
-}
-#endif
 
 void bu52014hfv_irq_north_work_func(struct work_struct *work)
 {
@@ -106,6 +88,18 @@ void bu52014hfv_irq_north_work_func(struct work_struct *work)
 						    struct bu52014hfv_info,
 						    irq_north_work);
 	bu52014hfv_update(info, info->gpio_north, info->north_value);
+
+	mutex_lock(&info->lock);
+	/* Toggle the type if level-triggered (pseudo-edge). */
+	if (info->irq_north_type & IRQ_TYPE_LEVEL_HIGH) {
+		info->irq_north_type &= ~IRQ_TYPE_LEVEL_HIGH;
+		info->irq_north_type |= IRQ_TYPE_LEVEL_LOW;
+	} else if (info->irq_north_type & IRQ_TYPE_LEVEL_LOW) {
+		info->irq_north_type &= ~IRQ_TYPE_LEVEL_LOW;
+        info->irq_north_type |= IRQ_TYPE_LEVEL_HIGH;
+	}
+	set_irq_type(info->irq_north, info->irq_north_type);
+	mutex_unlock(&info->lock);
 	enable_irq(info->irq_north);
 }
 
@@ -115,6 +109,18 @@ void bu52014hfv_irq_south_work_func(struct work_struct *work)
 						    struct bu52014hfv_info,
 						    irq_south_work);
 	bu52014hfv_update(info, info->gpio_south, info->south_value);
+
+	mutex_lock(&info->lock);
+	/* Toggle the type if level-triggered (pseudo-edge). */
+	if (info->irq_south_type & IRQ_TYPE_LEVEL_HIGH) {
+		info->irq_south_type &= ~IRQ_TYPE_LEVEL_HIGH;
+		info->irq_south_type |= IRQ_TYPE_LEVEL_LOW;
+	} else if (info->irq_south_type & IRQ_TYPE_LEVEL_LOW) {
+		info->irq_south_type &= ~IRQ_TYPE_LEVEL_LOW;
+        info->irq_south_type |= IRQ_TYPE_LEVEL_HIGH;
+	}
+	set_irq_type(info->irq_south, info->irq_south_type);
+	mutex_unlock(&info->lock);
 	enable_irq(info->irq_south);
 }
 
@@ -146,6 +152,8 @@ static int __devinit bu52014hfv_probe(struct platform_device *pdev)
 		goto error_kmalloc_failed;
 	}
 
+	mutex_init(&info->lock);
+
 	/* Initialize hall effect driver data */
 	info->gpio_north = pdata->docked_north_gpio;
 	info->gpio_south = pdata->docked_south_gpio;
@@ -170,8 +178,10 @@ static int __devinit bu52014hfv_probe(struct platform_device *pdev)
 	INIT_WORK(&info->irq_north_work, bu52014hfv_irq_north_work_func);
 	INIT_WORK(&info->irq_south_work, bu52014hfv_irq_south_work_func);
 
+	/* GPIO is active low */
+	info->irq_north_type = IRQ_TYPE_LEVEL_LOW;
 	ret = request_irq(info->irq_north, bu52014hfv_isr,
-			  IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+			  IRQ_TYPE_LEVEL_LOW | IRQF_DISABLED,
 			  BU52014HFV_MODULE_NAME, info);
 
 	if (ret) {
@@ -179,8 +189,10 @@ static int __devinit bu52014hfv_probe(struct platform_device *pdev)
 		goto error_request_irq_north_failed;
 	}
 
+	/* GPIO is active low */
+	info->irq_south_type = IRQ_TYPE_LEVEL_LOW;
 	ret = request_irq(info->irq_south, bu52014hfv_isr,
-			  IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+			  IRQ_TYPE_LEVEL_LOW | IRQF_DISABLED,
 			  BU52014HFV_MODULE_NAME, info);
 	if (ret) {
 		pr_err("%s: south request irq failed: %d\n", __func__, ret);
@@ -204,11 +216,6 @@ static int __devinit bu52014hfv_probe(struct platform_device *pdev)
 	ret = bu52014hfv_update(info, info->gpio_south, info->south_value);
 	if (!ret)
 		bu52014hfv_update(info, info->gpio_north, info->north_value);
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	info->early_suspend.resume = bu52014hfv_resume;
-	register_early_suspend(&info->early_suspend);
-#endif
 
 	return 0;
 

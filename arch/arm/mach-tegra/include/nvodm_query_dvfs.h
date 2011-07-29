@@ -38,11 +38,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix512M44nmEmcConfigTable[] 
             0x00000008,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x0000004b,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -92,11 +92,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix512M44nmEmcConfigTable[] 
             0x00000008,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000071,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -146,11 +146,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix512M44nmEmcConfigTable[] 
             0x00000008,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000000e1,   /* TREFBW */
-            0x00000005,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000000,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -200,11 +200,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix512M44nmEmcConfigTable[] 
             0x00000008,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000001c2,   /* TREFBW */
-            0x00000005,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x007f9010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -254,11 +254,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix512M44nmEmcConfigTable[] 
             0x00000008,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000270,   /* TREFBW */
-            0x00000005,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa04c04ae,   /* CFG_DIG_DLL */
             0x007fb010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -370,7 +370,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M50nmEmcConfigTable[]
             0x00000002,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xA06A04AE,   /* CFG_DIG_DLL */
             0x007FE010,   /* DLL_XFORM_DQS */
             0x00003010,   /* DLL_XFORM_QUSE */
@@ -424,7 +424,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M50nmEmcConfigTable[]
             0x00000002,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xA06A04AE,   /* CFG_DIG_DLL */
             0x007FE010,   /* DLL_XFORM_DQS */
             0x00003010,   /* DLL_XFORM_QUSE */
@@ -478,7 +478,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M50nmEmcConfigTable[]
             0x00000000,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xA06A04AE,   /* CFG_DIG_DLL */
             0x007FE010,   /* DLL_XFORM_DQS */
             0x00003010,   /* DLL_XFORM_QUSE */
@@ -532,7 +532,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M50nmEmcConfigTable[]
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xA06A04AE,   /* CFG_DIG_DLL */
             0x007FE010,   /* DLL_XFORM_DQS */
             0x00003010,   /* DLL_XFORM_QUSE */
@@ -586,7 +586,7 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M50nmEmcConfigTable[]
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xA04C04AE,   /* CFG_DIG_DLL */
             0x007FE010,   /* DLL_XFORM_DQS */
             0x00003010,   /* DLL_XFORM_QUSE */
@@ -694,11 +694,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M40nmEmcConfigTable[]
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x0000004b,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -748,11 +748,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M40nmEmcConfigTable[]
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000071,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -802,11 +802,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M40nmEmcConfigTable[]
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000000e1,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000000,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -856,11 +856,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M40nmEmcConfigTable[]
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000001c2,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x007f4010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -910,11 +910,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida512M40nmEmcConfigTable[]
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000270,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa04c04ae,   /* CFG_DIG_DLL */
             0x007f9010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1022,11 +1022,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix1G54nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x0000004b,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1076,11 +1076,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix1G54nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000071,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1130,11 +1130,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix1G54nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000000e1,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000000,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1184,11 +1184,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix1G54nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000001c2,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x007f7010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1238,11 +1238,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmHynix1G54nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000270,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa04c04ae,   /* CFG_DIG_DLL */
             0x007fa010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1350,11 +1350,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G50nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x0000004b,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x00004810,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1404,11 +1404,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G50nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000071,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x00004810,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1458,11 +1458,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G50nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000000e1,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000000,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x00004810,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1512,11 +1512,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G50nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000001c2,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x007fb010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1566,11 +1566,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G50nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000270,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa04c04ae,   /* CFG_DIG_DLL */
             0x007fc010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1678,11 +1678,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G40nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x0000004b,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x00020000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1732,11 +1732,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G40nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000071,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1786,11 +1786,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G40nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000000e1,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000000,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x0001f000,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1840,11 +1840,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G40nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000001c2,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x007f7010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -1894,11 +1894,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmElpida1G40nmEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000270,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa04c04ae,   /* CFG_DIG_DLL */
             0x007fa810,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -2006,11 +2006,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmMicron1GEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x0000004b,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x00004810,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -2060,11 +2060,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmMicron1GEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000071,   /* TREFBW */
-            0x00000003,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000003,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x00004810,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -2114,11 +2114,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmMicron1GEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000000e1,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000000,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x00004810,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -2168,11 +2168,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmMicron1GEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x000001c2,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa06804ae,   /* CFG_DIG_DLL */
             0x00000810,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */
@@ -2222,11 +2222,11 @@ static const NvOdmSdramControllerConfigAdv s_NvOdmMicron1GEmcConfigTable[] =
             0x00000006,   /* TCLKSTABLE */
             0x00000002,   /* TCLKSTOP */
             0x00000270,   /* TREFBW */
-            0x00000004,   /* QUSE_EXTRA */
+            0x00000000,   /* QUSE_EXTRA */
             0x00000001,   /* FBIO_CFG6 */
             0x00000000,   /* ODT_WRITE */
             0x00000000,   /* ODT_READ */
-            0x00000082,   /* FBIO_CFG5 */
+            0x00000282,   /* FBIO_CFG5 */
             0xa04c04ae,   /* CFG_DIG_DLL */
             0x007fe010,   /* DLL_XFORM_DQS */
             0x00000000,   /* DLL_XFORM_QUSE */

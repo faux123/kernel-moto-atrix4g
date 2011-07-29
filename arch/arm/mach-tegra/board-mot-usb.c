@@ -26,7 +26,6 @@ int __init board_boot_mode_init(char *s)
 __setup("androidboot.mode=", board_boot_mode_init);
 
 #ifdef CONFIG_USB_MOT_ANDROID
-
 static char *usb_functions_ums[] = {
 	"usb_mass_storage",
 };
@@ -240,7 +239,6 @@ static struct platform_device acm_device = {
 static char *usb_serial_num;
 
 static char *olympus_dev = "MB860";
-static char *arowana_dev = "MT870";
 static char *etna_dev = "XT865";
 static char *daytona_dev = "MB870";
 static char *sunfire_dev = "Sunfire";
@@ -308,10 +306,6 @@ void mot_setup_gadget(void)
 		andusb_plat.product_name = sunfire_dev;
 		andusb_plat_bp.product_name = sunfire_dev;
 		tegra_usb_fsg_platform.product = sunfire_dev;
-	} else if (machine_is_arowana()) {
-		andusb_plat.product_name = arowana_dev;
-		andusb_plat_bp.product_name = arowana_dev;
-		tegra_usb_fsg_platform.product = arowana_dev;
 	} else {
 		andusb_plat.product_name = default_dev;
 		andusb_plat_bp.product_name = default_dev;

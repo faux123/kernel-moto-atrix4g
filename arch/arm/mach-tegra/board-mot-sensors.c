@@ -549,36 +549,6 @@ struct isl29030_platform_data isl29030_als_ir_data_Etna = {
 	.getIrqStatus = isl29030_getIrqStatus,
 	.gpio_intr = PROX_INT_GPIO,
 };
-/*Arowana prox sensor is the same as etna*/
-struct isl29030_platform_data isl29030_als_ir_data_Arowana = {
-/*
-	NOTE: Original values
-	.configure = 0x6c,
-	.interrupt_cntrl = 0x40,
-	.prox_lower_threshold = 0x1e,
-	.prox_higher_threshold = 0x32,
-	.als_ir_low_threshold = 0x00,
-	.als_ir_high_low_threshold = 0x00,
-	.als_ir_high_threshold = 0x45,
-	.lens_percent_t = 100,
-*/
-	.init = NULL,
-	.exit = NULL,
-	.power_on = NULL,
-	.power_off = NULL,
-	.configure = 0x66,
-	.interrupt_cntrl = 0x20,
-	.prox_lower_threshold = 0x0f,
-	.prox_higher_threshold = 0x14,
-	.crosstalk_vs_covered_threshold = 0x96,
-	.default_prox_noise_floor = 0x96,
-	.num_samples_for_noise_floor = 0x05,
-	.lens_percent_t = 20,
-	.irq = 0,
-	.getIrqStatus = isl29030_getIrqStatus,
-	.gpio_intr = PROX_INT_GPIO,
-};
-
 
 struct isl29030_platform_data isl29030_als_ir_data_Daytona = {
 /*
@@ -636,10 +606,6 @@ static void __init isl29030_init(void)
 	if (machine_is_olympus()) {
 		isl29030_als_ir_data_Olympus.irq = gpio_to_irq(PROX_INT_GPIO);
 		isl29030_als_ir.dev.platform_data = &(isl29030_als_ir_data_Olympus);
-	}
-	if (machine_is_arowana()) {
-		isl29030_als_ir_data_Arowana.irq = gpio_to_irq(PROX_INT_GPIO);
-		isl29030_als_ir.dev.platform_data = &(isl29030_als_ir_data_Arowana);
 	}
 	if (machine_is_etna()) {
 		isl29030_als_ir_data_Etna.irq = gpio_to_irq(PROX_INT_GPIO);

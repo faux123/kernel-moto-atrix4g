@@ -373,8 +373,6 @@ struct qtm_touch_multi_cfg
 	uint8_t			x_edge_dist;
 	uint8_t			y_edge_ctrl;
 	uint8_t			y_edge_dist;
-	uint8_t                 jumplimit;
-	uint8_t                 sec_screen;
 } __attribute__ ((packed));
 
 /* TOUCH_KEYARRAY_T15 */

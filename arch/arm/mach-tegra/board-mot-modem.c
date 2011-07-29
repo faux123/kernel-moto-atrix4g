@@ -11,20 +11,17 @@
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
-#include "gpio-names.h"
-#include "board-mot.h"
 
-#if defined(CONFIG_MOT_FEAT_TD_BP_CTRL) || defined(CONFIG_MOT_FEAT_TD_BP_CTRL_MODULE)
-#include <linux/td_bp_ctrl.h>
-#endif
-
-#ifdef CONFIG_MDM_CTRL
 #include <mach/mdm_ctrl.h>
 
 #ifdef CONFIG_SPI_SLAVE
 #include <linux/spi/spi_slave.h>
 #include <linux/spi/mdm6600_spi.h>
 #endif
+
+#include "gpio-names.h"
+#include "board-mot.h"
+
 
 /*
  * Modem class control driver agent for MDM6600.
@@ -366,11 +363,9 @@ static void __init mot_setup_wrigley_host_wake(void)
 	}
 }
 
-int __init mot_pnx_ctrl_init(void);
 
 int __init mot_modem_init(void)
 {
-#ifdef CONFIG_MDM_CTRL
 	char bp_ctrl_bus[40] = "UART";
 	char bp_data_bus[20] = "only";
 
@@ -409,103 +404,6 @@ int __init mot_modem_init(void)
 	     (HWREV_TYPE_IS_BRASSBOARD(system_rev) &&
 	      HWREV_REV(system_rev) >= HWREV_REV_3)))
 		mot_setup_wrigley_host_wake();
-#else
-	if (machine_is_arowana())
-		mot_pnx_ctrl_init();
-#endif
-	return 0;
-}
-
-#else
-
-/*
- * Interim Wrigley host wake support.
- */
-#include <linux/wakelock.h>
-
-#define WRIGLEY_HOST_WAKE_GPIO TEGRA_GPIO_PC7
-
-static struct wake_lock wrigley_host_wakelock;
-
-static irqreturn_t wrigley_host_wake_irq_handler(int irq, void *ptr)
-{
-	/* Keep us awake for a bit until USB gets going */
-	wake_lock_timeout(&wrigley_host_wakelock, (HZ * 1));
-	return IRQ_HANDLED;
-}
-
-static void __init mot_setup_wrigley_host_wake(void)
-{
-	int irq, err;
-
-	wake_lock_init(&wrigley_host_wakelock, WAKE_LOCK_SUSPEND,
-		"WAN Host Wakelock");
-
-	gpio_request(WRIGLEY_HOST_WAKE_GPIO, "WAN Wake Host");
-	gpio_direction_input(WRIGLEY_HOST_WAKE_GPIO);
-	irq = gpio_to_irq(WRIGLEY_HOST_WAKE_GPIO);
-	printk(KERN_INFO "%s: irq: %d, value: %d\n", __func__, irq,
-				gpio_get_value(WRIGLEY_HOST_WAKE_GPIO));
-
-	set_irq_type(irq, IRQ_TYPE_EDGE_FALLING);
-	err = request_irq(irq, wrigley_host_wake_irq_handler,
-			IRQF_DISABLED, "wan_wake_host", NULL);
-	if (err < 0) {
-		printk(KERN_ERR "%s: failed to register WAN BP AP WAKE "
-		       "interrupt handler, errno = %d\n", __func__, -err);
-	}
-}
-
-#if defined(CONFIG_MOT_FEAT_TD_BP_CTRL) || defined(CONFIG_MOT_FEAT_TD_BP_CTRL_MODULE)
-
-/*
- * define the platform device
- */
-
-static struct resource mot_td_bpp_resource []= {
-		[0]={
-				.name  = "wdi_irq",
-				.start = GPIO_TO_IRQ(GPIO_TD_BP_WDI),
-				.end = GPIO_TO_IRQ(GPIO_TD_BP_WDI),
-				.flags = IORESOURCE_IRQ|IORESOURCE_IRQ_LOWEDGE,
-		},
-};
-
-
-static struct mot_td_bpp_pdata mot_td_bpp_pdata = {
-  .gpio_bp_on_key = GPIO_TD_BP_ON_KEY,
-  .gpio_bp_wdi = GPIO_TD_BP_WDI,
-  .gpio_bp_reset = GPIO_TD_BP_RESET,
-  .gpio_bp_flash_en = GPIO_TD_BP_FLASH_EN,
-};
-
-static struct platform_device mot_td_bpp_pdev = {
-		.id = -1,
-		.name = "td_bp_ctrl",
-#if 0
-		.resource = mot_td_bpp_resource,
-		.num_resources = ARRAY_SIZE(mot_td_bpp_resource),
-#endif
-		.dev = {
-				.platform_data = &mot_td_bpp_pdata,
-		},
-
-};
-
-
-int __init mot_pnx_ctrl_init(void){
-/*
- * create and register platform device
- */
-	platform_device_register(&mot_td_bpp_pdev);
-
-	printk(KERN_WARNING "%s: Finished.\n",__FUNCTION__);
-	return 0;
-}
-#else
-int __init mot_mdm_ctrl_init(void){
 
 	return 0;
 }
-#endif
-#endif

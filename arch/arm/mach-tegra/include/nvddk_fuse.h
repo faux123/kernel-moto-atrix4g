@@ -414,6 +414,11 @@ void NvDdkFuseClear(void);
 void NvDdkDisableFuseProgram(void);
 
 
+/* simple interface to R/W a 32 bit fuse at offset, handle all clocks, etc
+   provides a legacy interface */
+NvError NvDdkFuseReadOffset(NvU32 offset, NvU32 *data);
+NvError NvDdkFuseWriteOffset(NvU32 offset, NvU32 data);
+
 #if defined(__cplusplus)
 }
 #endif

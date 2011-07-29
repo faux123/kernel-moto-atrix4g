@@ -44,7 +44,7 @@ static int disp_backlight_init(void)
             __func__, ret);
         return ret;
     }
-	if (machine_is_olympus() || machine_is_arowana()) {
+	if (machine_is_olympus()) {
 		if ((ret = gpio_request(TEGRA_KEY_BACKLIGHT_EN_GPIO,
 				"key_backlight_en"))) {
 			pr_err("%s: gpio_request(%d, key_backlight_en) failed: %d\n",
@@ -132,9 +132,6 @@ void mot_setup_lights(struct i2c_board_info *info)
 		pr_info("\n%s: Sunfire; removing LM3532 button backlight\n",
 		__func__);
 		lm3532_pdata.flags = LM3532_HAS_WEBTOP;
-	}
-	else if (machine_is_arowana()) {
-		lm3532_pdata.flags &= ~LM3532_HAS_WEBTOP;
 	}
 	else {
 #ifdef CONFIG_LEDS_DISP_BTN_TIED

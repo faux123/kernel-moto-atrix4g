@@ -12,7 +12,6 @@ obj-$(CONFIG_TEGRA_ODM_WHISTLER)	+= nvodm_keyboard_stub.o
 obj-$(CONFIG_TEGRA_ODM_CONCORDE)	+= nvodm_keyboard_stub.o
 obj-$(CONFIG_TEGRA_ODM_VENTANA)		+= nvodm_keyboard_stub.o
 obj-$(CONFIG_TEGRA_ODM_OLYMPUS) += nvodm_keyboard_stub.o
-obj-$(CONFIG_TEGRA_ODM_AROWANA) += nvodm_keyboard_stub.o
 obj-$(CONFIG_TEGRA_ODM_ETNA) += nvodm_keyboard_stub.o
 obj-$(CONFIG_TEGRA_ODM_DAYTONA) += nvodm_keyboard_stub.o
 obj-$(CONFIG_TEGRA_ODM_SUNFIRE) += nvodm_keyboard_stub.o

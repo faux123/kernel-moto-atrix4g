@@ -447,8 +447,8 @@ NvBool Adt7461Init(NvOdmTmonDeviceHandle hTmon)
         else if (pIoAddress->Interface == NvOdmIoModule_Gpio)
         {
             /* Use configuration data for GPIO assignment only for non-Motorola h/w */
-            if (!machine_is_olympus() && !machine_is_etna() && !machine_is_sunfire()&& !machine_is_arowana()
-	        && !machine_is_tegra_daytona())
+            if (!machine_is_olympus() && !machine_is_etna() &&
+	        !machine_is_sunfire() && !machine_is_tegra_daytona())
             {
                 NvU32 port = pIoAddress->Instance;
                 NvU32 pin  = pIoAddress->Address;
@@ -480,16 +480,6 @@ NvBool Adt7461Init(NvOdmTmonDeviceHandle hTmon)
             pin  = 0x06;
 
         }
-
-        pPrivData->hGpioPin = NvOdmGpioAcquirePinHandle(pPrivData->hGpio, port, pin);
-    } 
-    else if (machine_is_arowana())
-    {
-        NvU32 port;
-        NvU32 pin;
-
-        port = NVODM_PORT('d');
-        pin  = 0x01;
 
         pPrivData->hGpioPin = NvOdmGpioAcquirePinHandle(pPrivData->hGpio, port, pin);
     } 

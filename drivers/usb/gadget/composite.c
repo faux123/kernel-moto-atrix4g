@@ -117,16 +117,9 @@ void usb_composite_force_reset(struct usb_composite_dev *cdev)
 		cdev->mute_switch = 1;
 		spin_unlock_irqrestore(&cdev->lock, flags);
 
-		/* According to our test, the interval between D+ pullup
-		 * and next pulldown operation shall be bigger than 50ms,
-		 * otherwise there will be enumeration issue.  It shall be
-		 * relevant with USB transceiver on device/host side.
-		 *  Sleep 50ms here to make it smoothly
-		 */
 		usb_gadget_disconnect(cdev->gadget);
-		msleep(100);
+		msleep(10);
 		usb_gadget_connect(cdev->gadget);
-		msleep(100);
 	} else {
 		spin_unlock_irqrestore(&cdev->lock, flags);
 	}

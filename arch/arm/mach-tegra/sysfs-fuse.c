@@ -256,12 +256,12 @@ void IntToStr(char *arr, char *str, unsigned int MaxSize)
     int i = 0, j =  0;
     char tmp[BUF_SIZE]={0};
     strcpy(tmp,"0");
-    for (i=MaxSize-1; i >= 0; i--)
+    for (i = MaxSize - 1; i >= 0; i--)
     {
         if ((arr[i] == 0) && (j==0))
             continue;
 
-        sprintf(&tmp[j*2],"%02X",arr[i]&0xff);
+        sprintf(&tmp[j*2], "%02X", arr[i] & 0xff);
         PRINT_FUSE(("arr[%d]: %s\n", i, &tmp[j*2]));
         j++;
     }
@@ -325,7 +325,7 @@ void StrToInt(const char *str,
     char tmp[BUF_SIZE]={0};
     unsigned char Iterations = (NumChars + 1)/2;
     unsigned int t;
-    for (j=MaxSize-1; j >= Iterations; j--)
+    for (j = MaxSize-1; j >= Iterations; j--)
     {
         arr[j] = 0;
     }
@@ -450,7 +450,7 @@ static int __init sysfsfuse_init(void)
     nvfuse_kobj = kobject_create_and_add("fuse", firmware_kobj);
     PRINT_FUSE(("\n Fuse Init"));
 
-    if (! nvfuse_kobj) 
+    if (!nvfuse_kobj)
     {
         PRINT_FUSE(("Fuse Init failed!"));
         return -ENOMEM;
@@ -475,7 +475,8 @@ static int __init sysfsfuse_init(void)
         sysfs_chmod_file(nvfuse_kobj, &nvfuse_OdmProduction_attr.attr, 0640);
     }
 
-    nvfuse_raw_attr.private = tegra_kfuse_cache_get(&nvfuse_raw_attr.size);
+    nvfuse_raw_attr.private = (void *)tegra_kfuse_cache_get(
+                                                      &nvfuse_raw_attr.size);
     CHK_ERR(sysfs_create_bin_file(nvfuse_kobj, &nvfuse_raw_attr));
     CHK_ERR(sysfs_create_file(nvfuse_kobj, &nvfuse_DeviceKey_attr.attr));
     CHK_ERR(sysfs_create_file(nvfuse_kobj, &nvfuse_JtagDisable_attr.attr));

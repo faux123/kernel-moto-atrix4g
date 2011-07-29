@@ -94,15 +94,9 @@ static struct platform_device apanic_handle_mmc_platform_device = {
 	}
 };
 
-static struct notifier_block extra_panic_blk;
-
 extern struct tegra_nand_platform tegra_nand_plat;
 extern int tegra_sdhci_boot_device;
 extern struct platform_device tegra_sdhci_devices[];
-#ifdef CONFIG_TEGRA_ODM_AROWANA
-static int arowana_panic_notifier(struct notifier_block *this,
-		unsigned long event, void *ptr);
-#endif
 
 int apanic_mmc_init(void)
 {
@@ -157,45 +151,7 @@ int apanic_mmc_init(void)
 	return result;
 }
 #endif
-/*Implementation of extra panic notifications to user
- * like vibrations, LED,etc. different products should
- * put their own code within this function. feature's
- * config switch is in board-mot.h, board-mot.c will
- * call this function unconditionally.
- * You may need to change panic reboot timeout value to
- * get enough time to user before reboot by panic.
- * */
-#ifdef CONFIG_MOT_FEAT_PANIC_NOTIFIER
-void mot_panic_notifier_init(void)
-{
 
-	extra_panic_blk.notifier_call = NULL;
-	if (machine_is_arowana())
-		extra_panic_blk.notifier_call = arowana_panic_notifier;
-/*
- * put other products' implementation here before we register it
-*/
-	if (extra_panic_blk.notifier_call)
-		atomic_notifier_chain_register(&panic_notifier_list,
-				&extra_panic_blk);
-	return;
-}
-#endif
-
-#ifdef CONFIG_TEGRA_ODM_AROWANA
-static int arowana_panic_notifier(struct notifier_block *this,
-		unsigned long event, void *ptr)
-{
-/*
- * Requesting a GPIO regularly could fail since vibrator driver may have already
- * requested it. Just do it directly and hard coded IO pin for a single product.
- * This notifier call back should be called only when a panic happens.
- */
-	printk(KERN_WARNING "Call panic notifier of Arowana, enable vibrator\n");
-	gpio_direction_output(TEGRA_GPIO_PD0, 1);
-	return 0;
-}
-#endif
 void mot_set_hsj_mux(short hsj_mux_gpio)
 {
 	/* set pin M 2 to 1 to route audio onto headset or 0 to route console uart */

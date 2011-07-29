@@ -48,9 +48,6 @@
 #include "ap15/arapbpm.h"
 #include "nvrm_clocks.h"
 #include "nvodm_query.h"
-#ifdef CONFIG_TEGRA_ODM_AROWANA
-#include <linux/interrupt.h>
-#endif
 
 // TODO: Always Disable before check-in
 // Module debug: 0=disable, 1=enable
@@ -82,11 +79,6 @@
 #define NVRM_POWER_INDEX2ID(index, mask) (((mask) << 16) | (index))
 #define NVRM_POWER_ID2INDEX(id) ((id) & 0xFFFF)
 
-
-#ifdef CONFIG_TEGRA_ODM_AROWANA
-extern irqreturn_t bp_wdi_irq_handler(int irq, void *data);
-extern void wkup_aftlp0(void);
-#endif
 
 /*
  * Holds power client voltage request information for a
@@ -808,16 +800,6 @@ ReportRmPowerState(NvRmDeviceHandle hRmDeviceHandle)
             NvOsDebugPrintf("*** Wakeup from LP0 *** wake-source: 0x%x\n",
                     s_LastLP0WakeSource);
             PowerEventNotify(hRmDeviceHandle, NvRmPowerEvent_WakeLP0);
-#ifdef CONFIG_TEGRA_ODM_AROWANA
-			if(s_LastLP0WakeSource &  0x1000000) {
-				NvOsDebugPrintf("receive wdi event from LP0\n");
-				bp_wdi_irq_handler(NULL, NULL);
-			}
-			if(s_LastLP0WakeSource &  0x4) {
-				NvOsDebugPrintf("receive usb ipc event from LP0, but didn't wkup\n");
-				wkup_aftlp0();
-			}
-#endif
             break;
         case NvRmPowerState_LP1:
             NvOsDebugPrintf("*** Wakeup from LP1 ***\n");
@@ -1545,7 +1527,8 @@ NvRmPowerActivityHint (
 NvError
 NvRmKernelPowerSuspend( NvRmDeviceHandle hRmDeviceHandle )
 {
-    NvOdmSocPowerState state = NvRmPowerLowestStateGet();
+    NvOdmSocPowerState state =
+        NvOdmQueryLowestSocPowerState()->LowestPowerState;
 
     if (state ==  NvOdmSocPowerState_Suspend)
         NvRmPrivPowerGroupSuspend(hRmDeviceHandle);
@@ -1595,7 +1578,8 @@ NvRmKernelPowerSuspend( NvRmDeviceHandle hRmDeviceHandle )
 NvError
 NvRmKernelPowerResume( NvRmDeviceHandle hRmDeviceHandle )
 {
-    NvOdmSocPowerState state = NvRmPowerLowestStateGet();
+    NvOdmSocPowerState state =
+        NvOdmQueryLowestSocPowerState()->LowestPowerState;
 
     NvOsMutexLock(s_hPowerClientMutex);
     ReportRmPowerState(hRmDeviceHandle);

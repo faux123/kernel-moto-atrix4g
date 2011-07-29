@@ -25,11 +25,6 @@
 #include <linux/uaccess.h>
 #include <linux/wakelock.h>
 
-#ifdef	CONFIG_SUPPORT_ALARM_POWERON
-#include <linux/rtc.h>
-extern struct rtc_device *alarm_rtc_dev;
-#endif
-
 #define ANDROID_ALARM_PRINT_INFO (1U << 0)
 #define ANDROID_ALARM_PRINT_IO (1U << 1)
 #define ANDROID_ALARM_PRINT_INT (1U << 2)
@@ -68,18 +63,10 @@ static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	unsigned long flags;
 	struct timespec new_alarm_time;
 	struct timespec new_rtc_time;
-#ifdef	CONFIG_SUPPORT_ALARM_POWERON
-	struct rtc_time     rtc_current_rtc_time;
-	unsigned long       rtc_alarm_time;
-	struct timespec     rtc_current_timespec;
-	struct timespec     rtc_delta;
-	struct rtc_wkalrm   rtc_alarm;
-#endif
 	struct timespec tmp_time;
 	enum android_alarm_type alarm_type = ANDROID_ALARM_IOCTL_TO_TYPE(cmd);
 	uint32_t alarm_type_mask = 1U << alarm_type;
 
-	pr_alarm(IO, "%s:%d alarm_type= 0x%x\n", __func__, __LINE__, alarm_type);
 	if (alarm_type >= ANDROID_ALARM_TYPE_COUNT)
 		return -EINVAL;
 
@@ -111,13 +98,6 @@ static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		}
 		alarm_enabled &= ~alarm_type_mask;
 		spin_unlock_irqrestore(&alarm_slock, flags);
-#ifdef	CONFIG_SUPPORT_ALARM_POWERON
-		if (alarm_type == ANDROID_ALARM_POWEROFF_WAKEUP) {
-			rtc_alarm.enabled = POWEROFF_WAKEUP_DISABLE;
-			rtc_time_to_tm(0, &rtc_alarm.time);
-			rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
-		}
-#endif
 		break;
 
 	case ANDROID_ALARM_SET_OLD:
@@ -144,23 +124,7 @@ from_old_alarm_set:
 		alarm_start_range(&alarms[alarm_type],
 			timespec_to_ktime(new_alarm_time),
 			timespec_to_ktime(new_alarm_time));
-		spin_unlock_irqrestore(&alarm_slock, flags);		
-#ifdef	CONFIG_SUPPORT_ALARM_POWERON
-		if (alarm_type == ANDROID_ALARM_POWEROFF_WAKEUP) {
-			rtc_read_time(alarm_rtc_dev, &rtc_current_rtc_time);
-			pr_alarm(IO, "cur alrm->tm_hour=%d alrm->tm_min=%d alrm->tm_sec=%d\n",\
-				rtc_alarm.time.tm_hour, rtc_alarm.time.tm_min, rtc_alarm.time.tm_sec);
-			rtc_current_timespec.tv_nsec = 0;
-			rtc_tm_to_time(&rtc_current_rtc_time, &rtc_current_timespec.tv_sec);
-			save_time_delta(&rtc_delta, &rtc_current_timespec);
-			rtc_alarm_time = timespec_sub(new_alarm_time, rtc_delta).tv_sec;
-			rtc_time_to_tm(rtc_alarm_time, &rtc_alarm.time);
-			pr_alarm(IO, "new alrm->tm_hour=%d alrm->tm_min=%d alrm->tm_sec=%d\n",\
-				rtc_alarm.time.tm_hour, rtc_alarm.time.tm_min, rtc_alarm.time.tm_sec);
-			rtc_alarm.enabled = POWEROFF_WAKEUP_ENABLE;
-			rtc_set_alarm(alarm_rtc_dev, &rtc_alarm);
-		}
-#endif
+		spin_unlock_irqrestore(&alarm_slock, flags);
 		if (ANDROID_ALARM_BASE_CMD(cmd) != ANDROID_ALARM_SET_AND_WAIT(0)
 		    && cmd != ANDROID_ALARM_SET_AND_WAIT_OLD)
 			break;
@@ -200,9 +164,6 @@ from_old_alarm_set:
 		switch (alarm_type) {
 		case ANDROID_ALARM_RTC_WAKEUP:
 		case ANDROID_ALARM_RTC:
-#ifdef CONFIG_SUPPORT_ALARM_POWERON
-		case ANDROID_ALARM_POWEROFF_WAKEUP:
-#endif
 			getnstimeofday(&tmp_time);
 			break;
 		case ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP:

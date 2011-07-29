@@ -36,5 +36,5 @@ enum cpcap_accy {
 struct cpcap_accy_platform_data {
 	enum cpcap_accy accy;
 };
-extern enum cpcap_accy cpcap_accy_get_crrent_accry(void);
+
 #endif  /* __CPCAP_ACCY_H__ */

@@ -238,25 +238,7 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 				result = NOTIFY_BAD;
 			}
 		}
-#ifdef CONFIG_SUPPORT_ALARM_POWERON
-		if (mode != NULL && !strncmp("outofchargealarm", mode, 17)) {
-			/* Set the outofchargealarm bit in the cpcap */
-			ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
-				CPCAP_BIT_OUT_CHARGE_ONLY_ALARM,
-				CPCAP_BIT_OUT_CHARGE_ONLY_ALARM);
-			if (ret) {
-				dev_err(&(misc_cpcap->spi->dev),
-					"outofchargealarm cpcap set failure.\n");
-				result = NOTIFY_BAD;
-			}
-			if (ret) {
-				dev_err(&(misc_cpcap->spi->dev),
-					"reset cpcap set failure.\n");
-				result = NOTIFY_BAD;
-			}
-			printk(KERN_INFO "Set the outofchargealarm bit\n");
-		}
-#endif
+
 		/* Check if we are starting recovery mode */
 		if (mode != NULL && !strncmp("fota", mode, 5)) {
 			/* Set the fota (recovery mode) bit in the cpcap */
@@ -360,16 +342,7 @@ static int cpcap_reboot(struct notifier_block *this, unsigned long code,
 				"outofcharge cpcap set failure.\n");
 			result = NOTIFY_BAD;
 		}
-#ifdef CONFIG_SUPPORT_ALARM_POWERON		
-		ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1,
-					 0,
-					 CPCAP_BIT_OUT_CHARGE_ONLY_ALARM);
-		if (ret) {
-			dev_err(&(misc_cpcap->spi->dev),
-				"outofchargealarm cpcap set failure.\n");
-			result = NOTIFY_BAD;
-		}
-#endif		
+
 		/* Clear the soft reset bit in the cpcap */
 		ret = cpcap_regacc_write(misc_cpcap, CPCAP_REG_VAL1, 0,
 					CPCAP_BIT_SOFT_RESET);

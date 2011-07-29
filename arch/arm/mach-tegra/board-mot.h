@@ -9,7 +9,6 @@
 extern struct kxtf9_platform_data kxtf9_data;
 extern struct akm8975_platform_data akm8975_data;
 extern struct isl29030_platform_data isl29030_als_ir_data_Olympus;
-extern struct isl29030_platform_data isl29030_als_ir_data_Arowana;
 extern struct isl29030_platform_data isl29030_als_ir_data_Etna;
 extern struct isl29030_platform_data isl29030_als_ir_data_Daytona;
 extern struct isl29030_platform_data isl29030_als_ir_data_Sunfire;
@@ -50,15 +49,6 @@ extern void mot_sec_init(void);
 extern void mot_tcmd_init(void);
 extern int apanic_mmc_init(void);
 
-/*Init functions of extra panic notifications
- * config switch of this feature works here.
- */
-#ifdef CONFIG_MOT_FEAT_PANIC_NOTIFIER
-extern	void mot_panic_notifier_init(void);
-#else
-#define mot_panic_notifier_init()		do { } while (0)
-#endif
-
 extern void tegra_otg_set_mode(int);
 extern void sdhci_tegra_wlan_detect(void);
 extern void mot_setup_spi_ipc(void);
@@ -86,6 +76,5 @@ extern void cpcap_set_dock_switch(int state);
 #define UART_IPC_OLYMPUS	3
 #define UART_IPC_ETNA		3
 #define UART_IPC_SUNFIRE		3
-#define UART_IPC_AROWANA        3
 #define UART_IPC_DAYTONA		3
 #endif

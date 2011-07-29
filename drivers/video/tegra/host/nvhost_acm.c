@@ -26,8 +26,6 @@
 #include <linux/err.h>
 #include <linux/device.h>
 
-#include "nvhost_syncpt.h"
-
 #define ACM_TIMEOUT_MSEC 50
 
 void nvhost_module_busy(struct nvhost_module *mod)
@@ -134,9 +132,6 @@ static int is_module_idle(struct nvhost_module *mod)
 	return (count == 0);
 }
 
-extern int nvhost_channel_fifo_debug(struct nvhost_dev *m);
-extern void nvhost_sync_reg_dump(struct nvhost_dev *m);
-
 static void debug_not_idle(struct nvhost_module *mod)
 {
 	int i;
@@ -145,10 +140,9 @@ static void debug_not_idle(struct nvhost_module *mod)
 
 	for (i = 0; i < NVHOST_NUMCHANNELS; i++) {
 		struct nvhost_module *m = &dev->channels[i].mod;
-		if (m->name) {
-			printk("******** tegra_grhost: %s: refcnt %d ********* \n",
-                               m->name, atomic_read(&m->refcount));
-                }
+		if (m->name)
+			printk("tegra_grhost: %s: refcnt %d\n",
+				m->name, atomic_read(&m->refcount));
 	}
 
 	for (i = 0; i < NV_HOST1X_SYNC_MLOCK_NUM; i++) {
@@ -160,10 +154,6 @@ static void debug_not_idle(struct nvhost_module *mod)
 	}
 	if (lock_released)
 		printk("tegra_grhost: all locks released\n");
-
-        nvhost_syncpt_debug(&dev->syncpt);
-        nvhost_channel_fifo_debug(dev);
-        nvhost_sync_reg_dump(dev);
 }
 
 void nvhost_module_suspend(struct nvhost_module *mod, bool system_suspend)
@@ -171,25 +161,7 @@ void nvhost_module_suspend(struct nvhost_module *mod, bool system_suspend)
 	if (system_suspend && (!is_module_idle(mod)))
 		debug_not_idle(mod);
 
-        if(!wait_event_timeout(mod->idle, is_module_idle(mod), 2*HZ)) {
-                // timeout -> clear refcnt forcibly
-                struct nvhost_dev *dev = container_of(mod, struct nvhost_dev, mod);
-                int i = 0;
-
-                for (i = 0; i < NVHOST_NUMCHANNELS; i++) {
-                        struct nvhost_module *m = &dev->channels[i].mod;
-                        if (m->name) {
-                                int refcount = atomic_read(&m->refcount);
-                                if(refcount != 0) {
-                                        printk("%s refcount = %d, now clear ***** \n", m->name, refcount);
-                                        nvhost_module_idle_mult(mod, refcount);
-                                }
-                        }
-                }
-        }
-
-        wait_event(mod->idle, is_module_idle(mod));
-
+	wait_event(mod->idle, is_module_idle(mod));
 	if (system_suspend)
 		printk("tegra_grhost: entered idle\n");
 

@@ -310,6 +310,9 @@ static int tegra_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 
 	i2c_dev->is_suspended = true;
 
+	for (i=0; i < i2c_dev->bus_count; i++)
+		i2c_unlock_adapter(&i2c_dev->busses[i].adapter);
+
 	return 0;
 }
 
@@ -318,6 +321,9 @@ static int tegra_i2c_resume(struct platform_device *pdev)
 	struct tegra_i2c_dev *i2c_dev = platform_get_drvdata(pdev);
 //	int ret;
 	int i;
+
+	for (i=0; i < i2c_dev->bus_count; i++)
+		i2c_lock_adapter(&i2c_dev->busses[i].adapter);
 
 // This doesn't do what we want in K32. Is there something equivalent we should be doing?
 // From K35 patch 6ac71d93f4adba249c222e972128c2b75aa0a4fc

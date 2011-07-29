@@ -249,10 +249,6 @@ static int cpcap_batt_ioctl(struct inode *inode,
 		if (copy_from_user((void *)&sply->batt_state,
 				   (void *)arg, sizeof(struct cpcap_batt_data)))
 			return -EFAULT;
-		
-		printk("BATT: status = %d,health=%d,present=%d,batt_temp=%d,batt_volt=%d,batt_capacity=%d\n",sply->batt_state.status,sply->batt_state.health,sply->batt_state.present,sply->batt_state.batt_temp,sply->batt_state.batt_volt,sply->batt_state.capacity) ;
-
-
 		power_supply_changed(&sply->batt);
 
 		if (data->batt_changed)

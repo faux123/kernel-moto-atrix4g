@@ -22,6 +22,15 @@ config TOUCHSCREEN_XMEGAT
 	  To compile this driver as a module, choose M here: the
 	  module will be called xmeagat.
 
+config XMEGAT_USE_RESET_TO_RESUME
+	bool
+	default y
+
+config XMEGAT_DO_HARD_RESET
+	bool
+	depends on XMEGAT_USE_RESET_TO_RESUME
+	default y
+
 config TOUCHSCREEN_ADS7846
 	tristate "ADS7846/TSC2046 and ADS7843 based touchscreens"
 	depends on SPI_MASTER

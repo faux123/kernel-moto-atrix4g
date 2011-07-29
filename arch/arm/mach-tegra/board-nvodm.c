@@ -355,7 +355,7 @@ static void __init tegra_setup_sdhci(void) {
 	if ((machine_is_olympus() &&
 		(HWREV_TYPE_IS_FINAL(system_rev) ||
 		(HWREV_TYPE_IS_PORTABLE(system_rev) &&
-		(HWREV_REV(system_rev) >= HWREV_REV_3)))) || machine_is_arowana() ||
+		(HWREV_REV(system_rev) >= HWREV_REV_3)))) ||
 	     machine_is_tegra_daytona() ||
 	    (machine_is_etna() &&
 		(HWREV_TYPE_IS_FINAL(system_rev) ||
@@ -365,7 +365,7 @@ static void __init tegra_setup_sdhci(void) {
 		 (HWREV_REV(system_rev) >= HWREV_REV_3)))) ||
 	     machine_is_sunfire() ) {
 		tegra_sdhci_platform[2].regulator_str = (char *)tegra_sdio_ext_reg_str;
-        }
+	}
 
 	NvOdmQueryClockLimits(NvOdmIoModule_Sdio, &clock_limits, &clock_count);
 	NvOdmQueryPinMux(NvOdmIoModule_Sdio, &pinmux, &nr_pinmux);
@@ -448,7 +448,7 @@ static void __init tegra_setup_sdhci(void) {
 static void __init tegra_setup_sdhci(void) { }
 #endif
 
-#if defined(CONFIG_SERIAL_TEGRA) || defined(CONFIG_SERIAL_TEGRA_TD)
+#ifdef CONFIG_SERIAL_TEGRA
 struct tegra_serial_platform_data tegra_uart_platform[] = {
 	{
 		.p = {

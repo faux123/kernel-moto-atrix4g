@@ -298,13 +298,6 @@ config KEYBOARD_TEGRA
 	  Say Y here if you want to use a matrix keyboard connected directly
 	  to the internal keyboard controller on Tegra SoCs
 
-config MOT_FEAT_TD_KEY_PROVE_SYSTEM_ALIVE
-        bool "use key to prove the system is alive"
-        depends on KEYBOARD_TEGRA && VIB_GPIO
-        default n
-        help
-          Say Y here if you want to use key to prove the system is alive.
-
 config KEYBOARD_TEGRA_NVEC
 	boolean "NVIDIA Tegra NvEc-compliant embedded controller keyboard"
 	depends on ARCH_TEGRA && TEGRA_NVEC

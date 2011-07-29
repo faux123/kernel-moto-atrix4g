@@ -54,6 +54,12 @@
 // Set below macro to 1 to get prints during fuse read/ program operations.
 #define ENABLE_DEBUG_PRINTS 0
 
+#if ENABLE_DEBUG_PRINTS
+  #define PRINT_FUSE(x) NvOsDebugPrintf x
+#else
+  #define PRINT_FUSE(x)
+#endif
+
 #define FUSE_BOOT_DEVICE_INFO_0_BOOT_DEVICE_CONFIG_RANGE 13:0
 #define FUSE_RESERVED_SW_0_BOOT_DEVICE_SELECT_RANGE       2:0
 #define FUSE_RESERVED_SW_0_SKIP_DEV_SEL_STRAPS_RANGE      3:3
@@ -951,7 +957,7 @@ void NvDdkFuseClear(void)
     if(!s_pFuseRec)
     {
         // NV_ASSERT(0);
-        NvOsDebugPrintf("\r\n Plz call NvDdkFuseOpen before using this API");
+        NvOsDebugPrintf("\r\n 1Plz call NvDdkFuseOpen before using this API");
         return;
     }
     NvOsMutexLock(s_pFuseRec->Mutex);
@@ -967,7 +973,7 @@ void NvDdkFuseSense(void)
     if(!s_pFuseRec)
     {
         // NV_ASSERT(0);
-        NvOsDebugPrintf("\r\n Plz call NvDdkFuseOpen before using this API");
+        NvOsDebugPrintf("\r\n 2Plz call NvDdkFuseOpen before using this API");
         return;
     }
     NvOsMutexLock(s_pFuseRec->Mutex);
@@ -1054,7 +1060,7 @@ NvError NvDdkFuseGet(NvDdkFuseDataType Type, void *pData, NvU32 *pSize)
             fusememcpy(pData, ReservedOdm, sizeof(ReservedOdm));
             break;
         default:
-            NvOsDebugPrintf("\r\n Invalid fuse type selected");
+            NvOsDebugPrintf("\r\n Invalid fuse type selected.  Type:0x%x",Type);
             break;
     }
     return NvSuccess;
@@ -1078,7 +1084,7 @@ NvError NvDdkFuseGet(NvDdkFuseDataType Type, void *pData, NvU32 *pSize)
 
     if(!s_pFuseRec)
     {
-        NvOsDebugPrintf("\r\n Plz call NvDdkFuseOpen before using this API");
+        NvOsDebugPrintf("\r\n 3Plz call NvDdkFuseOpen before using this API");
         return 1;
     }
     DataSizeArrayLen = ((sizeof(s_DataSize)) / (sizeof(NvU32)));
@@ -1189,9 +1195,18 @@ NvError NvDdkFuseGet(NvDdkFuseDataType Type, void *pData, NvU32 *pSize)
 #if ENABLE_FUSE_VOLTAGE
 static NvRmDeviceHandle *ps_hRmDevice = NULL;
 #endif
+
 NvError NvDdkFuseOpen(NvRmDeviceHandle hRmDevice)
 {
     NvError e;
+
+    PRINT_FUSE(("\r\n %s", __func__));
+
+    if (hRmDevice == NULL)
+       return NvError_BadParameter;
+
+    if (s_pFuseRec)
+        return NvSuccess;
 
     // Allocate memory for handle.
     s_pFuseRec = NvOsAlloc(sizeof(NvDdkFuse));
@@ -1244,7 +1259,7 @@ fail:
 
 void NvDdkFuseClose()
 {
-    NvOsDebugPrintf("\r\n NvDdkFuseClose ");
+    PRINT_FUSE(("\r\n %s", __func__));
     NvOsMutexDestroy(s_pFuseRec->Mutex);
     NvOsFree(s_pFuseRec);
     s_pFuseRec = NULL;
@@ -1301,7 +1316,7 @@ NvError NvDdkFuseSet(NvDdkFuseDataType Type, void *pData, NvU32 *pSize)
             fusememcpy(ReservedOdm, pData, sizeof(ReservedOdm));
             break;
         default:
-            NvOsDebugPrintf("\r\n Invalid fuse type selected");
+            NvOsDebugPrintf("\r\n Invalid fuse type selected.  Type:0x%x",Type);
             break;
     }
     return NvSuccess;
@@ -1357,7 +1372,7 @@ NvError NvDdkFuseSet(NvDdkFuseDataType Type, void *pData, NvU32 *pSize)
     if(!s_pFuseRec)
     {
         // NV_ASSERT(0);
-        NvOsDebugPrintf("\r\n Plz call NvDdkFuseOpen before using this API");
+        NvOsDebugPrintf("\r\n 4Plz call NvDdkFuseOpen before using this API");
         return 1;
     }
     NvOsMutexLock(s_pFuseRec->Mutex);
@@ -1579,7 +1594,7 @@ NvError NvDdkFuseProgram(void)
 {
     if(!s_pFuseRec)
     {
-        NvOsDebugPrintf("\r\n Plz call NvDdkFuseOpen before using this API");
+        NvOsDebugPrintf("\r\n 5Plz call NvDdkFuseOpen before using this API");
         return 1;
     }
 #if ENABLE_FUSE_VOLTAGE
@@ -1635,7 +1650,7 @@ NvError NvDdkFuseVerify(void)
     NvError e = NvError_Success;
     if(!s_pFuseRec)
     {
-        NvOsDebugPrintf("\r\n Plz call NvDdkFuseOpen before using this API");
+        NvOsDebugPrintf("\r\n 6Plz call NvDdkFuseOpen before using this API");
         return 1;
     }
     NvOsMutexLock(s_pFuseRec->Mutex);
@@ -1663,7 +1678,7 @@ void NvDdkDisableFuseProgram(void)
     if(!s_pFuseRec)
     {
         // NV_ASSERT(0);
-        NvOsDebugPrintf("\r\n Plz call NvDdkFuseOpen before using this API");
+        NvOsDebugPrintf("\r\n 7Plz call NvDdkFuseOpen before using this API");
         return;
     }
     NvOsMutexLock(s_pFuseRec->Mutex);
@@ -1672,4 +1687,75 @@ void NvDdkDisableFuseProgram(void)
     NvOsMutexUnlock(s_pFuseRec->Mutex);
 }
 
+/* simple interface to read a 32 bit fuse at offset, handle all clocks, etc
+   provides a legacy interface : bug 729024 */
+NvError NvDdkFuseReadOffset(NvU32 offset, NvU32 *data)
+{
+    NvRmDeviceHandle hRm = NULL;
+    NvError e = NvSuccess;
+
+    if (!s_pFuseRec) {
+         e = NvRmOpen(&hRm, 0);
+         if(e != NvSuccess)
+            goto readfailed;
+
+         e = NvDdkFuseOpen(hRm);
+         NvRmClose(hRm);
+         if(e != NvSuccess)
+            goto readfailed;
+    }
+
+    NvDdkFuseSense();
+    SetFuseRegVisibility(1);
+    *data = fuse_read(offset);
+    SetFuseRegVisibility(0);
+
+readfailed:
+    NV_ASSERT(e == NvSuccess);
+    if(e != NvSuccess)
+        NvOsDebugPrintf("\r\n %s failed",__func__);
+
+    PRINT_FUSE(("\r\n %s(0x%x)=0x%x\n",__func__,offset,*data));
+
+    /* leave open....interface is not reference counted/instanced
+       NvDdkFuseClose(); */
+    return e;
+}
+
+
+/* simple interface to write a 32 bit fuse at offset, handle all clocks, etc
+   provides a legacy interface : bug 729024 */
+NvError NvDdkFuseWriteOffset(NvU32 offset, NvU32 data)
+{
+    NvRmDeviceHandle hRm = NULL;
+    NvError e = NvSuccess;
+
+    if (!s_pFuseRec) {
+         e = NvRmOpen(&hRm, 0);
+         if(e != NvSuccess)
+            goto writefailed;
+
+         e = NvDdkFuseOpen(hRm);
+         NvRmClose(hRm);
+         if(e != NvSuccess)
+            goto writefailed;
+    }
+
+    NvDdkFuseSense();
+    SetFuseRegVisibility(1);
+    fuse_write(offset,data);
+    SetFuseRegVisibility(0);
+
+writefailed:
+    NV_ASSERT(e == NvSuccess);
+
+    if(e != NvSuccess)
+        NvOsDebugPrintf("\r\n %s failed",__func__);
+
+    PRINT_FUSE(("\r\n %s(0x%x)=0x%x\n",__func__,offset,data));
+
+    /* leave open....interface is not reference counted/instanced
+       NvDdkFuseClose(); */
+    return e;
+}
 /** @} */

@@ -115,8 +115,4 @@ source "drivers/xen/Kconfig"
 source "drivers/staging/Kconfig"
 
 source "drivers/platform/Kconfig"
-
-source "drivers/smsmdtv/Kconfig"
-
-source "drivers/smspower/Kconfig"
 endmenu

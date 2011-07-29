@@ -164,15 +164,6 @@ static int generic_probe(struct usb_device *udev)
 		dev_err(&udev->dev, "Device is not authorized for usage\n");
 	else {
 		c = usb_choose_configuration(udev);
-#ifdef CONFIG_USB_PNX6718_MODEM
-		printk("---------%x %x-------------\n",
-				udev->descriptor.idVendor, udev->descriptor.idProduct);
-		if((udev->descriptor.idProduct == 0x225c) &&
-				(udev->descriptor.idVendor == 0x04cc)) {
-			printk("[%s]: now c = %s\n", __func__, c);
-			c = 1;
-		}
-#endif 
 		if (c >= 0) {
 			err = usb_set_configuration(udev, c);
 			if (err) {

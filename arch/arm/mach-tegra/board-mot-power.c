@@ -59,9 +59,7 @@ void mot_system_power_off(void)
 	printk(KERN_ERR "%s(): Powering down system\n", __func__);
 
 	/* Disable RTC alarms to prevent unwanted powerups */
-#ifndef	CONFIG_SUPPORT_ALARM_POWERON
 	class_for_each_device(rtc_class, NULL, NULL, disable_rtc_alarms);
-#endif
 
 	/* Disable powercut detection before power off */
 	cpcap_disable_powercut();
@@ -85,15 +83,6 @@ void mot_system_power_off(void)
 			gpio_direction_output(TEGRA_GPIO_PV7, 1);
 			gpio_set_value(TEGRA_GPIO_PV7, 0);
 		}
-	}
-	if (machine_is_arowana())
-	{
-			//Fix me: need to check on arowana
-			// Olympus Mortable, P0, P2 and later
-			gpio_request(TEGRA_GPIO_PV7, "P2 WDI");
-			gpio_direction_output(TEGRA_GPIO_PV7, 1);
-			gpio_set_value(TEGRA_GPIO_PV7, 0);
-
 	}
 	else if (machine_is_etna())
 	{
@@ -199,13 +188,6 @@ static int is_olympus_ge_p3(struct cpcap_device *cpcap)
 	return 0;
 }
 
-static int is_arowana_ge_p1(struct cpcap_device *cpcap)
-{
-	if (machine_is_arowana())
-		return 1;
-	return 0;
-}
-
 int is_sunfire_ge_p0(struct cpcap_device *cpcap)
 {
 	if (machine_is_sunfire())
@@ -263,21 +245,17 @@ struct cpcap_spi_init_data tegra_cpcap_spi_init[] = {
 	/* Set VPLL to On/Off. */
 	{CPCAP_REG_VPLLC,     0x0019, NULL             },
 	{CPCAP_REG_VRF1C,     0x0002, NULL             },
-	/* Set VRF2C */
-	{CPCAP_REG_VRF2C,     0x000b, is_arowana_ge_p1 },
 	{CPCAP_REG_VRF2C,     0x0000, NULL             },
 	{CPCAP_REG_VRFREFC,   0x0000, NULL             },
 	/* Set VWLAN1 to off */
 	{CPCAP_REG_VWLAN1C,   0x0000, is_daytona_ge_p0 },
 	{CPCAP_REG_VWLAN1C,   0x0000, is_etna_ge_p3b   },
 	{CPCAP_REG_VWLAN1C,   0x0000, is_olympus_ge_p3 },
-	{CPCAP_REG_VWLAN1C,   0x0000, is_arowana_ge_p1 },
 	{CPCAP_REG_VWLAN1C,   0x0000, is_sunfire_ge_p0 },
 	/* Set VWLAN1 to AMS/AMS 1.8v */
 	{CPCAP_REG_VWLAN1C,   0x0005, NULL             },
 	/* Set VWLAN2 to On/LP 3.3v. */
 	{CPCAP_REG_VWLAN2C,   0x0089, is_olympus_ge_p3 },
-	{CPCAP_REG_VWLAN2C,   0x0089, is_arowana_ge_p1 },	
 	{CPCAP_REG_VWLAN2C,   0x0089, is_sunfire_ge_p0 },
 	/* Set VWLAN2 to On/On 3.3v */
 	{CPCAP_REG_VWLAN2C,   0x008d, NULL             },
@@ -363,7 +341,6 @@ struct cpcap_mode_value *cpcap_regulator_mode_values[] = {
 		   when binking the message LED.  Set SW5 to On/Off Secondary
 		   control when off. */
 		{ CPCAP_REG_OFF_MODE_SEC | 0x0020, is_olympus_ge_p0 },
-		{ CPCAP_REG_OFF_MODE_SEC | 0x0020, is_arowana_ge_p1 },
 		{ CPCAP_REG_OFF_MODE_SEC | 0x0020, is_sunfire_ge_p0 },
 		/* On/Off */
 		{ 0x0020, NULL             },
@@ -381,9 +358,7 @@ struct cpcap_mode_value *cpcap_regulator_mode_values[] = {
 		{0x0000, NULL }
 	},
 	[CPCAP_VDIG] = (struct cpcap_mode_value []) {
-	/* On/On */
-		{0x0003, is_arowana_ge_p1 },
-	/* Off/Off */
+		/* Off/Off */
 		{0x0000, NULL }
 	},
 	[CPCAP_VFUSE] = (struct cpcap_mode_value []) {
@@ -419,7 +394,6 @@ struct cpcap_mode_value *cpcap_regulator_mode_values[] = {
 		{0x0000, is_daytona_ge_p0 },
 		{0x0000, is_etna_ge_p3b   },
 		{0x0000, is_olympus_ge_p3 },
-		{0x0000, is_arowana_ge_p1 },
 		{0x0000, is_sunfire_ge_p0 },
 		/* AMS/AMS. */
 		{0x0005, NULL             },
@@ -429,7 +403,6 @@ struct cpcap_mode_value *cpcap_regulator_mode_values[] = {
 		{0x0009, is_olympus_ge_p3 },
 		{0x0009, is_sunfire_ge_p0 },
 		/* On/On 3.3v (external pass) */
-		{0x000D, is_arowana_ge_p1 },
 		{0x000D, NULL             },
 	},
 	[CPCAP_VSIM] = (struct cpcap_mode_value []) {
@@ -509,7 +482,6 @@ struct cpcap_mode_value *cpcap_regulator_off_mode_values[] = {
 	[CPCAP_VWLAN2] = (struct cpcap_mode_value []) {
 		/* Turn off only once sec standby is entered. */
 		{0x0004, is_olympus_ge_p3 },
-		{0x0004, is_arowana_ge_p1 },
 		{0x0004, is_sunfire_ge_p0 },
 		{0x0000, NULL             },
 	},
@@ -622,12 +594,6 @@ struct regulator_consumer_supply cpcap_vaudio_consumers[] = {
 	REGULATOR_CONSUMER("odm-kit-vaudio", NULL /* mic opamp */),
 };
 
-#if defined(CONFIG_GPS_BCM4750)
-struct regulator_consumer_supply cpcap_vdig_consumers[] = {
-    REGULATOR_CONSUMER("vdig", NULL /*  gps bbrfregin */),
-};
-#endif
-
 static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 	[CPCAP_SW1] = {
 		.constraints = {
@@ -706,19 +672,6 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= 0,
 		},
 	},
-#if defined(CONFIG_GPS_BCM4750)
-    [CPCAP_VDIG] = {
-		.constraints = {
-			.min_uV = 1875000,
-			.max_uV = 1875000,
-			.valid_ops_mask = REGULATOR_CHANGE_STATUS,
-			.always_on = 1,
-			.apply_uV  = 1,
-		},
-		.num_consumer_supplies = ARRAY_SIZE(cpcap_vdig_consumers),
-		.consumer_supplies  = cpcap_vdig_consumers,
-	},
-#else
 	[CPCAP_VDIG] = {
 		.constraints = {
 			.min_uV			= 1200000,
@@ -726,7 +679,6 @@ static struct regulator_init_data cpcap_regulator[CPCAP_NUM_REGULATORS] = {
 			.valid_ops_mask		= 0,
 		},
 	},
-#endif
 	[CPCAP_VFUSE] = {
 		.constraints = {
 			.min_uV			= 1500000,
@@ -944,20 +896,7 @@ struct spi_board_info tegra_spi_devices[] __initdata = {
         .platform_data = NULL,
         .irq = 0,
     },
-#endif     
-//==== added for arowana cmmb chip ======
-#ifdef CONFIG_TEGRA_ODM_AROWANA
-    {
-        .modalias = "smsmdtv",
-        .bus_num = 2,
-        .chip_select = 0,
-        .mode = SPI_MODE_0,
-        .max_speed_hz = 12000000,
-        .controller_data = NULL,
-        .irq = 1,
-    },
 #endif
-//=======================================
 };
 
 
@@ -1002,18 +941,17 @@ static int cpcap_usb_connected_probe(struct platform_device *pdev)
 		tegra_otg_set_mode(1);
 #endif
 	}
-#ifdef CONFIG_MDM_CTRL
 	mdm_ctrl_set_usb_ipc(true);
-#endif
+
 	return 0;
 }
 
 static int cpcap_usb_connected_remove(struct platform_device *pdev)
 {
 	struct cpcap_usb_connected_data *data = platform_get_drvdata(pdev);
-#ifdef CONFIG_MDM_CTRL
+
 	mdm_ctrl_set_usb_ipc(false);
-#endif
+
 	/* Configure CPCAP-AP20 USB Mux to CPCAP */
 	NvOdmGpioSetState(data->h_gpio, data->h_pin, 0x0);
 	NvOdmGpioReleasePinHandle(data->h_gpio, data->h_pin);
@@ -1087,7 +1025,6 @@ void mot_setup_power(void)
 	int error;
 
 	/* CPCAP standby lines connected to CPCAP GPIOs on Etna P1B & Olympus P2 */
-	/* arowana follow olympus p3 */
 	if ( HWREV_TYPE_IS_FINAL(system_rev) ||
 	     (machine_is_etna() &&
 	      HWREV_TYPE_IS_PORTABLE(system_rev) &&
@@ -1095,7 +1032,7 @@ void mot_setup_power(void)
 	     (machine_is_olympus() &&
 	       HWREV_TYPE_IS_PORTABLE(system_rev) &&
 	       (HWREV_REV(system_rev)  >= HWREV_REV_2)) ||
-		  machine_is_tegra_daytona() || machine_is_sunfire() || machine_is_arowana()) {
+		  machine_is_tegra_daytona() || machine_is_sunfire()) {
 		tegra_cpcap_data.hwcfg[1] |= CPCAP_HWCFG1_STBY_GPIO;
 	}
 
@@ -1116,24 +1053,6 @@ void mot_setup_power(void)
 			   external SD card. */
 			fixed_sdio_config.enabled_at_boot = 1;
 		}
-		/* Indicate the macro controls SW5. */
-		tegra_cpcap_leds.rgb_led.regulator_macro_controlled = true;
-	}
-
-	if (machine_is_arowana()) {
-
-			pr_info("Detected Arowana hardware.\n");
-
-			tegra_cpcap_data.hwcfg[1] |= CPCAP_HWCFG1_SEC_STBY_VWLAN2;
-			tegra_cpcap_data.hwcfg[1] &= ~CPCAP_HWCFG1_SEC_STBY_VWLAN1;
-
-#ifdef CONFIG_MOT_FEAT_PANIC_NOTIFIER
-	    /* if we need vibration to notify user when a kernel panic happens,
-	     * vibrator regulator must be kept on all the time on Arowana. Not
-	     * easy to do spi operations in panic environment...
-	     */
-			cpcap_regulator[CPCAP_VVIB].constraints.always_on = 1;
-#endif
 		/* Indicate the macro controls SW5. */
 		tegra_cpcap_leds.rgb_led.regulator_macro_controlled = true;
 	}

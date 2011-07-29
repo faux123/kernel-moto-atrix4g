@@ -31,10 +31,6 @@ ifeq ($(CONFIG_TEGRA_ODM_OLYMPUS),y)
   is_tpk_touch := y
 endif
 
-ifeq ($(CONFIG_TEGRA_ODM_AROWANA),y)
-  is_tpk_touch := y
-endif
-
 ifeq ($(CONFIG_TEGRA_ODM_HARMONY),y)
   is_panjit_touch := y
 endif

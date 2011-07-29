@@ -53,6 +53,8 @@
 // 2 = calling NvOdmSpiSlaveGetTransactionData for SPI1
 extern unsigned int tx_state;
 #endif
+#include "nvddk_fuse.h"
+
 
 // This list requires pre-sorted info in bond-out registers order and bond-out
 // register bit shift order (MSB-to-LSB).
@@ -979,55 +981,31 @@ static void
 NvRmPrivContentProtectionFuses( NvRmDeviceHandle hRm )
 {
     NvU32 reg;
-    NvU32 clk_rst;
+    NvError e;
 
     /* need to set FUSE_RESERVED_PRODUCTION_0 to 0x3,
      * enable the bypass and write access
      *
      * bit 0: macrovision
      * bit 1: hdcp
-     */
-
-#if NV_USE_FUSE_CLOCK_ENABLE
-    // Enable fuse clock
-    Ap20EnableModuleClock(hRm, NvRmModuleID_Fuse, NV_TRUE);
-#endif
-
-    /**
+     *
      * This order is IMPORTANT. Fuse bypass doesn't seem to work with
      * different ordering.
      */
+    e = NvDdkFuseReadOffset(FUSE_FUSEBYPASS_0, &reg);
+    reg = NV_FLD_SET_DRF_DEF(FUSE, FUSEBYPASS, FUSEBYPASS_VAL, ENABLED, reg);
+    e |= NvDdkFuseWriteOffset(FUSE_FUSEBYPASS_0,reg);
 
-    clk_rst = NV_REGR( hRm, NvRmPrivModuleID_ClockAndReset, 0,
-        CLK_RST_CONTROLLER_MISC_CLK_ENB_0 );
-    clk_rst = NV_FLD_SET_DRF_NUM( CLK_RST_CONTROLLER, MISC_CLK_ENB,
-        CFG_ALL_VISIBLE, 1, clk_rst );
-    NV_REGW( hRm, NvRmPrivModuleID_ClockAndReset, 0,
-        CLK_RST_CONTROLLER_MISC_CLK_ENB_0, clk_rst );
-
-    reg = NV_REGR( hRm, NvRmModuleID_Fuse, 0, FUSE_FUSEBYPASS_0);
-    reg = NV_FLD_SET_DRF_DEF( FUSE, FUSEBYPASS, FUSEBYPASS_VAL, ENABLED, reg );
-    NV_REGW( hRm, NvRmModuleID_Fuse, 0, FUSE_FUSEBYPASS_0, reg );
-
-    reg = NV_REGR( hRm, NvRmModuleID_Fuse, 0, FUSE_WRITE_ACCESS_SW_0);
-    reg = NV_FLD_SET_DRF_DEF( FUSE, WRITE_ACCESS_SW, WRITE_ACCESS_SW_CTRL,
+    e |= NvDdkFuseReadOffset(FUSE_WRITE_ACCESS_SW_0, &reg);
+    reg = NV_FLD_SET_DRF_DEF(FUSE, WRITE_ACCESS_SW, WRITE_ACCESS_SW_CTRL,
             READWRITE, reg);
-    NV_REGW( hRm, NvRmModuleID_Fuse, 0, FUSE_WRITE_ACCESS_SW_0, reg );
+    e |= NvDdkFuseWriteOffset(FUSE_WRITE_ACCESS_SW_0, reg);
 
-    reg = NV_REGR( hRm, NvRmModuleID_Fuse, 0, FUSE_RESERVED_PRODUCTION_0);
-    reg = NV_FLD_SET_DRF_NUM( FUSE, RESERVED_PRODUCTION,
-            RESERVED_PRODUCTION, 0x3, reg );
-    NV_REGW( hRm, NvRmModuleID_Fuse, 0, FUSE_RESERVED_PRODUCTION_0, reg );
-
-    clk_rst = NV_FLD_SET_DRF_NUM( CLK_RST_CONTROLLER, MISC_CLK_ENB,
-        CFG_ALL_VISIBLE, 0, clk_rst );
-    NV_REGW( hRm, NvRmPrivModuleID_ClockAndReset, 0,
-        CLK_RST_CONTROLLER_MISC_CLK_ENB_0, clk_rst );
-
-#if NV_USE_FUSE_CLOCK_ENABLE
-    // Disable fuse clock
-    Ap20EnableModuleClock(hRm, NvRmModuleID_Fuse, NV_FALSE);
-#endif
+    e |= NvDdkFuseReadOffset(FUSE_RESERVED_PRODUCTION_0, &reg);
+    reg = NV_FLD_SET_DRF_NUM(FUSE, RESERVED_PRODUCTION,
+            RESERVED_PRODUCTION, 0x3, reg);
+    e |= NvDdkFuseWriteOffset(FUSE_RESERVED_PRODUCTION_0, reg);
+    NV_ASSERT(e == NV_SUCCESS);
 }
 
 // Safe PLLM (max 1000MHz) divider for GPU modules

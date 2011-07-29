@@ -66,76 +66,6 @@
 #include "board-mot.h"
 #include "nvrm_power.h"
 
-
-static char arowana_unused_pins_p1a[] = {
-        TEGRA_GPIO_PO1,
-        TEGRA_GPIO_PO2,
-        TEGRA_GPIO_PO3,
-        TEGRA_GPIO_PO4,
-        TEGRA_GPIO_PO5,
-        TEGRA_GPIO_PO6,
-        TEGRA_GPIO_PO7,
-        TEGRA_GPIO_PO0,
-        TEGRA_GPIO_PY0,
-        TEGRA_GPIO_PY1,
-        TEGRA_GPIO_PY2,
-        TEGRA_GPIO_PY3,
-        TEGRA_GPIO_PC1,
-        TEGRA_GPIO_PN5,
-        TEGRA_GPIO_PW1,
-        TEGRA_GPIO_PB3,
-        TEGRA_GPIO_PE5,
-        TEGRA_GPIO_PE6,
-        TEGRA_GPIO_PF0,
-        TEGRA_GPIO_PM6,
-        TEGRA_GPIO_PM7,
-        TEGRA_GPIO_PT4,
-        TEGRA_GPIO_PL5,
-        TEGRA_GPIO_PL7,
-        TEGRA_GPIO_PT2,
-        TEGRA_GPIO_PD6,
-        TEGRA_GPIO_PD7,
-        TEGRA_GPIO_PR3,
-        TEGRA_GPIO_PR4,
-        TEGRA_GPIO_PR5,
-        TEGRA_GPIO_PR6,
-        TEGRA_GPIO_PR7,
-        TEGRA_GPIO_PS0,
-        TEGRA_GPIO_PS2,
-        TEGRA_GPIO_PQ3,
-        TEGRA_GPIO_PQ4,
-        TEGRA_GPIO_PQ5,
-        TEGRA_GPIO_PBB0,
-        TEGRA_GPIO_PZ5,
-        TEGRA_GPIO_PK5,
-        TEGRA_GPIO_PK6,
-        TEGRA_GPIO_PW5,
-        TEGRA_GPIO_PI7,
-        TEGRA_GPIO_PJ0,
-        TEGRA_GPIO_PJ2,
-        TEGRA_GPIO_PK3,
-        TEGRA_GPIO_PK4,
-        TEGRA_GPIO_PK2,
-        TEGRA_GPIO_PG0,
-        TEGRA_GPIO_PG1,
-        TEGRA_GPIO_PG2,
-        TEGRA_GPIO_PG3,
-        TEGRA_GPIO_PG4,
-        TEGRA_GPIO_PG5,
-        TEGRA_GPIO_PG6,
-        TEGRA_GPIO_PG7,
-        TEGRA_GPIO_PH0,
-        TEGRA_GPIO_PH1,
-        TEGRA_GPIO_PH2,
-        TEGRA_GPIO_PH3,
-        TEGRA_GPIO_PI0,
-        TEGRA_GPIO_PI4,
-        TEGRA_GPIO_PT5,
-        TEGRA_GPIO_PT6,
-        TEGRA_GPIO_PC7,
-};
-
-
 static char oly_unused_pins_p3[] = {
         TEGRA_GPIO_PO1,
         TEGRA_GPIO_PO2,
@@ -608,18 +538,6 @@ static struct i2c_board_info tegra_i2c_bus3_board_info[] = {
 		.irq = 180,
 	},
 #endif
-#if defined(CONFIG_TEGRA_ODM_AROWANA)
-	{
-		/*  ISL 29030 (prox/ALS) driver */
-		I2C_BOARD_INFO(LD_ISL29030_NAME, 0x44),
-		.platform_data = &isl29030_als_ir_data_Arowana,
-		.irq = 180,
-	},
-#endif
-
-
-
-
 };
 
 #if 1
@@ -725,60 +643,9 @@ static int config_unused_pins(char *pins, int num)
 }
 
 
-/*   GPS Chip BCM4750 Power Management */
-#ifdef CONFIG_GPS_BCM4750
-    #ifndef AGPS_RESET_N
-    #define AGPS_RESET_N TEGRA_GPIO_PM6
-    #endif
-
-    #ifndef AGPS_POWER_EN
-    #define AGPS_POWER_EN TEGRA_GPIO_PL5
-    #endif
-
-struct gps_platform_data{
-	int reset_pin;
-	int power_pin;
-};
-
-static struct gps_platform_data gps_platform_data = {
-    .reset_pin = AGPS_RESET_N,
-    .power_pin = AGPS_POWER_EN,
-};
-static struct platform_device gps_bcm4750_device = {
-     .name = "bcm4750",
-     .id = -1,
-     .dev = {
-		 .platform_data = &gps_platform_data,
-	 },
-};
-
-static void __init gps_bcm4750_init(void)
-{
-	printk(KERN_INFO "===<*GPS*>=== [%s:%s:%d] GPS pins init here\n",\
-			__FILE__, __func__, __LINE__);
-	gpio_request(AGPS_POWER_EN, NULL);
-	gpio_direction_output(AGPS_POWER_EN, 0);
-    gpio_request(AGPS_RESET_N, NULL);
-    gpio_direction_output(AGPS_RESET_N, 0);
-
-    gpio_set_value(AGPS_RESET_N, 1);
-    gpio_set_value(AGPS_RESET_N, 0);
-    gpio_set_value(AGPS_RESET_N, 1);
-
-    platform_device_register(&gps_bcm4750_device);
- }
-
-#else
-     static inline void gps_bcm4750_init(void) {}
-#endif
-
-
 static void __init tegra_mot_init(void)
 {
 	tegra_common_init();
-#ifdef CONFIG_TEGRA_ODM_AROWANA
-	mot_modem_init();
-#endif
 	tegra_setup_nvodm(true, true);
 	tegra_register_socdev();
 
@@ -788,7 +655,7 @@ static void __init tegra_mot_init(void)
 #ifdef CONFIG_APANIC_MMC
 	apanic_mmc_init();
 #endif
-	mot_panic_notifier_init();
+
 	mot_setup_power();
 	mot_setup_lights(&tegra_i2c_bus0_board_info[BACKLIGHT_DEV]);
 	mot_setup_touch(&tegra_i2c_bus0_board_info[TOUCHSCREEN_DEV]);
@@ -802,9 +669,7 @@ static void __init tegra_mot_init(void)
 		tegra_uart_platform[UART_IPC_OLYMPUS].uart_ipc = 1;
 		tegra_uart_platform[UART_IPC_OLYMPUS].uart_wake_host = TEGRA_GPIO_PA0;
 		tegra_uart_platform[UART_IPC_OLYMPUS].uart_wake_request = TEGRA_GPIO_PF1;
-#ifdef CONFIG_MDM_CTRL
 		tegra_uart_platform[UART_IPC_OLYMPUS].peer_register = mot_mdm_ctrl_peer_register;
-#endif
 	}
 	else if(machine_is_etna()) {
 		if (HWREV_TYPE_IS_BRASSBOARD(system_rev)) {
@@ -815,33 +680,21 @@ static void __init tegra_mot_init(void)
 			tegra_uart_platform[UART_IPC_ETNA].uart_ipc = 1;
 			tegra_uart_platform[UART_IPC_ETNA].uart_wake_host = TEGRA_GPIO_PA0;
 			tegra_uart_platform[UART_IPC_ETNA].uart_wake_request = TEGRA_GPIO_PF1;
-#ifdef CONFIG_MDM_CTRL
 			tegra_uart_platform[UART_IPC_ETNA].peer_register = mot_mdm_ctrl_peer_register;
-#endif
 		}
 	}
 	else if(machine_is_tegra_daytona()) {
 		tegra_uart_platform[UART_IPC_DAYTONA].uart_ipc = 1;
 		tegra_uart_platform[UART_IPC_DAYTONA].uart_wake_host = TEGRA_GPIO_PA0;
 		tegra_uart_platform[UART_IPC_DAYTONA].uart_wake_request = TEGRA_GPIO_PF1;
-#ifdef CONFIG_MDM_CTRL
 		tegra_uart_platform[UART_IPC_DAYTONA].peer_register = mot_mdm_ctrl_peer_register;
-#endif
 	}
 	else if(machine_is_sunfire()) {
 		tegra_uart_platform[UART_IPC_SUNFIRE].uart_ipc = 1;
 		tegra_uart_platform[UART_IPC_SUNFIRE].uart_wake_host = TEGRA_GPIO_PA0;
 		tegra_uart_platform[UART_IPC_SUNFIRE].uart_wake_request = TEGRA_GPIO_PF1;
-#ifdef CONFIG_MDM_CTRL
 		tegra_uart_platform[UART_IPC_SUNFIRE].peer_register = mot_mdm_ctrl_peer_register;
-#endif
 	}
-	//Fix me: IPC code need review, first align with olympus
-	else if(machine_is_arowana()) {
-		tegra_uart_platform[UART_IPC_AROWANA].uart_ipc = 1;
-		tegra_uart_platform[UART_IPC_AROWANA].uart_wake_host = TEGRA_GPIO_PA0;
-		tegra_uart_platform[UART_IPC_AROWANA].uart_wake_request = TEGRA_GPIO_PF1;
-	 }
 
 	if( (bi_powerup_reason() & PWRUP_FACTORY_CABLE) &&
 	    (bi_powerup_reason() != PWRUP_INVALID) ){
@@ -850,9 +703,7 @@ static void __init tegra_mot_init(void)
 #endif
 	}
 
-#ifndef CONFIG_TEGRA_ODM_AROWANA
 	mot_modem_init();
-#endif
 
 	(void) platform_driver_register(&cpcap_usb_connected_driver);
 
@@ -880,7 +731,7 @@ static void __init tegra_mot_init(void)
 	i2c_register_board_info(3, tegra_i2c_bus3_board_info, 
 							ARRAY_SIZE(tegra_i2c_bus3_board_info));
 
-	if (machine_is_olympus() || machine_is_arowana()){
+	if (machine_is_olympus()){
 		/* console UART can be routed to 'headset jack by setting HSJ mux to 0*/
 		short hsj_mux_gpio=1;
 
@@ -891,12 +742,6 @@ static void __init tegra_mot_init(void)
 		mot_set_hsj_mux( hsj_mux_gpio );
 	}
 
-#ifdef CONFIG_GPS_BCM4750
-    gps_bcm4750_init();
-    printk(KERN_INFO "\n<#GPS#>%s: init gps chip bcm4750\n", __func__);
-#endif
-
-	
 	pm_power_off = mot_system_power_off;
 	tegra_setup_bluesleep();
 
@@ -941,14 +786,12 @@ static void __init tegra_mot_init(void)
 			config_unused_pins(etna_unused_pins_p2c, ARRAY_SIZE(etna_unused_pins_p2c));
 		}
 	}
-        if (machine_is_arowana() ){
- 		config_unused_pins(arowana_unused_pins_p1a, ARRAY_SIZE(arowana_unused_pins_p1a));
-	}
+
         if (machine_is_tegra_daytona())
                 config_unused_pins(daytona_unused_pins_p1, ARRAY_SIZE(daytona_unused_pins_p1));
 
 
-	if (machine_is_etna() || machine_is_tegra_daytona() || machine_is_sunfire() ||  machine_is_arowana())
+	if (machine_is_etna() || machine_is_tegra_daytona() || machine_is_sunfire())
 		// UTS tool support
 		mot_keymap_update_init();
 }
@@ -1004,18 +847,6 @@ MACHINE_START(OLYMPUS, "Olympus")
     .timer        = &tegra_timer,
 
 MACHINE_END
-
-MACHINE_START(AROWANA, "Arowana")
-
-    .boot_params  = 0x00000100,
-    .fixup        = mot_fixup,
-    .map_io       = tegra_map_common_io,
-    .init_irq     = tegra_init_irq,
-    .init_machine = tegra_mot_init,
-    .timer        = &tegra_timer,
-
-MACHINE_END
-
 
 MACHINE_START(ETNA, "Etna")
 

@@ -180,26 +180,7 @@ int __init mot_nvodmcam_init(void)
 			ASSIGN(pdata.camera[1].cam_pd, BB5, 0);
 		}
 	}
-	/* ===== AROWANA ===== */
-	else if (machine_is_arowana()) {
-        printk("machine_is_arowana\n");
-        pdata.num_cameras = 2;
 
-		/* camera 0 - back camera */
-		/* Arowana All HW -> AP8140 pd=D2,no rs */
-                SENSOR(pdata.camera[0], AP8140);
-		ASSIGN(pdata.camera[0].cam_pd, D2, 1);
-
-		/* camera 0 - flash */
-		/* Arowana All HW -> LM3559 rs=T3 */
-		ASSIGN(pdata.camera[0].flash_rs, T3, 1);
-
-		/* camera 1 - front camera */
-		/* Arowana All HW -> OV7739 pd=BB5,rs=L4 */
-                SENSOR(pdata.camera[1], OV7739);
-		ASSIGN(pdata.camera[1].cam_pd, BB5, 0);
-		ASSIGN(pdata.camera[1].cam_rs, L4, 1);
-    }
 	else {
 		printk(KERN_ERR "%s: your hw not supported\n", __func__);
 		return -ENODEV;

@@ -27,10 +27,17 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/miscdevice.h>
+#include <linux/mutex.h>
 #include <linux/qtouch_obp_ts.h>
 #include <linux/wakelock.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
+
+/* Alternative resume methods */
+/* use soft reset instead of power config */
+/* #define CONFIG_XMEGAT_USE_RESET_TO_RESUME */
+/* do hard reset before soft reset */
+/* #define CONFIG_XMEGAT_DO_HARD_RESET */
 
 /*
 #define	USE_NVODM_STUFF	1
@@ -83,6 +90,8 @@ struct axis_map
 struct qtouch_ts_data 
 {
 	struct i2c_client		*client;
+	/* Use this mutex to protect access to i2c */
+	struct mutex				i2c_lock;
 	struct input_dev		*input_dev;
 	struct work_struct		init_work;
 	struct work_struct		work;
@@ -161,6 +170,7 @@ static void qtouch_printk (int, char *, ...);
 static	int	qtouch_ioctl_open(struct inode *inode, struct file *filp);
 static	int qtouch_ioctl_ioctl(struct inode *node, struct file *filp, unsigned int cmd, unsigned long arg);
 static	int qtouch_ioctl_write(struct file *flip, const char __user *buf, size_t count, loff_t *f_pos );
+static int qtouch_read(struct qtouch_ts_data *ts, void *buf, int buf_sz);
 
 static uint8_t calibrate_chip(struct qtouch_ts_data *ts);
 static uint8_t check_chip_calibration(struct qtouch_ts_data *ts);
@@ -218,7 +228,7 @@ static void clean_i2c(struct qtouch_ts_data *ts)
 	clean = FALSE;
 	while ( !clean )
 	{
-		ret = i2c_master_recv(ts->client, (char *)buf, 1);
+		ret = qtouch_read(ts, (char *)buf, 1);
 		if ( ret < 1 )
 			clean = TRUE;
 		if ( buf[0] == 0xff )
@@ -271,6 +281,8 @@ static int qtouch_write(struct qtouch_ts_data *ts, void *buf, int buf_sz)
 	int retries = 10;
 	int ret;
 
+	mutex_lock(&ts->i2c_lock);
+
 	do {
 		ret = i2c_master_send(ts->client, (char *)buf, buf_sz);
 	} while ((ret < buf_sz) && (--retries > 0));
@@ -284,6 +296,9 @@ static int qtouch_write(struct qtouch_ts_data *ts, void *buf, int buf_sz)
 		QTOUCH_INFO("%s: Write %d bytes, expected %d\n", __func__, ret, buf_sz);
 		ret = -EIO;
 	}
+
+	mutex_unlock(&ts->i2c_lock);
+
 	return ret;
 }
 
@@ -303,6 +318,8 @@ static int qtouch_read(struct qtouch_ts_data *ts, void *buf, int buf_sz)
 {
 	int retries = 10;
 	int ret;
+
+	mutex_lock(&ts->i2c_lock);
 
 	QTOUCH_INFO("%s: Read %d bytes into address 0x%X\n", __func__, buf_sz, buf );
 	do 
@@ -324,6 +341,9 @@ static int qtouch_read(struct qtouch_ts_data *ts, void *buf, int buf_sz)
 	}
 	else
 		QTOUCH_INFO("%s: Read %d bytes\n", __func__, buf_sz );
+
+	mutex_unlock(&ts->i2c_lock);
+
 	return ret >= 0 ? 0 : ret;
 }
 
@@ -527,8 +547,6 @@ static int qtouch_force_backupnv(struct qtouch_ts_data *ts)
 	if (ret)
 		QTOUCH_ERR("%s: Unable to send the Backup NV request message\n",
 					__func__);
-
-	msleep(500);
 	return ret;
 }
 
@@ -722,7 +740,6 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 	obj = find_obj(ts, QTM_OBJ_TOUCH_MULTI);
 	if (obj && obj->entry.num_inst > 0) 
 	{
-		uint8_t sec_screen = ts->pdata->multi_touch_cfg.sec_screen;
 		struct qtm_touch_multi_cfg cfg;
 		memcpy(&cfg, &ts->pdata->multi_touch_cfg, sizeof(cfg));
 		if (ts->pdata->flags & QTOUCH_USE_MULTITOUCH)
@@ -734,20 +751,6 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 		if (ret != 0) 
 		{
 			QTOUCH_ERR("%s: Can't write multi-touch config\n", __func__);
-			goto failed2write;
-		}
-		/* Sometimes the register 295 maybe wrote to 0xff wrongly,
-		 * 1.now we will initial this register to 0 every powerup.
-		 * 2.if it is modified when running, we will reflash it to 0.
-		 * 
-		 * Note: if the register 295 is used for other function or
-		 * the obj->entry.size is added, please delete these modify.
-		 */
-		ret = qtouch_write_addr(ts, obj->entry.addr + obj->entry.size,
-					&sec_screen, 1);
-		if (ret != 0) 
-		{
-			QTOUCH_ERR("%s: Can't write sec_screen config\n", __func__);
 			goto failed2write;
 		}
 	}
@@ -1137,10 +1140,6 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj, vo
 
 	if (msg->status & QTM_CMD_PROC_STATUS_CFGERR) 
 	{
-		ret = qtouch_hw_init(ts);
-		if (ret != 0)
-			QTOUCH_ERR("%s:Cannot init the touch IC\n",
-				 __func__);
 		QTOUCH_ERR("%s: Configuration error\n", __func__);
 	}
 	/* Check the EEPROM checksum.  An ESD event may cause
@@ -1173,11 +1172,33 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj, vo
 			{
 				if (!hw_reset) 
 				{
-					ret = qtouch_hw_init(ts);
-					if (ret != 0)
-						QTOUCH_ERR("%s:Cannot init the touch IC\n",
-							 __func__);
 					qtouch_force_reset(ts, FALSE);
+					if (ts->resume_full_reload_flag == TRUE)
+					{
+						/*
+						 * Unfortunately, this means
+						 * that we failed to save config
+						 * into nvram. But for the good
+						 * news, we can re-load it again
+						 * and try saving it to nvram.
+						 * Since we are sending the full
+						 * config, trying to save it to
+						 * nvram adds very little
+						 * overhead
+						 */
+						ret = qtouch_hw_init(ts);
+						if (ret != 0)
+						{
+							QTOUCH_ERR("%s: Cannot reload IC config\n",
+								__func__);
+							return -EIO;
+						}
+#ifdef CONFIG_XMEGAT_DO_HARD_RESET
+						/* try saving to nvram */
+						if (!qtouch_force_backupnv(ts))
+							ts->resume_full_reload_flag = FALSE;
+#endif
+					}
 					ts->checksum_cnt++;
 				}
 			}
@@ -1581,21 +1602,26 @@ static int	qtouch_set_bootloader_mode(struct qtouch_ts_data *ts)
 	/* need to read 1 byte from i2c */
 	ts->client->addr = XMEGAT_BL_I2C_ADDR;
 	ts->i2cBLAddr = XMEGAT_BL_I2C_ADDR;
-	if ((ret = i2c_master_recv(ts->client, data, 1 )) < 0 )
+	ret = qtouch_read(ts, data, 1);
+	if (ret  < 0)
 	{
 		ts->client->addr = XMEGAT_BL_I2C_ADDR_ALT;
 		ts->i2cBLAddr = XMEGAT_BL_I2C_ADDR_ALT;
-		if ((ret = i2c_master_recv(ts->client, data, 1 )) < 0 )
+		ret = qtouch_write(ts, data, 1);
+		if (ret < 0)
 		{
-			QTOUCH_INFO("%s: i2c_master_recv (bootloader client) error  %d\n",__func__,ret);
-			QTOUCH_INFO("%s: Cause: touch device is probably missing.\n", __func__);
+			QTOUCH_INFO("%s: BT client error %d\n",
+					__func__, ret);
+			QTOUCH_INFO("%s: touch device is probably missing.\n",
+					__func__);
 			ts->modeOfOperation = QTOUCH_MODE_UNKNOWN;
 			return QTOUCH_MODE_UNKNOWN;
 		}
 	}
 	else
 	{
-		QTOUCH_INFO("%s: i2c_master_recv (bootloader client) data: 0x%x\n",__func__,data[0]);
+		QTOUCH_INFO("%s: qtouch_write (bootloader client) data: 0x%x\n",
+				__func__, data[0]);
 		QTOUCH_INFO("%s: entering bootloader mode\n",__func__);
 		ts->modeOfOperation = QTOUCH_MODE_BOOTLOADER;
 		/* wait until we get 0x8n */
@@ -1604,18 +1630,20 @@ static int	qtouch_set_bootloader_mode(struct qtouch_ts_data *ts)
 			QTOUCH_INFO("%s: Sending Unblock command (0xDC,0xAA)\n",__func__);
 			data[0] = 0xDC;
 			data[1] = 0xAA;
-			ret = i2c_master_send (ts->client, data, 2);
+			ret = qtouch_write(ts, data, 2);
 			if ( ret < 0 )
 			{
-				QTOUCH_INFO("%s: i2c_master_send (bootloader unlock: 0xDC,0xAA)\n",__func__);
+				QTOUCH_INFO("%s: BT unlock: 0xDC,0xAA)\n",
+						__func__);
 				ts->modeOfOperation = QTOUCH_MODE_UNKNOWN;
 				return QTOUCH_MODE_UNKNOWN;
 			}
 			msleep(30);
-			ret = i2c_master_recv(ts->client, data, 1);
+			ret = qtouch_read(ts, data, 1);
 			if ( ret < 0 )
 			{
-				QTOUCH_INFO("%s: i2c_master_recv (bootloader client waiting for 0x8n) error  %d\n",__func__,ret);
+				QTOUCH_INFO("%s: error waiting for 0x8n (%d)\n",
+						__func__, ret);
 				ts->modeOfOperation = QTOUCH_MODE_UNKNOWN;
 				return QTOUCH_MODE_UNKNOWN;
 			}
@@ -1830,7 +1858,7 @@ static void qtouch_ts_work_func(struct work_struct *work)
 	if ( ts->modeOfOperation == QTOUCH_MODE_BOOTLOADER )
 	{
 		char	buf[5];
-		ret = i2c_master_recv(ts->client, buf,1);
+		ret = qtouch_read(ts, buf, 1);
 		msleep(30);
 		if (ret < 0)
 		{
@@ -1840,7 +1868,8 @@ static void qtouch_ts_work_func(struct work_struct *work)
  * address because IC has finished reset after the firmware.
  * So, we can switch the address to 0x11 and to NORMAL mode
  * */
-			QTOUCH_ERR("%s: i2c_master_recv failed(BOOTLOADER mode)\n",__func__);
+			QTOUCH_ERR("%s: qtouch_reqd failed(BOOTLOADER mode)\n",
+					__func__);
 			ts->dlStatus = QTOUCH_BL_WAITING_FOR_NOTHING;
 			ts->modeOfOperation = QTOUCH_MODE_NORMAL;
 			ts->client->addr = ts->i2cNormAddr;
@@ -2049,6 +2078,15 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	qtouch_tsdebug = 0xFF;
 	QTOUCH_INFO("%s: Enter...\n", __func__);
 
+#ifdef CONFIG_XMEGAT_USE_RESET_TO_RESUME
+	QTOUCH_INFO("%s: Using reset on resume\n", __func__);
+#ifdef CONFIG_XMEGAT_DO_HARD_RESET
+	QTOUCH_INFO("%s: Using HARD reset on resume\n", __func__);
+#endif
+#endif
+/* do hard reset before soft reset */
+/* #define CONFIG_XMEGAT_DO_HARD_RESET */
+
 	need2check4IC_problem = FALSE;
 	if (pdata == NULL) 
 	{
@@ -2098,6 +2136,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 	/* Should only be used by IOCTL functions */
 	tsGl = ts;
 
+	mutex_init(&ts->i2c_lock);
 	qtouch_ts_wq = create_singlethread_workqueue("qtouch_obp_ts_wq");
 	if (qtouch_ts_wq == NULL) 
 	{
@@ -2431,6 +2470,7 @@ err_process_info_block:
 	input_free_device(ts->input_dev);
 
 err_alloc_input_dev:
+	mutex_destroy(&ts->i2c_lock);
 	i2c_set_clientdata(client, NULL);
 	wake_lock_destroy(&(ts->wLock));
 	kfree(ts);
@@ -2457,10 +2497,6 @@ static int qtouch_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
-/* Alternative resume methods */
-#define USE_RESET_TO_RESUME  /* use soft reset instead of power config */
-#define DO_HARD_RESET        /* do hard reset before soft reset */
-
 static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 {
 	struct qtouch_ts_data *ts = i2c_get_clientdata(client);
@@ -2475,6 +2511,10 @@ static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	if (ret < 0)
 		QTOUCH_ERR("%s: Cannot write power config\n", __func__);
 
+	/* Need some delay. Seems that if suspend/resup happens too fast, TS
+	 * gets locked up and only reset helps
+	 */
+	msleep(10);
 	return 0;
 }
 
@@ -2504,7 +2544,7 @@ static int qtouch_ts_resume(struct i2c_client *client)
 	}
 	input_sync(ts->input_dev);
 
-#ifdef USE_RESET_TO_RESUME
+#ifdef CONFIG_XMEGAT_USE_RESET_TO_RESUME
 /*
  * hard reset does not generate reset message, so there
  * will be no re-calibration after the hard reset.
@@ -2514,7 +2554,7 @@ static int qtouch_ts_resume(struct i2c_client *client)
  * not clear if there is anything that hard reset actually solves
  */
 
-#ifdef DO_HARD_RESET
+#ifdef CONFIG_XMEGAT_DO_HARD_RESET
 	qtouch_force_reset(ts, FALSE);
 	if (ts->resume_full_reload_flag == TRUE)
 	{
@@ -2532,23 +2572,24 @@ static int qtouch_ts_resume(struct i2c_client *client)
 					__func__);
 			return -EIO;
 		}
+#ifdef CONFIG_XMEGAT_DO_HARD_RESET
 		/* try saving to nvram */
 		if (!qtouch_force_backupnv(ts))
 			ts->resume_full_reload_flag = FALSE;
-
+#endif
 		/* nothing more to do, qtouch_hw_init did the rest */
 		return 0;
 	}
 	/* fall through here, to do power/calibration */
 
-#else /* DO_HARD_RESET */
+#else /* CONFIG_XMEGAT_DO_HARD_RESET */
 	qtouch_force_reset(ts, TRUE);
 	/*
 	 * nothing more to do, qtouch_hw_init from control msg will do the rest
 	 */
 	return 0;
-#endif /* DO_HARD_RESET */
-#endif /* USE_RESET_TO_RESUME */
+#endif /* CONFIG_XMEGAT_DO_HARD_RESET */
+#endif /* CONFIG_XMEGAT_USE_RESET_TO_RESUME */
 
 	ret = qtouch_power_config(ts, TRUE);
 	if (ret < 0) 
@@ -2717,16 +2758,16 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp,
 				msleep(50);
 				/* Make sure the device is in bootloader mode */
 				tsGl->client->addr = tsGl->i2cBLAddr;
-				rc = i2c_master_recv(tsGl->client, data, 1);
+				rc = qtouch_read(tsGl, data, 1);
 				if( (data[0] & 0xC0 ) == 0xC0 )
 				{
 					QTOUCH_INFO("%s: mode is BOOTLOADER. Ready to unlock to device for firmware download.\n", __func__);
 					/* unlock the device */
 					data[0] = 0xDC;
 					data[1] = 0xAA;
-					rc = i2c_master_send(tsGl->client, data, 2);
+					rc = qtouch_write(tsGl, data, 2);
 					msleep(30);
-					rc = i2c_master_recv(tsGl->client, data, 1);
+					rc = qtouch_read(tsGl, data, 1);
 					if( (data[0] & 0x80 ) == 0x80 )
 					{
 						/* Device should be in the right state waiting for the data */
@@ -3010,12 +3051,14 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp,
 		/* Make sure that IC can accept the config information */
 		if ( tsGl->modeOfOperation != QTOUCH_MODE_NORMAL )
 			return -1;
+#ifdef CONFIG_XMEGAT_DO_HARD_RESET
 		/*
 		 * At this point all the objects have been sent to the IC
 		 * This is perfect time to backup the data to nv
 		 */
 		if (qtouch_force_backupnv(tsGl))
 			tsGl->resume_full_reload_flag = TRUE;
+#endif
 
 		qtouch_force_reset(tsGl, FALSE);
 		qtouch_force_calibration(tsGl);
@@ -3174,7 +3217,7 @@ static int qtouch_ioctl_write(struct file *flip, const char __user *buf, size_t 
 				QTOUCH_INFO("%02x ", kernelBuffer[i]);
 			}
 			QTOUCH_INFO("\n");
-			retval = i2c_master_send (tsGl->client, kernelBuffer, count);
+			retval = qtouch_write(tsGl, kernelBuffer, count);
 
 			if (retval < 0)
 			{
@@ -3183,7 +3226,8 @@ static int qtouch_ioctl_write(struct file *flip, const char __user *buf, size_t 
 			}
 			else
 			{
-				QTOUCH_INFO("%s: i2c_master_send(): rc= %d\n",__func__,retval);
+				QTOUCH_INFO("%s: qtouch_write(): rc= %d\n",
+						__func__, retval);
 				tsGl->dlStatus = QTOUCH_BL_WAITING_FOR_COMMAND;
 				retval = count;
 			}

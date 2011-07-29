@@ -1602,7 +1602,6 @@ static irqreturn_t serial8250_interrupt(int irq, void *dev_id)
 			/* If we hit this, we're dead. */
 			printk(KERN_ERR "serial8250: too much work for "
 				"irq%d\n", irq);
-			BUG();
 			break;
 		}
 	} while (l != end);

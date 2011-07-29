@@ -238,17 +238,6 @@ static inline bool is_leap_year(unsigned int year)
 	return (!(year % 4) && (year % 100)) || !(year % 400);
 }
 
-#ifdef	CONFIG_SUPPORT_ALARM_POWERON
-/*RTC_WAKEUP support alarm funtion when phone sleep and idle,
-  if power off or battery remove,the funtion is not avaliable
-  POWEROFF_WAKEUP support alarm funtion when phone sleep,
-  idle and power off with battery */
-#define RTC_WAKEUP_DISABLE           0
-#define RTC_WAKEUP_ENABLE            1
-#define POWEROFF_WAKEUP_DISABLE      2
-#define POWEROFF_WAKEUP_ENABLE       3
-#endif
-
 #endif /* __KERNEL__ */
 
 #endif /* _LINUX_RTC_H_ */

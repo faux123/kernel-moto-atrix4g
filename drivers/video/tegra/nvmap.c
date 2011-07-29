@@ -54,7 +54,7 @@
 #include "nvcommon.h"
 #include "nvrm_memmgr.h"
 #include "nvbootargs.h"
-#include <asm/sections.h>
+
 #ifndef NVMAP_BASE
 #define NVMAP_BASE 0xFEE00000
 #define NVMAP_SIZE SZ_2M
@@ -235,16 +235,6 @@ enum {
 	CARVEOUT_STAT_BASE,
 };
 
-/* Fix me: sometimes we received an invalide pointer from user space
- * that holds invalid mem address to trigger panic. Since
- * driver is the design from NV, we can not ensure all apps play well.
- * Have to add this bad workaround. Actually, even if _end  is not
- * 100% safe to justify this addr is in kernel space 'legaly'...
- */
-static inline int _nvmap_addr_checker(unsigned long addr)
-{
-	return (addr <= (unsigned long)_end ? -EFAULT : 0);
-}
 
 static inline pgprot_t _nvmap_flag_to_pgprot(unsigned long flag, pgprot_t base)
 {
@@ -1882,7 +1872,6 @@ static int nvmap_ioctl_pinop(struct file *filp,
 	unsigned long *refs;
 	unsigned long __user *output;
 	unsigned int i;
-	unsigned int j;
 	int err;
 
 	err = copy_from_user(&op, arg, sizeof(op));
@@ -1909,14 +1898,6 @@ static int nvmap_ioctl_pinop(struct file *filp,
 		on_stack[0] = (unsigned long)op.handles;
 	}
 
-	for (j = 0; j < op.count; j++) {
-		if (_nvmap_addr_checker(refs[j])) {
-			printk(KERN_WARNING "%s:invalid refs 0x%x or refs[%d] 0x%x!!!",
-				__func__, refs, j, refs[j]);
-			err = -EPERM;
-			goto out;
-		}
-	}
 	if (is_pin)
 		err = _nvmap_do_pin(filp->private_data, op.count, refs);
 	else
@@ -2657,8 +2638,7 @@ static int _nvmap_do_alloc(struct nvmap_file_priv *priv,
 
 	align = max_t(size_t, align, L1_CACHE_BYTES);
 
-	if (!href || _nvmap_addr_checker(href))
-		return -EINVAL;
+	if (!href) return -EINVAL;
 
 	spin_lock(&priv->ref_lock);
 	r = _nvmap_ref_lookup_locked(priv, href);
@@ -2799,8 +2779,6 @@ static int _nvmap_do_free(struct nvmap_file_priv *priv, unsigned long href)
 	int do_wake = 0;
 
 	if (!href) return 0;
-	if (_nvmap_addr_checker(href))
-		return -EPERM;
 
 	spin_lock(&priv->ref_lock);
 	r = _nvmap_ref_lookup_locked(priv, href);
@@ -4417,9 +4395,8 @@ int nvmap_pin_array(struct file *filp,
 	/* find unique handles, pin them and collect into unpin array */
 	for (elem = arr, i = num_elems; i && !ret; i--, elem++) {
 		struct nvmap_handle *to_pin = elem->pin_mem;
-		if (_nvmap_addr_checker((unsigned long)to_pin) ||
-				to_pin->poison != NVDA_POISON) {
-			pr_err("%s: handle is poisoned or invalid\n", __func__);
+		if (to_pin->poison != NVDA_POISON) {
+			pr_err("%s: handle is poisoned\n", __func__);
 			ret = -EFAULT;
 		}
 		else if (!(to_pin->flags & NVMEM_HANDLE_VISITED)) {

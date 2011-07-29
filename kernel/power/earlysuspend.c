@@ -30,19 +30,19 @@ enum {
 	DEBUG_SUSPEND = 1U << 2,
 	DEBUG_WD = 1U << 3,
 };
-static int debug_mask = DEBUG_USER_STATE | DEBUG_SUSPEND;
+static int debug_mask = DEBUG_USER_STATE;
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
-static int early_suspend_timeout_value = 60;
+static int early_suspend_timeout_value = 10;
 module_param_named(early_suspend_timeout_value, early_suspend_timeout_value,
 			int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int late_resume_timeout_value = 60;
+static int late_resume_timeout_value = 10;
 module_param_named(late_resume_timeout_value, late_resume_timeout_value,
 			int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int early_suspend_queue_timeout = 60;
+static int early_suspend_queue_timeout = 10;
 module_param_named(early_suspend_queue_timeout, early_suspend_queue_timeout,
 			int, S_IRUGO | S_IWUSR | S_IWGRP);
-static int late_resume_queue_timeout = 60;
+static int late_resume_queue_timeout = 10;
 module_param_named(late_resume_queue_timeout, late_resume_queue_timeout,
 			int, S_IRUGO | S_IWUSR | S_IWGRP);
 
@@ -263,10 +263,6 @@ static void early_suspend_timeout(unsigned long data)
 			" %pF, state: %d, requested state: %d.\n",
 			(void *)data, state, requested_suspend_state);
 
-	printk(KERN_WARNING "*---* Dumping suspend work queue stack *---*\n");
-	dump_workqueue_stack(suspend_work_queue);
-	printk(KERN_WARNING "*---* End of suspend queue stack *---*\n");
-
 	dump_process_state(s_nvrm_daemon_pid);
 	dump_process_state(suspend_pid);
 	tombstone_timeout(0);
@@ -284,10 +280,6 @@ static void late_resume_timeout(unsigned long data)
 		printk(KERN_EMERG "**** Late Resume Timeout; function:"
 			" %pF, state: %d, requested state: %d.\n",
 			(void *)data, state, requested_suspend_state);
-
-	printk(KERN_WARNING "*---* Dumping suspend work queue stack *---*\n");
-	dump_workqueue_stack(suspend_work_queue);
-	printk(KERN_WARNING "*---* End of suspend queue stack *---*\n");
 
 	dump_process_state(s_nvrm_daemon_pid);
 	dump_process_state(suspend_pid);
@@ -356,7 +348,3 @@ static void early_suspend_wd_disable(int suspend_type)
                         pr_info("Late Resume watchdog stopped.\n");
 	}
 }
-void dump_suspend_workqueue_stack(void){
-	dump_workqueue_stack(suspend_work_queue);
-}
-EXPORT_SYMBOL(dump_suspend_workqueue_stack);

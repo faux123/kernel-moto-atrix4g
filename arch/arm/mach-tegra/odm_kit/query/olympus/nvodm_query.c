@@ -42,7 +42,7 @@
 #define BOARD_REV_ALL ((NvU8)0xFF)
 
 #define NVODM_ENABLE_EMC_DVFS (1)
-#define NUM_LPDDR2_PARTS 7
+#define NUM_LPDDR2_PARTS 9
 
 // Function to auto-detect boards with external CPU power supply
 NvBool NvOdmIsCpuExtSupply(void);
@@ -109,9 +109,13 @@ static struct {
   const unsigned int entries;
 } lpddr2_tbl[NUM_LPDDR2_PARTS] = {
   {0x06, 0, 0, 0x14, s_NvOdmHynix512M44nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmHynix512M44nmEmcConfigTable)},
+  {0x06, 0, 1, 0x14, s_NvOdmHynix512M44nmEmcConfigTable,
+	NV_ARRAY_SIZE(s_NvOdmHynix512M44nmEmcConfigTable)},
   {0x03, 0, 0, 0x14, s_NvOdmElpida512M50nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmElpida512M50nmEmcConfigTable)},
   {0x03, 1, 0, 0x14, s_NvOdmElpida512M40nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmElpida512M40nmEmcConfigTable)}, 
   {0x06, 0, 0, 0x54, s_NvOdmHynix1G54nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmHynix1G54nmEmcConfigTable)},
+  {0x06, 0, 1, 0x54, s_NvOdmHynix1G54nmEmcConfigTable,
+	NV_ARRAY_SIZE(s_NvOdmHynix1G54nmEmcConfigTable)},
   {0x03, 0, 0, 0x54, s_NvOdmElpida1G50nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmElpida1G50nmEmcConfigTable)},
   {0x03, 1, 0, 0x54, s_NvOdmElpida1G40nmEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmElpida1G40nmEmcConfigTable)},
   {0xFF, 0, 0, 0x54, s_NvOdmMicron1GEmcConfigTable, NV_ARRAY_SIZE(s_NvOdmMicron1GEmcConfigTable)},

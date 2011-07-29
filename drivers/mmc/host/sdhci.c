@@ -1055,16 +1055,15 @@ out:
 	host->clock = clock;
 }
 
-static void sdhci_set_power(struct sdhci_host *host, unsigned short power)
+static void sdhci_prepare_power(struct sdhci_host *host, unsigned short power)
 {
-	u8 pwr;
 	unsigned int min_uv = 0;
 	unsigned int max_uv = 0;
+	u8 pwr;
 	int err = 0;
 
-	if (power == (unsigned short)-1)
-		pwr = 0;
-	else {
+	/* Change regulator voltage if a voltage function was supplied. */
+	if (host->regulator != NULL && power != (unsigned short)-1) {
 		switch (1 << power) {
 		case MMC_VDD_165_195:
 			pwr = SDHCI_POWER_180;
@@ -1086,16 +1085,10 @@ static void sdhci_set_power(struct sdhci_host *host, unsigned short power)
 		default:
 			BUG();
 		}
-	}
 
-	if (host->pwr == pwr)
-		return;
+		if (host->pwr == pwr)
+			return;
 
-	host->pwr = pwr;
-
-	/* Change regulator voltage if a voltage function was supplied. */
-	if (host->regulator != NULL)
-	{
 		if (max_uv == 0)
 			err = regulator_disable(host->regulator);
 		else {
@@ -1108,10 +1101,36 @@ static void sdhci_set_power(struct sdhci_host *host, unsigned short power)
 			__func__, err);
 		}
 	}
-	if (pwr == 0) {
-		sdhci_writeb(host, 0, SDHCI_POWER_CONTROL);
-		return;
+}
+
+static void sdhci_set_power(struct sdhci_host *host, unsigned short power)
+{
+	u8 pwr;
+
+	if (power == (unsigned short)-1)
+		pwr = 0;
+	else {
+		switch (1 << power) {
+		case MMC_VDD_165_195:
+			pwr = SDHCI_POWER_180;
+			break;
+		case MMC_VDD_29_30:
+		case MMC_VDD_30_31:
+			pwr = SDHCI_POWER_300;
+			break;
+		case MMC_VDD_32_33:
+		case MMC_VDD_33_34:
+			pwr = SDHCI_POWER_330;
+			break;
+		default:
+			BUG();
+		}
 	}
+
+	if (host->pwr == pwr)
+		return;
+
+	host->pwr = pwr;
 
 	/*
 	 * Spec says that we should clear the power reg before setting
@@ -1191,8 +1210,15 @@ static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 
 	host = mmc_priv(mmc);
 
-	if (ios->power_mode != MMC_POWER_OFF)
+	/*
+	 * Prepare may call the regulator API, which takes a mutex.
+	 */
+	if (ios->power_mode == MMC_POWER_OFF)
+		sdhci_prepare_power(host, -1);
+	else {
+		sdhci_prepare_power(host, ios->vdd);
 		sdhci_set_clock(host, ios->clock);
+	}
 
 	spin_lock_irqsave(&host->lock, flags);
 
@@ -1209,15 +1235,10 @@ static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		sdhci_set_clock(host, ios->clock);
 	}
 
-	if (ios->power_mode == MMC_POWER_OFF) {
-		spin_unlock_irqrestore(&host->lock, flags);
+	if (ios->power_mode == MMC_POWER_OFF)
 		sdhci_set_power(host, -1);
-		spin_lock_irqsave(&host->lock, flags);
-	} else {
-		spin_unlock_irqrestore(&host->lock, flags);
+	else
 		sdhci_set_power(host, ios->vdd);
-		spin_lock_irqsave(&host->lock, flags);
-	}
 
 	ctrl = sdhci_readb(host, SDHCI_HOST_CONTROL);
 
@@ -1442,7 +1463,6 @@ static void sdhci_tasklet_finish(unsigned long param)
 #ifndef SDHCI_USE_LEDS_CLASS
 	sdhci_deactivate_led(host);
 #endif
-
 	mmiowb();
 	spin_unlock_irqrestore(&host->lock, flags);
 

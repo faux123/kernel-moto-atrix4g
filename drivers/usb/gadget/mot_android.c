@@ -658,6 +658,7 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 	strings_dev[STRING_CONFIG_IDX].id = id;
 	android_config_driver.iConfiguration = id;
 
+
 	/* Remove Remote Wakeup
 	if (gadget->ops->wakeup)
 		android_config_driver.bmAttributes |=
