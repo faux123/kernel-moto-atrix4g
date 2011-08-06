@@ -656,17 +656,38 @@ out_lock:
 	return rc;
 }
 
-static int ecryptfs_readlink_lower(struct dentry *dentry, char **buf,
-				   size_t *bufsiz)
+static int
+ecryptfs_readlink(struct dentry *dentry, char __user *buf, int bufsiz)
 {
-	struct dentry *lower_dentry = ecryptfs_dentry_to_lower(dentry);
 	char *lower_buf;
-	size_t lower_bufsiz = PATH_MAX;
+	size_t lower_bufsiz;
+	struct dentry *lower_dentry;
+	struct ecryptfs_mount_crypt_stat *mount_crypt_stat;
+	char *plaintext_name;
+	size_t plaintext_name_size;
 	mm_segment_t old_fs;
 	int rc;
 
+	lower_dentry = ecryptfs_dentry_to_lower(dentry);
+	if (!lower_dentry->d_inode->i_op->readlink) {
+		rc = -EINVAL;
+		goto out;
+	}
+	mount_crypt_stat = &ecryptfs_superblock_to_private(
+						dentry->d_sb)->mount_crypt_stat;
+	/*
+	 * If the lower filename is encrypted, it will result in a significantly
+	 * longer name.  If needed, truncate the name after decode and decrypt.
+	 */
+	if (mount_crypt_stat->flags & ECRYPTFS_GLOBAL_ENCRYPT_FILENAMES)
+		lower_bufsiz = PATH_MAX;
+	else
+		lower_bufsiz = bufsiz;
+	/* Released in this function */
 	lower_buf = kmalloc(lower_bufsiz, GFP_KERNEL);
-	if (!lower_buf) {
+	if (lower_buf == NULL) {
+		printk(KERN_ERR "%s: Out of memory whilst attempting to "
+		       "kmalloc [%zd] bytes\n", __func__, lower_bufsiz);
 		rc = -ENOMEM;
 		goto out;
 	}
@@ -676,31 +697,29 @@ static int ecryptfs_readlink_lower(struct dentry *dentry, char **buf,
 						   (char __user *)lower_buf,
 						   lower_bufsiz);
 	set_fs(old_fs);
-	if (rc < 0)
-		goto out;
-	lower_bufsiz = rc;
-	rc = ecryptfs_decode_and_decrypt_filename(buf, bufsiz, dentry,
-						  lower_buf, lower_bufsiz);
-out:
+	if (rc >= 0) {
+		rc = ecryptfs_decode_and_decrypt_filename(&plaintext_name,
+							  &plaintext_name_size,
+							  dentry, lower_buf,
+							  rc);
+		if (rc) {
+			printk(KERN_ERR "%s: Error attempting to decode and "
+			       "decrypt filename; rc = [%d]\n", __func__,
+				rc);
+			goto out_free_lower_buf;
+		}
+		/* Check for bufsiz <= 0 done in sys_readlinkat() */
+		rc = copy_to_user(buf, plaintext_name,
+				  min((size_t) bufsiz, plaintext_name_size));
+		if (rc)
+			rc = -EFAULT;
+		else
+			rc = plaintext_name_size;
+		kfree(plaintext_name);
+		fsstack_copy_attr_atime(dentry->d_inode, lower_dentry->d_inode);
+	}
+out_free_lower_buf:
 	kfree(lower_buf);
-	return rc;
-}
-
-static int
-ecryptfs_readlink(struct dentry *dentry, char __user *buf, int bufsiz)
-{
-	char *kbuf;
-	size_t kbufsiz, copied;
-	int rc;
-
-	rc = ecryptfs_readlink_lower(dentry, &kbuf, &kbufsiz);
-	if (rc)
-		goto out;
-	copied = min_t(size_t, bufsiz, kbufsiz);
-	rc = copy_to_user(buf, kbuf, copied) ? -EFAULT : copied;
-	kfree(kbuf);
-	fsstack_copy_attr_atime(dentry->d_inode,
-				ecryptfs_dentry_to_lower(dentry)->d_inode);
 out:
 	return rc;
 }
@@ -1005,28 +1024,6 @@ out:
 	return rc;
 }
 
-int ecryptfs_getattr_link(struct vfsmount *mnt, struct dentry *dentry,
-			  struct kstat *stat)
-{
-	struct ecryptfs_mount_crypt_stat *mount_crypt_stat;
-	int rc = 0;
-
-	mount_crypt_stat = &ecryptfs_superblock_to_private(
-						dentry->d_sb)->mount_crypt_stat;
-	generic_fillattr(dentry->d_inode, stat);
-	if (mount_crypt_stat->flags & ECRYPTFS_GLOBAL_ENCRYPT_FILENAMES) {
-		char *target;
-		size_t targetsiz;
-
-		rc = ecryptfs_readlink_lower(dentry, &target, &targetsiz);
-		if (!rc) {
-			kfree(target);
-			stat->size = targetsiz;
-		}
-	}
-	return rc;
-}
-
 int ecryptfs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 		     struct kstat *stat)
 {
@@ -1051,7 +1048,7 @@ ecryptfs_setxattr(struct dentry *dentry, const char *name, const void *value,
 
 	lower_dentry = ecryptfs_dentry_to_lower(dentry);
 	if (!lower_dentry->d_inode->i_op->setxattr) {
-		rc = -EOPNOTSUPP;
+		rc = -ENOSYS;
 		goto out;
 	}
 	mutex_lock(&lower_dentry->d_inode->i_mutex);
@@ -1069,7 +1066,7 @@ ecryptfs_getxattr_lower(struct dentry *lower_dentry, const char *name,
 	int rc = 0;
 
 	if (!lower_dentry->d_inode->i_op->getxattr) {
-		rc = -EOPNOTSUPP;
+		rc = -ENOSYS;
 		goto out;
 	}
 	mutex_lock(&lower_dentry->d_inode->i_mutex);
@@ -1096,7 +1093,7 @@ ecryptfs_listxattr(struct dentry *dentry, char *list, size_t size)
 
 	lower_dentry = ecryptfs_dentry_to_lower(dentry);
 	if (!lower_dentry->d_inode->i_op->listxattr) {
-		rc = -EOPNOTSUPP;
+		rc = -ENOSYS;
 		goto out;
 	}
 	mutex_lock(&lower_dentry->d_inode->i_mutex);
@@ -1113,7 +1110,7 @@ static int ecryptfs_removexattr(struct dentry *dentry, const char *name)
 
 	lower_dentry = ecryptfs_dentry_to_lower(dentry);
 	if (!lower_dentry->d_inode->i_op->removexattr) {
-		rc = -EOPNOTSUPP;
+		rc = -ENOSYS;
 		goto out;
 	}
 	mutex_lock(&lower_dentry->d_inode->i_mutex);
@@ -1144,7 +1141,6 @@ const struct inode_operations ecryptfs_symlink_iops = {
 	.put_link = ecryptfs_put_link,
 	.permission = ecryptfs_permission,
 	.setattr = ecryptfs_setattr,
-	.getattr = ecryptfs_getattr_link,
 	.setxattr = ecryptfs_setxattr,
 	.getxattr = ecryptfs_getxattr,
 	.listxattr = ecryptfs_listxattr,
