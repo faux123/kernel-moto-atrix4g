@@ -1623,7 +1623,7 @@ static void update_group_shares_cpu(struct task_group *tg, int cpu,
  */
 static int tg_shares_up(struct task_group *tg, void *data)
 {
-	unsigned long weight, rq_weight = 0, shares = 0;
+	unsigned long weight, rq_weight = 0, sum_weight = 0, shares = 0;
 	unsigned long *usd_rq_weight;
 	struct sched_domain *sd = data;
 	unsigned long flags;
@@ -1639,6 +1639,7 @@ static int tg_shares_up(struct task_group *tg, void *data)
 		weight = tg->cfs_rq[i]->load.weight;
 		usd_rq_weight[i] = weight;
 
+		rq_weight += weight;
 		/*
 		 * If there are currently no tasks on the cpu pretend there
 		 * is one of average load so that when a new task gets to
@@ -1647,9 +1648,12 @@ static int tg_shares_up(struct task_group *tg, void *data)
 		if (!weight)
 			weight = NICE_0_LOAD;
 
-		rq_weight += weight;
+		sum_weight += weight;
 		shares += tg->cfs_rq[i]->shares;
 	}
+
+	if (!rq_weight)
+		rq_weight = sum_weight;
 
 	if ((!shares && rq_weight) || shares > tg->shares)
 		shares = tg->shares;
@@ -5211,44 +5215,89 @@ cputime_t task_stime(struct task_struct *p)
 {
 	return p->stime;
 }
+
+void thread_group_times(struct task_struct *p, cputime_t *ut, cputime_t *st)
+{
+	struct task_cputime cputime;
+
+	thread_group_cputime(p, &cputime);
+
+	*ut = cputime.utime;
+	*st = cputime.stime;
+}
 #else
+
+#ifndef nsecs_to_cputime
+# define nsecs_to_cputime(__nsecs) \
+	msecs_to_cputime(div_u64((__nsecs), NSEC_PER_MSEC))
+#endif
+
 cputime_t task_utime(struct task_struct *p)
 {
-	clock_t utime = cputime_to_clock_t(p->utime),
-		total = utime + cputime_to_clock_t(p->stime);
+	cputime_t utime = p->utime, total = utime + p->stime;
 	u64 temp;
 
 	/*
 	 * Use CFS's precise accounting:
 	 */
-	temp = (u64)nsec_to_clock_t(p->se.sum_exec_runtime);
+	temp = (u64)nsecs_to_cputime(p->se.sum_exec_runtime);
 
 	if (total) {
 		temp *= utime;
 		do_div(temp, total);
 	}
-	utime = (clock_t)temp;
+	utime = (cputime_t)temp;
 
-	p->prev_utime = max(p->prev_utime, clock_t_to_cputime(utime));
+	p->prev_utime = max(p->prev_utime, utime);
 	return p->prev_utime;
 }
 
 cputime_t task_stime(struct task_struct *p)
 {
-	clock_t stime;
+	cputime_t stime;
 
 	/*
 	 * Use CFS's precise accounting. (we subtract utime from
 	 * the total, to make sure the total observed by userspace
 	 * grows monotonically - apps rely on that):
 	 */
-	stime = nsec_to_clock_t(p->se.sum_exec_runtime) -
-			cputime_to_clock_t(task_utime(p));
+	stime = nsecs_to_cputime(p->se.sum_exec_runtime) - task_utime(p);
 
 	if (stime >= 0)
-		p->prev_stime = max(p->prev_stime, clock_t_to_cputime(stime));
+		p->prev_stime = max(p->prev_stime, stime);
 
 	return p->prev_stime;
+}
+
+/*
+ * Must be called with siglock held.
+ */
+void thread_group_times(struct task_struct *p, cputime_t *ut, cputime_t *st)
+{
+	struct signal_struct *sig = p->signal;
+	struct task_cputime cputime;
+	cputime_t rtime, utime, total;
+
+	thread_group_cputime(p, &cputime);
+
+	total = cputime_add(cputime.utime, cputime.stime);
+	rtime = nsecs_to_cputime(cputime.sum_exec_runtime);
+
+	if (total) {
+		u64 temp;
+
+		temp = (u64)(rtime * cputime.utime);
+		do_div(temp, total);
+		utime = (cputime_t)temp;
+	} else
+		utime = rtime;
+
+	sig->prev_utime = max(sig->prev_utime, utime);
+	sig->prev_stime = max(sig->prev_stime,
+			      cputime_sub(rtime, sig->prev_utime));
+
+	*ut = sig->prev_utime;
+	*st = sig->prev_stime;
 }
 #endif
 
