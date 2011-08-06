@@ -555,7 +555,7 @@ static void percpu_modcopy(void *pcpudest, const void *from, unsigned long size)
 	int cpu;
 
 	for_each_possible_cpu(cpu)
-		memcpy(per_cpu_ptr(pcpudest, cpu), from, size);
+		memcpy(pcpudest + per_cpu_offset(cpu), from, size);
 }
 
 #else /* ... !CONFIG_SMP */
@@ -870,7 +870,6 @@ SYSCALL_DEFINE2(delete_module, const char __user *, name_user,
 	mutex_lock(&module_mutex);
 	/* Store the name of the last unloaded module for diagnostic purposes */
 	strlcpy(last_unloaded_module, mod->name, sizeof(last_unloaded_module));
-	ddebug_remove_module(mod->name);
 	free_module(mod);
 
  out:
@@ -1532,6 +1531,9 @@ static void free_module(struct module *mod)
 	remove_notes_attrs(mod);
 	remove_sect_attrs(mod);
 	mod_kobject_remove(mod);
+
+	/* Remove dynamic debug info */
+	ddebug_remove_module(mod->name);
 
 	/* Arch-specific cleanup. */
 	module_arch_cleanup(mod);
