@@ -67,9 +67,9 @@ static struct cpufreq_frequency_table freq_table_1000[] = {
 	{ 1, 456000 },
 	{ 2, 608000 },
 	{ 3, 750000 },
-	{ 4, 912000 },
-	{ 5, 1000000 },
-	{ 6, 1100000 },
+	{ 4, 1000000 },
+	{ 5, 1100000 },
+	{ 6, 1160000 },
 	{ 7, CPUFREQ_TABLE_END },
 };
 
@@ -336,7 +336,7 @@ static int tegra_cpufreq_driver_init(struct cpufreq_policy *pol)
 	pol->max = usage.HighCornerKHz;
 #else
 #ifdef CONFIG_STOCK_VOLTAGE
-        pol->max = 1100000;
+        pol->max = 1160000;
 #else
         pol->max = 1100000;
 #endif //CONFIG_STOCK_VOLTAGE
@@ -350,9 +350,9 @@ static int tegra_cpufreq_driver_init(struct cpufreq_policy *pol)
 	pol->cpuinfo.max_freq = usage.MaxKHz;
 #else
 #ifdef CONFIG_STOCK_VOLTAGE
-        pol->cpuinfo.max_freq = 1100000;
+        pol->cpuinfo.max_freq = 1160000;
 #else
-        pol->cpuinfo.max_freq = 1100000;
+        pol->cpuinfo.max_freq = 110000;
 #endif //CONFIG_STOCK_VOLTAGE
 #endif //CONFIG_FAKE_SHMOO	pol->cpuinfo.transition_latency = 0;
 
