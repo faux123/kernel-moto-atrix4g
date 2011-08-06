@@ -1220,7 +1220,8 @@ ieee80211_drop_unencrypted(struct ieee80211_rx_data *rx, __le16 fc)
 		     (rx->key || rx->sdata->drop_unencrypted)))
 		return -EACCES;
 	if (rx->sta && test_sta_flags(rx->sta, WLAN_STA_MFP)) {
-		if (unlikely(ieee80211_is_unicast_robust_mgmt_frame(rx->skb) &&
+		if (unlikely(!ieee80211_has_protected(fc) &&
+			     ieee80211_is_unicast_robust_mgmt_frame(rx->skb) &&
 			     rx->key))
 			return -EACCES;
 		/* BIP does not use Protected field, so need to check MMIE */
@@ -1816,6 +1817,11 @@ ieee80211_rx_h_action(struct ieee80211_rx_data *rx)
 			 */
 			return RX_CONTINUE;
 		}
+		break;
+	case WLAN_CATEGORY_MESH_PLINK:
+	case WLAN_CATEGORY_MESH_PATH_SEL:
+		if (ieee80211_vif_is_mesh(&sdata->vif))
+			return ieee80211_mesh_rx_mgmt(sdata, rx->skb);
 		break;
 	default:
 		/* do not process rejected action frames */
