@@ -648,14 +648,12 @@ __tagtable(ATAG_REVISION, parse_tag_revision);
 static int __init parse_tag_cmdline(const struct tag *tag)
 {
 #if defined(CONFIG_CMDLINE_PREPEND_ATRIX)
-    /* fixed large stack frame issue. COMMAND_LINE_SIZE == 1024 */
-    /* char cmdline_buffer[COMMAND_LINE_SIZE] = "\0"; */
-    char *cmdline_buffer = kzalloc(COMMAND_LINE_SIZE, GFP_KERNEL);
-    char *tmp_cmdline = (char *)tag->u.cmdline.cmdline;
+    char cmdline_buffer[COMMAND_LINE_SIZE] = "\0";
+    char *tmp_cmdline = tag->u.cmdline.cmdline;
     char *cmdline_tok = strsep(&tmp_cmdline," ");
     const char excl1[] = "vmalloc=", excl2[] = "nvmem=", excl3[] = "mem=";
 
-    while ( (cmdline_tok = strsep(&tmp_cmdline," ")) )
+    while (cmdline_tok = strsep(&tmp_cmdline," "))
     {   /* only copy if not a mem related part of cmdline */
         if ((0 != strncmp(cmdline_tok, excl1, sizeof(&excl1))) &&
             (0 != strncmp(cmdline_tok, excl2, sizeof(&excl2))) &&
