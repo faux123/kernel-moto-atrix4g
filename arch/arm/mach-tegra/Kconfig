@@ -242,15 +242,20 @@ config FAKE_SHMOO
 	depends on ARCH_TEGRA
 	default y
 
+config BOOST_PERIPHERALS
+	bool "Tegra2 Overclocking Peripheral Enable"
+	depends on ARCH_TEGRA && FAKE_SHMOO
+	default y
+
 config MAX_AVP_OC_FREQ
 	int "AVP Overclock Frequency"
 	default 266400
-        depends on FAKE_SHMOO
+        depends on FAKE_SHMOO && BOOST_PERIPHERALS
 
 config MAX_3D_OC_FREQ
 	int "3D Overclock Frequency"
 	default 350000
-        depends on FAKE_SHMOO
+        depends on FAKE_SHMOO && BOOST_PERIPHERALS
 
 config DDR2_SDRAM_FREQ
 	int "DDR2 SDRAM Frequency"
