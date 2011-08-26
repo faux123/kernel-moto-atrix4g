@@ -251,10 +251,13 @@ NvRmPrivClockLimitsInit(NvRmDeviceHandle hRmDevice)
     // override default with configuration values
     // CPU clock duh!
     pSKUedLimits->CpuMaxKHz = MAX_CPU_OC_FREQ;
+
+#ifdef CONFIG_BOOST_PERIPHERALS
     // AVP clock
     pSKUedLimits->AvpMaxKHz = CONFIG_MAX_AVP_OC_FREQ;
     // 3D clock
-    pSKUedLimits->AvpMaxKHz = CONFIG_MAX_3D_OC_FREQ;
+    pSKUedLimits->TDMaxKHz = CONFIG_MAX_3D_OC_FREQ;
+#endif // CONFIG_BOOST_PERIPHERALS
 
 #endif // CONFIG_FAKE_SHMOO
     NvOsDebugPrintf("NVRM corner (%d, %d)\n",
