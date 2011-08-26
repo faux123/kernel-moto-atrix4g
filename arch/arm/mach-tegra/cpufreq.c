@@ -62,7 +62,7 @@ extern atomic_t hotplug_policy;
 
 /* Frequency table index must be sequential starting at 0 and
    frequencies must be ascending*/
-static struct cpufreq_frequency_table freq_table_1000[] = {
+static struct cpufreq_frequency_table freq_table_1100[] = {
 	{ 0, 216000 },
 	{ 1, 456000 },
 	{ 2, 608000 },
@@ -70,6 +70,17 @@ static struct cpufreq_frequency_table freq_table_1000[] = {
 	{ 4, 912000 },
 	{ 5, 1000000 },
 	{ 6, 1100000 },
+	{ 7, CPUFREQ_TABLE_END },
+};
+
+static struct cpufreq_frequency_table freq_table_1300[] = {
+	{ 0, 216000 },
+	{ 1, 456000 },
+	{ 2, 800000 },
+	{ 3, 1000000 },
+	{ 4, 1100000 },
+	{ 5, 1200000 },
+	{ 6, 1300000 },
 	{ 7, CPUFREQ_TABLE_END },
 };
 
@@ -336,7 +347,7 @@ static int tegra_cpufreq_driver_init(struct cpufreq_policy *pol)
 	pol->max = usage.HighCornerKHz;
 #else
 #ifdef CONFIG_STOCK_VOLTAGE
-        pol->max = 1100000;
+        pol->max = 1300000;
 #else
         pol->max = 1100000;
 #endif //CONFIG_STOCK_VOLTAGE
@@ -350,16 +361,20 @@ static int tegra_cpufreq_driver_init(struct cpufreq_policy *pol)
 	pol->cpuinfo.max_freq = usage.MaxKHz;
 #else
 #ifdef CONFIG_STOCK_VOLTAGE
-        pol->cpuinfo.max_freq = 1100000;
+	freq_table = freq_table_1100;
+        pol->cpuinfo.max_freq = 1300000;
 #else
+	freq_table = freq_table_1300;
         pol->cpuinfo.max_freq = 1100000;
 #endif //CONFIG_STOCK_VOLTAGE
 #endif //CONFIG_FAKE_SHMOO	pol->cpuinfo.transition_latency = 0;
 
+/*
 	if (usage.MaxKHz >= 1000000)
 		freq_table = freq_table_1000;
 	 else
 		freq_table = freq_table_750;
+*/
 	cpufreq_frequency_table_cpuinfo(pol, freq_table);
 	cpufreq_frequency_table_get_attr(freq_table, pol->cpu);
 	return 0;
