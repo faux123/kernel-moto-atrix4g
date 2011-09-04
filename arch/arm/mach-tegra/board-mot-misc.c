@@ -295,8 +295,6 @@ __tagtable(ATAG_MOTOROLA, parse_tag_motorola);
 static int keymap_update_connect(struct input_handler *handler, struct input_dev *dev,
 					  const struct input_device_id *id)
  {
-	int i;
-
 	if (strcmp(dev->name , "tegra-kbc"))  return 0;
 
 	set_bit(0x38, dev->keybit); // ALT

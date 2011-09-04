@@ -624,6 +624,7 @@ static void __init isl29030_init(void)
 	gpio_direction_input(PROX_INT_GPIO);
 }
 
+/*
 static int isl29030_power_on(void)
 {
 	return 0;
@@ -632,7 +633,7 @@ static int isl29030_power_on(void)
 static int isl29030_power_off(void)
 {
 	return 0;
-}
+}*/
 
 static struct platform_device *tegra_sensors[] __initdata = {
 	&isl29030_als_ir,

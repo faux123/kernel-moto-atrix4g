@@ -45,6 +45,7 @@ static int touch_reset(void)
 	return 0;
 }
 
+/*
 static struct vkey touch_vkeys[] = {
 	{
 		.code		= KEY_BACK,
@@ -59,6 +60,7 @@ static struct vkey touch_vkeys[] = {
 		.code		= KEY_SEARCH,
 	},
 };
+*/
 
 struct qtouch_ts_platform_data ts_platform_olympus_p_1_37 = 
 {
