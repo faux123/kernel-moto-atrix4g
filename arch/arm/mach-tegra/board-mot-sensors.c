@@ -28,6 +28,7 @@
 #define TEGRA_PROX_INT_GPIO			TEGRA_GPIO_PE1
 #define TEGRA_HF_NORTH_GPIO			TEGRA_GPIO_PS2
 #define TEGRA_HF_SOUTH_GPIO			TEGRA_GPIO_PS0
+#define TEGRA_HF_KICKSTAND_GPIO		TEGRA_GPIO_PW3
 #define TEGRA_VIBRATOR_GPIO			TEGRA_GPIO_PD0
 #define TEGRA_VIBRATOR_GPIO_ETNA_S1	TEGRA_GPIO_PU4
 #define TEGRA_KXTF9_INT_GPIO		TEGRA_GPIO_PV3
@@ -213,6 +214,7 @@ static struct platform_device tegra_tmon = {
 static struct bu52014hfv_platform_data bu52014hfv_platform_data = {
 	.docked_north_gpio = TEGRA_HF_NORTH_GPIO,
 	.docked_south_gpio = TEGRA_HF_SOUTH_GPIO,
+	.kickstand_gpio = TEGRA_HF_KICKSTAND_GPIO,
 	.north_is_desk = 1,
 	.set_switch_func = cpcap_set_dock_switch,
 };
@@ -591,7 +593,7 @@ struct isl29030_platform_data isl29030_als_ir_data_Sunfire = {
 	.crosstalk_vs_covered_threshold = 0x96,
 	.default_prox_noise_floor = 0x96,
 	.num_samples_for_noise_floor = 0x05,
-	.lens_percent_t = 20,
+	.lens_percent_t = 7,
 	.irq = 0,
 	.getIrqStatus = isl29030_getIrqStatus,
 	.gpio_intr = PROX_INT_GPIO,
@@ -663,13 +665,19 @@ static struct spi_board_info aes1750_spi_device __initdata = {
 /* Hall effect */
 static void tegra_hall_effect_init(void)
 {
-	gpio_request(TEGRA_HF_NORTH_GPIO, "tegra dock north");
-	gpio_direction_input(TEGRA_HF_NORTH_GPIO);
-//	omap_cfg_reg(AG25_34XX_GPIO10);
+	if ((machine_is_sunfire())) {
+		pr_info("HALL: Sunfire kickstand gpio init.\n");
+		gpio_request(TEGRA_HF_KICKSTAND_GPIO, "tegra kickstand");
+		gpio_direction_input(TEGRA_HF_KICKSTAND_GPIO);
+	} else {
+		gpio_request(TEGRA_HF_NORTH_GPIO, "tegra dock north");
+		gpio_direction_input(TEGRA_HF_NORTH_GPIO);
+/*		omap_cfg_reg(AG25_34XX_GPIO10); */
 
-	gpio_request(TEGRA_HF_SOUTH_GPIO, "tegra dock south");
-	gpio_direction_input(TEGRA_HF_SOUTH_GPIO);
-//	omap_cfg_reg(B26_34XX_GPIO111);
+		gpio_request(TEGRA_HF_SOUTH_GPIO, "tegra dock south");
+		gpio_direction_input(TEGRA_HF_SOUTH_GPIO);
+/*		omap_cfg_reg(B26_34XX_GPIO111); */
+	}
 }
 
 static struct regulator *tegra_l3g4200d_regulator=NULL;
@@ -745,7 +753,8 @@ void __init mot_sensors_init(void)
 {
 	kxtf9_init();
 	tegra_akm8975_init();
-	if (machine_is_tegra_daytona())
+	if (machine_is_tegra_daytona() ||
+		machine_is_sunfire())
 		tegra_hall_effect_init();
 
 	tegra_vibrator_init();

@@ -241,7 +241,7 @@ static char *usb_serial_num;
 static char *olympus_dev = "MB860";
 static char *etna_dev = "XT865";
 static char *daytona_dev = "MB870";
-static char *sunfire_dev = "Sunfire";
+static char *sunfire_dev = "MB855";
 static char *default_dev = "Motorola AP20";
 
 static int __init mot_usb_serial_num_setup(char *options)

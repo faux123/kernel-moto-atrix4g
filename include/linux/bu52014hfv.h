@@ -26,6 +26,7 @@
 struct bu52014hfv_platform_data {
 	u8 docked_north_gpio;
 	u8 docked_south_gpio;
+	u8 kickstand_gpio;
 	u8 north_is_desk;
 	void (*set_switch_func)(int state);
 } __attribute__ ((packed));

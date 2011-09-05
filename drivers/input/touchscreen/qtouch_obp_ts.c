@@ -133,7 +133,6 @@ struct qtouch_ts_data
 	int					i2cBLAddr;
 
 	uint8_t				cal_check_flag;
-	uint8_t				resume_full_reload_flag;
 	unsigned long		cal_timer;
 };
 
@@ -147,6 +146,7 @@ static void qtouch_ts_early_suspend(struct early_suspend *handler);
 static void qtouch_ts_late_resume(struct early_suspend *handler);
 #endif
 
+static int qtouch_hw_init(struct qtouch_ts_data *ts);
 
 extern unsigned int	MotorolaBootDispArgGet(int *);
 
@@ -497,7 +497,7 @@ static int qtouch_force_reset(struct qtouch_ts_data *ts, uint8_t sw_reset)
 			msleep(41);
 #endif
 		}
-	} 
+	}
 	else if (sw_reset) 
 	{
 		QTOUCH_INFO("%s: Forcing SW reset\n", __func__);
@@ -1173,32 +1173,6 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj, vo
 				if (!hw_reset) 
 				{
 					qtouch_force_reset(ts, FALSE);
-					if (ts->resume_full_reload_flag == TRUE)
-					{
-						/*
-						 * Unfortunately, this means
-						 * that we failed to save config
-						 * into nvram. But for the good
-						 * news, we can re-load it again
-						 * and try saving it to nvram.
-						 * Since we are sending the full
-						 * config, trying to save it to
-						 * nvram adds very little
-						 * overhead
-						 */
-						ret = qtouch_hw_init(ts);
-						if (ret != 0)
-						{
-							QTOUCH_ERR("%s: Cannot reload IC config\n",
-								__func__);
-							return -EIO;
-						}
-#ifdef CONFIG_XMEGAT_DO_HARD_RESET
-						/* try saving to nvram */
-						if (!qtouch_force_backupnv(ts))
-							ts->resume_full_reload_flag = FALSE;
-#endif
-					}
 					ts->checksum_cnt++;
 				}
 			}
@@ -2446,10 +2420,6 @@ static int qtouch_ts_probe(struct i2c_client *client,
 
 	ts->cal_check_flag = 0;
 	ts->cal_timer = 0;
-	/* Assume at this point that nvram has configuration and there is no
-	 * need to do full reload on resume.
-	 */
-	ts->resume_full_reload_flag = FALSE;
 
 	return 0;
 
@@ -2556,30 +2526,6 @@ static int qtouch_ts_resume(struct i2c_client *client)
 
 #ifdef CONFIG_XMEGAT_DO_HARD_RESET
 	qtouch_force_reset(ts, FALSE);
-	if (ts->resume_full_reload_flag == TRUE)
-	{
-		/*
-		 * Unfortunately, this means that we failed to save config
-		 * into nvram. But for the good news, we can re-load it again
-		 * and try saving it to nvram. Since we are sending the full
-		 * config, trying to save it to nvram adds very little
-		 * overhead
-		 */
-		ret = qtouch_hw_init(ts);
-		if (ret != 0)
-		{
-			QTOUCH_ERR("%s: Cannot reload IC configuration\n",
-					__func__);
-			return -EIO;
-		}
-#ifdef CONFIG_XMEGAT_DO_HARD_RESET
-		/* try saving to nvram */
-		if (!qtouch_force_backupnv(ts))
-			ts->resume_full_reload_flag = FALSE;
-#endif
-		/* nothing more to do, qtouch_hw_init did the rest */
-		return 0;
-	}
 	/* fall through here, to do power/calibration */
 
 #else /* CONFIG_XMEGAT_DO_HARD_RESET */
@@ -3051,14 +2997,6 @@ static int qtouch_ioctl_ioctl(struct inode *node, struct file *filp,
 		/* Make sure that IC can accept the config information */
 		if ( tsGl->modeOfOperation != QTOUCH_MODE_NORMAL )
 			return -1;
-#ifdef CONFIG_XMEGAT_DO_HARD_RESET
-		/*
-		 * At this point all the objects have been sent to the IC
-		 * This is perfect time to backup the data to nv
-		 */
-		if (qtouch_force_backupnv(tsGl))
-			tsGl->resume_full_reload_flag = TRUE;
-#endif
 
 		qtouch_force_reset(tsGl, FALSE);
 		qtouch_force_calibration(tsGl);

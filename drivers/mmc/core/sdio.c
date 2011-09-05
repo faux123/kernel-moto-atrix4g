@@ -355,6 +355,7 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 		mmc_set_clock(host, card->cis.max_dtr);
 	}
 
+
 	/*
 	 * Switch to wider bus (if supported).
 	 */
@@ -575,6 +576,12 @@ int mmc_attach_sdio(struct mmc_host *host, u32 ocr)
 			tmp->max_blksize = host->embedded_sdio_data.funcs[i].f_maxblksize;
 			tmp->vendor = card->cis.vendor;
 			tmp->device = card->cis.device;
+#ifdef CONFIG_MOT_WIMAX
+			/*
+			 * Workaround for SDIO interface issue.
+			 */
+			tmp->enable_timeout = 1000;
+#endif
 		} else {
 #endif
 			err = sdio_init_func(host->card, i + 1);

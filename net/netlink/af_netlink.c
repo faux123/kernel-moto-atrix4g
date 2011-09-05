@@ -542,7 +542,6 @@ static int netlink_autobind(struct socket *sock)
 	s32 pid = current->tgid;
 	int err;
 	static s32 rover = -4097;
-
 retry:
 	cond_resched();
 	netlink_table_grab();
@@ -631,7 +630,6 @@ static int netlink_bind(struct socket *sock, struct sockaddr *addr,
 	struct netlink_sock *nlk = nlk_sk(sk);
 	struct sockaddr_nl *nladdr = (struct sockaddr_nl *)addr;
 	int err;
-
 	if (nladdr->nl_family != AF_NETLINK)
 		return -EINVAL;
 

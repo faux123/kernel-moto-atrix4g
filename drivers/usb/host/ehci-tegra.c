@@ -44,6 +44,7 @@
 #define TEGRA_USB_PHY_WAKEUP_REG_OFFSET		(0x408)
 #define TEGRA_USB_USBMODE_REG_OFFSET		(0x1a8)
 #define TEGRA_USB_USBMODE_HOST			(3)
+#define STS_SRI        (1<<7)  /*      SOF Recieved    */
 
 /*
  * Work thread function for setting the usb busy hints.
@@ -104,6 +105,7 @@ static int tegra_ehci_hub_control (
 	u32 __iomem	*status_reg = &ehci->regs->port_status[
 				(wIndex & 0xff) - 1];
 	u32		temp;
+	u32             usbsts_reg;
 	struct tegra_hcd_platform_data *pdata;
 	unsigned long	flags;
 	int		retval = 0;
@@ -126,6 +128,88 @@ static int tegra_ehci_hub_control (
 		temp = ehci_readl(ehci, status_reg);
 		ehci_writel(ehci, (temp & ~PORT_RWC_BITS) & ~PORT_PE, status_reg);
 		spin_unlock_irqrestore (&ehci->lock, flags);
+		return retval;
+	} else if (typeReq == SetPortFeature &&
+			wValue == USB_PORT_FEAT_SUSPEND) {
+		spin_lock_irqsave(&ehci->lock, flags);
+		temp = ehci_readl(ehci, status_reg);
+		if ((temp & PORT_PE) == 0 || (temp & PORT_RESET) != 0) {
+			retval = -EPIPE;
+			spin_unlock_irqrestore(&ehci->lock, flags);
+			return retval;
+		}
+
+		temp &= ~PORT_WKCONN_E;
+		temp |= PORT_WKDISC_E | PORT_WKOC_E;
+		ehci_writel(ehci, temp | PORT_SUSPEND, status_reg);
+		/* Need a 4ms delay before the controller goes to suspend */
+		mdelay(4);
+
+		/*
+		 * If a transaction is in progress, there may be a delay in
+		 * suspending the port. Poll until the port is suspended.
+		 */
+		if (handshake(ehci, status_reg, PORT_SUSPEND,
+						PORT_SUSPEND, 5000))
+			pr_err("%s: timeout waiting for SUSPEND\n", __func__);
+
+		set_bit((wIndex & 0xff) - 1, &ehci->suspended_ports);
+		spin_unlock_irqrestore(&ehci->lock, flags);
+		return retval;
+	}
+
+	/*
+	 * Tegra host controller will time the resume operation to clear the bit
+	 * when the port control state switches to HS or FS Idle. This behavior
+	 * is different from EHCI where the host controller driver is required
+	 * to set this bit to a zero after the resume duration is timed in the
+	 * driver.
+	 */
+	else if (typeReq == ClearPortFeature &&
+			wValue == USB_PORT_FEAT_SUSPEND) {
+		spin_lock_irqsave(&ehci->lock, flags);
+		temp = ehci_readl(ehci, status_reg);
+		if ((temp & PORT_RESET) || !(temp & PORT_PE)) {
+			retval = -EPIPE;
+			spin_unlock_irqrestore(&ehci->lock, flags);
+			return retval;
+		}
+
+		if (!(temp & PORT_SUSPEND)) {
+			spin_unlock_irqrestore(&ehci->lock, flags);
+			return retval;
+		}
+
+		ehci_dbg(ehci, "%s:USBSTS = 0x%x", __func__,
+			ehci_readl(ehci, &ehci->regs->status));
+		usbsts_reg = ehci_readl(ehci, &ehci->regs->status);
+		ehci_writel(ehci, usbsts_reg, &ehci->regs->status);
+		usbsts_reg = ehci_readl(ehci, &ehci->regs->status);
+		udelay(20);
+
+		if (handshake(ehci, &ehci->regs->status,
+					STS_SRI, STS_SRI, 2000))
+			pr_err("%s: timeout set for STS_SRI\n", __func__);
+
+		usbsts_reg = ehci_readl(ehci, &ehci->regs->status);
+		ehci_writel(ehci, usbsts_reg, &ehci->regs->status);
+
+		if (handshake(ehci, &ehci->regs->status,
+					STS_SRI, 0, 2000))
+			pr_err("%s: timeout clear STS_SRI\n", __func__);
+
+		if (handshake(ehci, &ehci->regs->status,
+					STS_SRI, STS_SRI, 2000))
+			pr_err("%s: timeout set STS_SRI\n", __func__);
+
+		udelay(20);
+		temp &= ~(PORT_RWC_BITS | PORT_WAKE_BITS);
+		/* start resume signaling */
+		ehci_writel(ehci, temp | PORT_RESUME, status_reg);
+
+		ehci->reset_done[wIndex-1] = jiffies + msecs_to_jiffies(25);
+
+		spin_unlock_irqrestore(&ehci->lock, flags);
 		return retval;
 	}
 

@@ -136,4 +136,10 @@ config BATTERY_CPCAP
 	help
 	 Say Y to include support for CPCAP Main Battery.
 
+config MOT_CHARGING_DIS
+	bool "eng build support"
+	default n
+	help
+	 Say Y here to enable disable usb charging when it is plug in.
+
 endif # POWER_SUPPLY

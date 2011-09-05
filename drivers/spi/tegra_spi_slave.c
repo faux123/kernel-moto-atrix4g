@@ -264,7 +264,7 @@ static void tegra_spi_slave_workerthread(struct work_struct *w)
 	BusyHints[3].ClockId = NvRmDfsClockId_Cpu;
 	BusyHints[3].BoostDurationMs = NV_WAIT_INFINITE;
 	BusyHints[3].BusyAttribute = NV_TRUE;
-	BusyHints[3].BoostKHz = 800000; // CPU
+	BusyHints[3].BoostKHz = 600000;
 
 	NvRmPowerBusyHintMulti(s_hRmGlobal, pShimSpi->RmPowerClientId,
 		BusyHints, 4, NvRmDfsBusyHintSyncMode_Async);

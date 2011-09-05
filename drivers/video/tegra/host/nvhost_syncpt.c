@@ -227,9 +227,16 @@ int nvhost_syncpt_wait_timeout(struct nvhost_syncpt *sp, u32 id,
 			dev_warn(&syncpt_to_dev(sp)->pdev->dev,
 				"syncpoint id %d (%s) stuck waiting %d  timeout=%d\n",
 				id, nvhost_syncpt_name(id), thresh, timeout);
+			/* A wait queue in nvhost driver maybe run frequently
+			  when early suspend/late resume. These log will be
+			  printed,then the early suspend/late resume
+			  maybe blocked,then it will triger early suspend/late
+			  resume watchdog. Now we cancel these log. */
+			/*
 			nvhost_syncpt_debug(sp);
 			nvhost_channel_fifo_debug(dev);
 			nvhost_sync_reg_dump(dev);
+			*/
 		}
 	};
 	if (err > 0)

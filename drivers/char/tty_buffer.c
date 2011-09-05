@@ -251,7 +251,7 @@ int tty_insert_flip_string(struct tty_struct *tty, const unsigned char *chars,
 		int space = tty_buffer_request_room(tty, goal);
 		struct tty_buffer *tb = tty->buf.tail;
 		/* If there is no space then tb may be NULL */
-		if (unlikely(space == 0))
+		if (unlikely(space == 0 || !tb))
 			break;
 		memcpy(tb->char_buf_ptr + tb->used, chars, space);
 		memset(tb->flag_buf_ptr + tb->used, TTY_NORMAL, space);

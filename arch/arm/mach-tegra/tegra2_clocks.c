@@ -121,6 +121,9 @@
 
 static void __iomem *reg_clk_base = IO_ADDRESS(TEGRA_CLK_RESET_BASE);
 static void __iomem *reg_pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
+static void __iomem *misc_gp_hidrev_base = IO_ADDRESS(TEGRA_APB_MISC_BASE);
+
+#define MISC_GP_HIDREV			0x804
 
 #define pmc_writel(value, reg) \
 	__raw_writel(value, (u32)reg_pmc_base + (reg))
@@ -130,6 +133,8 @@ static void __iomem *reg_pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
 	__raw_writel(value, (u32)reg_clk_base + (reg))
 #define clk_readl(reg) \
 	__raw_readl((u32)reg_clk_base + (reg))
+#define chipid_readl() \
+	__raw_readl((u32)misc_gp_hidrev_base + MISC_GP_HIDREV)
 
 unsigned long clk_measure_input_freq(void) {
 	u32 clock_autodetect;
@@ -651,6 +656,12 @@ static void tegra2_periph_clk_disable(struct clk *c)
 {
 	pr_debug("%s on clock %s\n", __func__, c->name);
 
+	/* If peripheral is in the APB bus then read the APB bus to
+	 * flush the write operation in apb bus. This will avoid the
+	 * peripheral access after disabling clock*/
+	if (c->flags & PERIPH_ON_APB)
+		val = chipid_readl();
+
 	clk_writel(PERIPH_CLK_TO_ENB_BIT(c),
 		CLK_OUT_ENB_CLR + PERIPH_CLK_TO_ENB_SET_REG(c));
 }
@@ -665,10 +676,18 @@ void tegra2_periph_reset_deassert(struct clk *c)
 
 void tegra2_periph_reset_assert(struct clk *c)
 {
+	unsigned long val;
 	pr_debug("%s on clock %s\n", __func__, c->name);
-	if (!(c->flags & PERIPH_NO_RESET))
+	if (!(c->flags & PERIPH_NO_RESET)) {
+		/* If peripheral is in the APB bus then read the APB bus to
+		 * flush the write operation in apb bus. This will avoid the
+		 * peripheral access after disabling clock*/
+		if (c->flags & PERIPH_ON_APB)
+			val = chipid_readl();
+
 		clk_writel(PERIPH_CLK_TO_ENB_BIT(c),
 			   RST_DEVICES_SET + PERIPH_CLK_TO_ENB_SET_REG(c));
+	}
 }
 
 
@@ -1181,7 +1200,7 @@ static struct clk_mux_sel mux_clk_32k[] = {
 		.flags     = _flags,			\
 	}
 
-#define PMC_PERIPH_CLK(_name, _dev, _con, _clk_num, _shift) \
+#define PMC_PERIPH_CLK(_name, _dev, _con, _clk_num, _shift, _flags) \
 	{						\
 		.name      = _name,			\
 		.lookup    = {				\
@@ -1193,30 +1212,30 @@ static struct clk_mux_sel mux_clk_32k[] = {
 		 .reg_shift = _shift,			\
 		.reg       = 0,				\
 		.inputs    = mux_clk_32k,		\
-		.flags     = PERIPH_PMC_RESET,		\
+		.flags     = _flags,		\
 	}
 
 struct clk tegra_periph_clks[] = {
-	PMC_PERIPH_CLK("rtc",       "rtc-tegra",  NULL,   4,  1),
-	PMC_PERIPH_CLK("kbc",       "tegra-kbc",  NULL,   36, 0),
+	PMC_PERIPH_CLK("rtc",       "rtc-tegra",  NULL,   4,  1, PERIPH_PMC_RESET | PERIPH_ON_APB),
+	PMC_PERIPH_CLK("kbc",       "tegra-kbc",  NULL,   36, 0, PERIPH_PMC_RESET | PERIPH_ON_APB),
 	PERIPH_CLK("timer",     "timer",      NULL,   5,  0,     mux_clk_m,                      0),
-	PERIPH_CLK("i2s1",      "i2s.0",      NULL,   11, 0x100, mux_plla_audio_pllp_clkm,       MUX | DIV_U71),
-	PERIPH_CLK("i2s2",      "i2s.1",      NULL,   18, 0x104, mux_plla_audio_pllp_clkm,       MUX | DIV_U71),
+	PERIPH_CLK("i2s1",      "i2s.0",      NULL,   11, 0x100, mux_plla_audio_pllp_clkm,       MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("i2s2",      "i2s.1",      NULL,   18, 0x104, mux_plla_audio_pllp_clkm,       MUX | DIV_U71 | PERIPH_ON_APB),
 	/* FIXME: spdif has 2 clocks but 1 enable */
-	PERIPH_CLK("spdif_out", "spdif_out",  NULL,   10, 0x108, mux_plla_audio_pllp_clkm,       MUX | DIV_U71),
-	PERIPH_CLK("spdif_in",  "spdif_in",   NULL,   10, 0x10c, mux_pllp_pllc_pllm,             MUX | DIV_U71),
-	PERIPH_CLK("pwm",       "pwm",        NULL,   17, 0x110, mux_pllp_pllc_audio_clkm_clk32, MUX | DIV_U71),
-	PERIPH_CLK("spi",       "spi",        NULL,   43, 0x114, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
+	PERIPH_CLK("spdif_out", "spdif_out",  NULL,   10, 0x108, mux_plla_audio_pllp_clkm,       MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("spdif_in",  "spdif_in",   NULL,   10, 0x10c, mux_pllp_pllc_pllm,             MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("pwm",       "pwm",        NULL,   17, 0x110, mux_pllp_pllc_audio_clkm_clk32, MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("spi",       "spi",        NULL,   43, 0x114, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
 	PERIPH_CLK("xio",       "xio",        NULL,   45, 0x120, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("twc",       "twc",        NULL,   16, 0x12c, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("sbc1",      "spi_tegra.0",NULL,   41, 0x134, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("sbc2",      "spi_tegra.1",NULL,   44, 0x118, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("sbc3",      "spi_tegra.2",NULL,   46, 0x11c, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("sbc4",      "spi_tegra.3",NULL,   68, 0x1b4, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
+	PERIPH_CLK("twc",       "twc",        NULL,   16, 0x12c, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("sbc1",      "spi_tegra.0",NULL,   41, 0x134, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("sbc2",      "spi_tegra.1",NULL,   44, 0x118, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("sbc3",      "spi_tegra.2",NULL,   46, 0x11c, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("sbc4",      "spi_tegra.3",NULL,   68, 0x1b4, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
 	PERIPH_CLK("ide",       "ide",        NULL,   25, 0x144, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
 	PERIPH_CLK("ndflash",   "tegra_nand", NULL,   13, 0x160, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
 	/* FIXME: vfir shares an enable with uartb */
-	PERIPH_CLK("vfir",      "vfir",       NULL,   7,  0x168, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
+	PERIPH_CLK("vfir",      "vfir",       NULL,   7,  0x168, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
 	PERIPH_CLK("sdmmc1",    "sdhci-tegra.0",    NULL,   14, 0x150, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
 	PERIPH_CLK("sdmmc2",    "sdhci-tegra.1",    NULL,   9,  0x154, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
 	PERIPH_CLK("sdmmc3",    "sdhci-tegra.2",    NULL,   69, 0x1bc, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
@@ -1225,22 +1244,22 @@ struct clk tegra_periph_clks[] = {
 	PERIPH_CLK("csite",     "csite",      NULL,   73, 0x1d4, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
 	/* FIXME: what is la? */
 	PERIPH_CLK("la",        "la",         NULL,   76, 0x1f8, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("owr",       "owr",        NULL,   71, 0x1cc, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
+	PERIPH_CLK("owr",       "owr",        NULL,   71, 0x1cc, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
 	PERIPH_CLK("nor",       "nor",        NULL,   42, 0x1d0, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("mipi",      "mipi",       NULL,   50, 0x174, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("i2c1",      "tegra-i2c.0",      NULL,   12, 0x124, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("i2c2",      "tegra-i2c.1",      NULL,   54, 0x198, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("i2c3",      "tegra-i2c.2",      NULL,   67, 0x1b8, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("dvc",       "tegra-i2c.3",      NULL,   47, 0x128, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("i2c1_i2c",  "tegra-i2c.0",      "i2c",  0, 0, mux_pllp_out3,        0),
-	PERIPH_CLK("i2c2_i2c",  "tegra-i2c.1",      "i2c",  0, 0, mux_pllp_out3,        0),
-	PERIPH_CLK("i2c3_i2c",  "tegra-i2c.2",      "i2c",  0, 0, mux_pllp_out3,        0),
-	PERIPH_CLK("dvc_i2c",   "tegra-i2c.3",      "i2c",  0, 0, mux_pllp_out3,        0),
-	PERIPH_CLK("uarta",     "uart.0",     NULL,   6,  0x178, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("uartb",     "uart.1",     NULL,   7,  0x17c, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("uartc",     "uart.2",     NULL,   55, 0x1a0, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("uartd",     "uart.3",     NULL,   65, 0x1c0, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
-	PERIPH_CLK("uarte",     "uart.4",     NULL,   66, 0x1c4, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71),
+	PERIPH_CLK("mipi",      "mipi",       NULL,   50, 0x174, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("i2c1",      "tegra-i2c.0",      NULL,   12, 0x124, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("i2c2",      "tegra-i2c.1",      NULL,   54, 0x198, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("i2c3",      "tegra-i2c.2",      NULL,   67, 0x1b8, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("dvc",       "tegra-i2c.3",      NULL,   47, 0x128, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("i2c1_i2c",  "tegra-i2c.0",      "i2c",  0, 0, mux_pllp_out3,        PERIPH_ON_APB),
+	PERIPH_CLK("i2c2_i2c",  "tegra-i2c.1",      "i2c",  0, 0, mux_pllp_out3,        PERIPH_ON_APB),
+	PERIPH_CLK("i2c3_i2c",  "tegra-i2c.2",      "i2c",  0, 0, mux_pllp_out3,        PERIPH_ON_APB),
+	PERIPH_CLK("dvc_i2c",   "tegra-i2c.3",      "i2c",  0, 0, mux_pllp_out3,        PERIPH_ON_APB),
+	PERIPH_CLK("uarta",     "uart.0",     NULL,   6,  0x178, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("uartb",     "uart.1",     NULL,   7,  0x17c, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("uartc",     "uart.2",     NULL,   55, 0x1a0, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("uartd",     "uart.3",     NULL,   65, 0x1c0, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
+	PERIPH_CLK("uarte",     "uart.4",     NULL,   66, 0x1c4, mux_pllp_pllc_pllm_clkm,        MUX | DIV_U71 | PERIPH_ON_APB),
 	PERIPH_CLK("3d",        "3d",         NULL,   24, 0x158, mux_pllm_pllc_pllp_plla,        MUX | DIV_U71 | PERIPH_MANUAL_RESET),
 	PERIPH_CLK("2d",        "2d",         NULL,   21, 0x15c, mux_pllm_pllc_pllp_plla,        MUX | DIV_U71),
 	/* FIXME: vi and vi_sensor share an enable */

@@ -137,11 +137,7 @@ static void spi_tty_handle_data(void *context, u8 *buf, u32 count)
 		SPI_IPC_INFO("insert data to tty\n");
 		buf += SPI_MSG_HEADER_LEN;
 		do {
-			if (len > 1024) {
-				cnt = tty_buffer_request_room(spi_tty->tty, 1024);
-			}else{
-				cnt = tty_buffer_request_room(spi_tty->tty, len);
-			}
+			cnt = tty_buffer_request_room(spi_tty->tty, len);
 			if (cnt == 0)
 				break;
 			cnt = tty_insert_flip_string(spi_tty->tty, buf, cnt);
