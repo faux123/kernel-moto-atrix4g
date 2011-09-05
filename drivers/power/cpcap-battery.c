@@ -53,7 +53,13 @@ static ssize_t cpcap_batt_read(struct file *file, char *buf, size_t count,
 static int cpcap_batt_probe(struct platform_device *pdev);
 static int cpcap_batt_remove(struct platform_device *pdev);
 static int cpcap_batt_resume(struct platform_device *pdev);
-
+#ifdef CONFIG_MOT_CHARGING_DIS
+static ssize_t cpcap_battery_show_property(struct device *dev,
+					  struct device_attribute *attr,
+					  char *buf);
+static ssize_t cpcap_battery_store_property(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count);
+#endif
 struct cpcap_batt_ps {
 	struct power_supply batt;
 	struct power_supply ac;
@@ -70,6 +76,7 @@ struct cpcap_batt_ps {
 	char async_req_pending;
 	unsigned long last_run_time;
 	bool no_update;
+	bool disable_charging;
 };
 
 static const struct file_operations batt_fops = {
@@ -335,7 +342,10 @@ static int cpcap_batt_ac_get_property(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_ONLINE:
-		val->intval = sply->ac_state.online;
+		if (sply->disable_charging)
+			val->intval = 0;
+		else
+			val->intval = sply->ac_state.online;
 		break;
 	default:
 		ret = -EINVAL;
@@ -362,7 +372,10 @@ static int cpcap_batt_usb_get_property(struct power_supply *psy,
 		val->intval = sply->usb_state.online;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		val->intval = sply->usb_state.current_now;
+		if (sply->disable_charging)
+			val->intval = 0;
+		else
+			val->intval = sply->usb_state.current_now;
 		break;
 	case POWER_SUPPLY_PROP_MODEL_NAME:
 		val->strval = cpcap_batt_usb_models[sply->usb_state.model];
@@ -427,7 +440,79 @@ static int cpcap_batt_get_property(struct power_supply *psy,
 
 	return ret;
 }
+#ifdef CONFIG_MOT_CHARGING_DIS
+#define CPCAP_BATTERY_ATTR(_name)					\
+{									\
+	.attr = { .name = #_name, .mode = 0666, .owner = THIS_MODULE },	\
+	.show = cpcap_battery_show_property,				\
+	.store = cpcap_battery_store_property,				\
+}
 
+static struct device_attribute cpcap_battery_attrs[] = {
+	CPCAP_BATTERY_ATTR(disable_charging),
+};
+
+enum cpcap_supply_property {
+	/* Properties of type `int' */
+	CPCAP_SUPPLY_DISABLE_CHRG = 0,
+};
+
+static int cpcap_battery_create_attrs(struct device *dev)
+{
+	int i, rc;
+
+	for (i = 0; i < ARRAY_SIZE(cpcap_battery_attrs); i++) {
+		rc = device_create_file(dev, &cpcap_battery_attrs[i]);
+		if (rc)
+			goto mxc_attrs_failed;
+	}
+
+	goto succeed;
+
+mxc_attrs_failed:
+	while (i--)
+		device_remove_file(dev, &cpcap_battery_attrs[i]);
+
+succeed:
+	return rc;
+}
+
+static void cpcap_battery_destroy_attrs(struct device *dev)
+{
+    int i;
+    for (i = 0; i < ARRAY_SIZE(cpcap_battery_attrs); i++)
+	device_remove_file(dev, &cpcap_battery_attrs[i]);
+}
+
+static ssize_t cpcap_battery_show_property(struct device *dev,
+					  struct device_attribute *attr,
+					  char *buf) {
+	const ptrdiff_t off = attr - cpcap_battery_attrs;
+
+	if (off == CPCAP_SUPPLY_DISABLE_CHRG)
+		return sprintf(buf, "%d\n", cpcap_batt_sply->disable_charging);
+	else
+		return 0;
+}
+
+static ssize_t cpcap_battery_store_property(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long val = 0;
+	ssize_t ret = count;
+	const ptrdiff_t off = attr - cpcap_battery_attrs;
+
+	if (off == CPCAP_SUPPLY_DISABLE_CHRG) {
+		strict_strtoul(buf, 10, &val);
+		cpcap_batt_sply->disable_charging = (val > 0);
+		if (cpcap_batt_sply->ac_state.online)
+			power_supply_changed(&cpcap_batt_sply->ac);
+		if (cpcap_batt_sply->usb_state.online)
+			power_supply_changed(&cpcap_batt_sply->usb);
+	}
+	return ret;
+}
+#endif
 static int cpcap_batt_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -449,6 +534,7 @@ static int cpcap_batt_probe(struct platform_device *pdev)
 	mutex_init(&sply->lock);
 	init_waitqueue_head(&sply->wait);
 
+	sply->disable_charging = 0;
 	sply->batt_state.status	= POWER_SUPPLY_STATUS_UNKNOWN;
 	sply->batt_state.health	= POWER_SUPPLY_HEALTH_GOOD;
 	sply->batt_state.present = 1;
@@ -494,6 +580,9 @@ static int cpcap_batt_probe(struct platform_device *pdev)
 	if (ret)
 		goto unregbatt_exit;
 	platform_set_drvdata(pdev, sply);
+#ifdef CONFIG_MOT_CHARGING_DIS
+	cpcap_battery_create_attrs(sply->batt.dev);
+#endif
 	sply->cpcap->battdata = sply;
 	cpcap_batt_sply = sply;
 
@@ -566,6 +655,9 @@ unregirq_exit:
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_UC_PRIMACRO_10);
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_UC_PRIMACRO_11);
 unregmisc_exit:
+#ifdef CONFIG_MOT_CHARGING_DIS
+	cpcap_battery_destroy_attrs(sply->batt.dev);
+#endif
 	misc_deregister(&batt_dev);
 unregusb_exit:
 	power_supply_unregister(&sply->usb);
@@ -584,6 +676,9 @@ static int cpcap_batt_remove(struct platform_device *pdev)
 	power_supply_unregister(&sply->batt);
 	power_supply_unregister(&sply->ac);
 	power_supply_unregister(&sply->usb);
+#ifdef CONFIG_MOT_CHARGING_DIS
+	cpcap_battery_destroy_attrs(sply->batt.dev);
+#endif
 	misc_deregister(&batt_dev);
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_VBUSOV);
 	cpcap_irq_free(sply->cpcap, CPCAP_IRQ_BATTDETB);

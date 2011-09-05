@@ -211,6 +211,36 @@ static void tegra_debug_port_resume(void)
 
 #ifdef CONFIG_MMC_SDHCI_TEGRA
 extern struct tegra_nand_platform tegra_nand_plat;
+
+#ifdef CONFIG_MOT_WIMAX
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+static struct sdio_embedded_func sdio_func_array[] = {
+	{
+		.f_class        = 0,
+		.f_maxblksize   = 64,
+	}
+};
+
+static struct embedded_sdio_data bcsm350_emb_sdio_data = {
+	.cis    = {
+		.vendor         = 0x392,
+		.device         = 0x15e,
+		.blksize        = 64,
+		.max_dtr        = 26000000,
+	},
+	.cccr   = {
+		.multi_block    = 1,
+		.low_speed      = 0,
+		.wide_bus       = 1,
+		.high_power     = 0,
+		.high_speed     = 0,
+	},
+	.funcs  = sdio_func_array,
+	.num_funcs = 1,
+};
+#endif /* CONFIG_MMC_EMBEDDED_SDIO */
+#endif /* CONFIG_MOT_WIMAX */
+
 static struct tegra_sdhci_platform_data tegra_sdhci_platform[] = {
 	[0] = {
 		.bus_width = 4,
@@ -224,7 +254,10 @@ static struct tegra_sdhci_platform_data tegra_sdhci_platform[] = {
 #ifdef CONFIG_MOT_WIMAX
 		.ocr_mask = MMC_VDD_165_195,
 		.register_status_notify = bcm_wimax_status_register,
-#endif
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+		.embedded_sdio = &bcsm350_emb_sdio_data,
+#endif /* CONFIG_MMC_EMBEDDED_SDIO */
+#endif /* CONFIG_MOT_WIMAX */
 	},
 	[2] = {
 		.bus_width = 4,
@@ -1597,25 +1630,6 @@ static struct tegra_suspend_platform_data tegra_suspend_platform = {
 static void __init tegra_setup_suspend(void)
 {
 #ifdef CONFIG_ARCH_TEGRA_2x_SOC
-#ifdef CONFIG_MOT_WIMAX
-	const int wakepad_irq[] = {
-		/*gpio_to_irq(TEGRA_GPIO_PO5),*/ gpio_to_irq(TEGRA_GPIO_PV3),
-		gpio_to_irq(TEGRA_GPIO_PL1), gpio_to_irq(TEGRA_GPIO_PB6),
-		gpio_to_irq(TEGRA_GPIO_PN7), gpio_to_irq(TEGRA_GPIO_PA0),
-		gpio_to_irq(TEGRA_GPIO_PU5), gpio_to_irq(TEGRA_GPIO_PU6),
-		gpio_to_irq(TEGRA_GPIO_PC7), /*gpio_to_irq(TEGRA_GPIO_PS2),*/
-		gpio_to_irq(TEGRA_GPIO_PAA1), gpio_to_irq(TEGRA_GPIO_PW3),
-		gpio_to_irq(TEGRA_GPIO_PW2), gpio_to_irq(TEGRA_GPIO_PY6),
-		gpio_to_irq(TEGRA_GPIO_PV6), gpio_to_irq(TEGRA_GPIO_PJ7),
-		INT_RTC, INT_KBC, INT_EXTERNAL_PMU,
-		/* FIXME: USB wake pad interrupt mapping may be wrong */
-		INT_USB, INT_USB3, INT_USB, INT_USB3,
-		gpio_to_irq(TEGRA_GPIO_PI5), gpio_to_irq(TEGRA_GPIO_PV2),
-		gpio_to_irq(TEGRA_GPIO_PS4), gpio_to_irq(TEGRA_GPIO_PS5),
-		/*gpio_to_irq(TEGRA_GPIO_PS0),*/ gpio_to_irq(TEGRA_GPIO_PQ6),
-		gpio_to_irq(TEGRA_GPIO_PQ7), gpio_to_irq(TEGRA_GPIO_PN2),
-	};
-#else
 	const int wakepad_irq[] = {
 		gpio_to_irq(TEGRA_GPIO_PO5), gpio_to_irq(TEGRA_GPIO_PV3),
 		gpio_to_irq(TEGRA_GPIO_PL1), gpio_to_irq(TEGRA_GPIO_PB6),
@@ -1633,7 +1647,6 @@ static void __init tegra_setup_suspend(void)
 		gpio_to_irq(TEGRA_GPIO_PS0), gpio_to_irq(TEGRA_GPIO_PQ6),
 		gpio_to_irq(TEGRA_GPIO_PQ7), gpio_to_irq(TEGRA_GPIO_PN2),
 	};
-#endif /* CONFIG_MOT_WIMAX */
 #endif /* CONFIG_ARCH_TEGRA_2x_SOC */
 	const NvOdmWakeupPadInfo *w;
 	const NvOdmSocPowerStateInfo *lp;

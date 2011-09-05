@@ -41,10 +41,8 @@
 #define KFUSE_KEYS 0x8c
 
 #define KFUSE_CACHE_SZ (144 * 4)
-#define USB_CALIB_CACHE_SZ (4)
 
 static u32 *kfuse_cache;
-static u32 usb_calib_cache=0;
 static int kfuse_cache_isvalid;
 
 /* set start address in auto-increment mode */
@@ -64,26 +62,6 @@ static inline void kfuse_clock_enable(int e)
 		writel(CLK_RST_CONTROLLER_CLK_ENB_H_CLR_0_CLR_CLK_ENB_KFUSE_FIELD,
 			IO_ADDRESS(TEGRA_CLK_RESET_BASE +
 			CLK_RST_CONTROLLER_CLK_ENB_H_CLR_0));
-	}
-}
-
-#define FUSE_VISIBILITY_REG_OFFSET 0x48
-#define FUSE_VISIBILITY_BIT_POS 28
-
-static inline void fuse_visibility_enable(int e)
-{
-	// Extract fuse FUSE_USB_CALIB_0 value
-	void __iomem *clk = IO_ADDRESS(TEGRA_CLK_RESET_BASE);
-	u32 clk_val = readl(clk + FUSE_VISIBILITY_REG_OFFSET);
-
-	if (e) {
-		// SetFuseRegVisibility(ON)
-		clk_val |= (1 << FUSE_VISIBILITY_BIT_POS);
-		writel(clk_val, (clk + FUSE_VISIBILITY_REG_OFFSET));
-	} else {
-		// SetFuseRegVisibility(OFF)
-		clk_val &= ~(1 << FUSE_VISIBILITY_BIT_POS);
-		writel(clk_val, (clk + FUSE_VISIBILITY_REG_OFFSET));
 	}
 }
 
@@ -116,11 +94,6 @@ static inline u32 kfuse_read(void)
 	return readl(IO_ADDRESS(TEGRA_KFUSE_BASE) + KFUSE_KEYS);
 }
 
-static inline u32 fuse_usb_calib_read(void)
-{
-	return readl(IO_ADDRESS(TEGRA_FUSE_BASE) + FUSE_USB_CALIB_0);
-}
-
 /* this is called very early in init because there is a bug that can cause
  * corruption if DMA and non-DMA requests overlap on APB bus. */
 void __init tegra_init_fuse_cache(void) {
@@ -143,18 +116,9 @@ void __init tegra_init_fuse_cache(void) {
 	}
 
 	kfuse_clock_enable(0);
-
-	fuse_visibility_enable(1);
-	usb_calib_cache = fuse_usb_calib_read();
-	fuse_visibility_enable(0);
 }
 
 const u32 *tegra_kfuse_cache_get(size_t *size) {
 	if (size) *size = KFUSE_CACHE_SZ;
 	return kfuse_cache;
-}
-
-const u32 tegra_usb_calib_cache_get(size_t *size) {
-	if (size) *size = USB_CALIB_CACHE_SZ;
-	return usb_calib_cache;
 }

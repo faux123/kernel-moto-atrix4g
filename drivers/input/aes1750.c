@@ -1438,6 +1438,8 @@ static int __devinit aes1750_probe(struct spi_device *spi)
 	register_early_suspend(&aes1750->early_suspend);
 #endif
 
+	/* Reset the sensor so it's in low power mode */
+	aes1750_reset(aes1750);
     aes1750_info("probe successful\n");
 	return 0;
 

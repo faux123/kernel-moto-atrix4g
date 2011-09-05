@@ -48,13 +48,6 @@
 #include "nvodm_query.h"
 #include "ap20/arahb_arbc.h"
 #include "ap20/arclk_rst.h"
-#include "ap20/arfuse.h"
-
-#include "mach/fuse.h"
-#include "mach/iomap.h"
-#include <linux/io.h>
-#include <linux/kernel.h>
-
 
 /* Defines for USB register read and writes */
 #define USB_REG_RD(reg)\
@@ -182,13 +175,6 @@
 
 #define USB_MISC_REGW(pUsbPhy, offset, value) \
     NV_WRITE32(pUsbPhy->MiscVirAdr + offset/4, value)
-
-#define FUSE_VISIBILITY_REG_OFFSET             0x48
-#define FUSE_VISIBILITY_BIT_POS                  28
-#define FUSE_SETUP_SEL_BIT_POS                    3
-#define USB_UTMIP_XCVR_SETUP_MASK               0xF
-#define USB_UTMIP_XCVR_SETUP_MAX_VAL            0xF
-#define USB_UTMIP_XCVR_SETUP_DEFAULT_VALUE      0x9
 
 /**
  * Structure defining the fields for USB UTMI clocks delay Parameters.
@@ -504,38 +490,12 @@ Ap20UsbPhyUtmiConfigure(
     return NvSuccess;
 }
 
-NvU32 Ap20UsbPhySetXcvrSetupValue(NvU32 CalibOffset)
-{
-    // Extract fuse FUSE_USB_CALIB_0 value
-    NvU32 old_value, new_value, size;
-
-    old_value = tegra_usb_calib_cache_get(&size);
-
-    // Updating the old value based upon calib offset value
-    if (CalibOffset <= 2 && size)
-    {
-        new_value = (old_value & USB_UTMIP_XCVR_SETUP_MASK) + CalibOffset;
-        if (new_value > USB_UTMIP_XCVR_SETUP_MAX_VAL)
-        {
-            new_value = USB_UTMIP_XCVR_SETUP_MAX_VAL;
-        }
-    }
-    else
-    {
-        new_value =  USB_UTMIP_XCVR_SETUP_DEFAULT_VALUE;
-        NvOsDebugPrintf("Setting USB calib offset to default value %d\n",new_value);
-    }
-    return new_value;
-}
-
 static void
 Ap20UsbPhyUtmiPowerControl(
     NvDdkUsbPhy *pUsbPhy,
     NvBool Enable)
 {
     NvU32 RegVal = 0;
-    void __iomem *usb = IO_ADDRESS(TEGRA_USB_BASE);
-    u32 fuse_setup_sel = readl(usb + USB1_UTMIP_SPARE_CFG0_0);
 
     /* UTMIP_XCVR_SETUP setting of 0x9, in conjunction with
        UTMIP_XCVR_TERM_RANGE_ADJ of 0x6, gives the maximum guard band around
@@ -568,7 +528,7 @@ Ap20UsbPhyUtmiPowerControl(
         pUsbPhy->pUtmiPadConfig->PadOnRefCount++;
 
         // Turn on power in the tranciver
-        RegVal = USB_UTMIP_REG_RD(XCVR_CFG0);
+	 RegVal = USB_UTMIP_REG_RD(XCVR_CFG0);
         RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
                     XCVR_CFG0, UTMIP_FORCE_PDZI_POWERDOWN, 0, RegVal);
         RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
@@ -577,14 +537,6 @@ Ap20UsbPhyUtmiPowerControl(
                     XCVR_CFG0, UTMIP_FORCE_PD_POWERDOWN, 0, RegVal);
         RegVal = USB_UTMIP_FLD_SET_DRF_DEF(
                     XCVR_CFG0, UTMIP_XCVR_SETUP, XcvrSetupValue, RegVal);
-
-        /* Override fuse setting and use XVCR SETUP register instead.
-         * FUSE_SETUP:
-         *     UTMIP_SPARE_CFG0[3] = 0 --> use XVCR SETUP register
-         *     UTMIP_SPARE_CFG0[3] = 1 --> use USB_CALIB fuse value
-         */
-        fuse_setup_sel &= ~(1 << FUSE_SETUP_SEL_BIT_POS);
-        writel(fuse_setup_sel, (usb + USB1_UTMIP_SPARE_CFG0_0));
 
         // To slow rise/ fall times in low-speed eye diagrams
         RegVal = USB_UTMIP_FLD_SET_DRF_DEF(

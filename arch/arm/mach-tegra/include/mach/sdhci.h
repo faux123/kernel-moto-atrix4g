@@ -27,6 +27,19 @@
 #include "nvcommon.h"
 #include "nvodm_query.h"
 
+#ifdef CONFIG_MACH_MOT
+#include <linux/mmc/card.h>
+#include <linux/mmc/sdio_func.h>
+#include <linux/mmc/host.h>
+
+struct embedded_sdio_data {
+	struct sdio_cis cis;
+	struct sdio_cccr cccr;
+	struct sdio_embedded_func *funcs;
+	int num_funcs;
+};
+#endif
+
 struct tegra_sdhci_platform_data {
 	const struct tegra_pingroup_config *pinmux;
 	int nr_pins;
@@ -49,6 +62,7 @@ struct tegra_sdhci_platform_data {
 	unsigned int ocr_mask;	/* available voltages */
 	int (*register_status_notify)\
 		(void (*callback)(void *dev_id), void *dev_id);
+	struct embedded_sdio_data *embedded_sdio;
 #endif
 };
 

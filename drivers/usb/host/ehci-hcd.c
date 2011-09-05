@@ -81,7 +81,7 @@ static const char	hcd_name [] = "ehci_hcd";
 #define	EHCI_TUNE_MULT_TT	1
 #define	EHCI_TUNE_FLS		2	/* (small) 256 frame schedule */
 
-#define EHCI_IAA_MSECS		10		/* arbitrary */
+#define EHCI_IAA_MSECS		10000		/* arbitrary */
 #define EHCI_IO_JIFFIES		(HZ/10)		/* io watchdog > irq_thresh */
 #define EHCI_ASYNC_JIFFIES	(HZ/20)		/* async idle timeout */
 #define EHCI_SHRINK_FRAMES	5		/* async qh unlink delay */

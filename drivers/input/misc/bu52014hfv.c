@@ -28,32 +28,40 @@
 #include <linux/workqueue.h>
 #include <linux/mutex.h>
 #include <linux/bu52014hfv.h>
+#include <asm/mach-types.h>
+#include <../../../arch/arm/mach-tegra/include/hwrev.h>
 
 struct bu52014hfv_info {
 	int gpio_north;
 	int gpio_south;
+	int gpio_kickstand;
 
 	int irq_north;
 	int irq_south;
+	int irq_kickstand;
 
 	struct work_struct irq_north_work;
 	struct work_struct irq_south_work;
+	struct work_struct irq_kickstand_work;
 
 	struct workqueue_struct *work_queue;
 	struct switch_dev sdev;
 
 	unsigned int north_value;
 	unsigned int south_value;
+	unsigned int kickstand_value;
 	void (*set_switch_func)(int state);
 	struct mutex lock;
 	unsigned int irq_north_type;
 	unsigned int irq_south_type;
+	unsigned int irq_kickstand_type;
 };
 
 enum {
 	NO_DOCK,
 	DESK_DOCK,
 	CAR_DOCK,
+	KICKSTAND_DOCK,
 };
 
 
@@ -66,6 +74,8 @@ static ssize_t print_name(struct switch_dev *sdev, char *buf)
 		return sprintf(buf, "DESK\n");
 	case CAR_DOCK:
 		return sprintf(buf, "CAR\n");
+	case KICKSTAND_DOCK:
+	    return sprintf(buf, "KICKSTAND\n");
 	}
 
 	return -EINVAL;
@@ -75,6 +85,13 @@ static int bu52014hfv_update(struct bu52014hfv_info *info, int gpio, int dock)
 {
 	int state = !gpio_get_value(gpio);
 
+	if (gpio == info->gpio_kickstand) {
+		if (HWREV_TYPE_IS_PORTABLE(system_rev) &&
+		    (HWREV_REV(system_rev) >= HWREV_REV_1B))
+			state = state ^ 1;  /* kickstand sense is invert */
+		else
+			state = 0; /* sensor missing before P1B */
+	}
 	if ((info->set_switch_func))
 		info->set_switch_func(state ? dock : NO_DOCK);
 	else
@@ -96,7 +113,7 @@ void bu52014hfv_irq_north_work_func(struct work_struct *work)
 		info->irq_north_type |= IRQ_TYPE_LEVEL_LOW;
 	} else if (info->irq_north_type & IRQ_TYPE_LEVEL_LOW) {
 		info->irq_north_type &= ~IRQ_TYPE_LEVEL_LOW;
-        info->irq_north_type |= IRQ_TYPE_LEVEL_HIGH;
+		info->irq_north_type |= IRQ_TYPE_LEVEL_HIGH;
 	}
 	set_irq_type(info->irq_north, info->irq_north_type);
 	mutex_unlock(&info->lock);
@@ -117,11 +134,32 @@ void bu52014hfv_irq_south_work_func(struct work_struct *work)
 		info->irq_south_type |= IRQ_TYPE_LEVEL_LOW;
 	} else if (info->irq_south_type & IRQ_TYPE_LEVEL_LOW) {
 		info->irq_south_type &= ~IRQ_TYPE_LEVEL_LOW;
-        info->irq_south_type |= IRQ_TYPE_LEVEL_HIGH;
+		info->irq_south_type |= IRQ_TYPE_LEVEL_HIGH;
 	}
 	set_irq_type(info->irq_south, info->irq_south_type);
 	mutex_unlock(&info->lock);
 	enable_irq(info->irq_south);
+}
+
+void bu52014hfv_irq_kickstand_work_func(struct work_struct *work)
+{
+	struct bu52014hfv_info *info = container_of(work,
+						    struct bu52014hfv_info,
+						    irq_kickstand_work);
+	bu52014hfv_update(info, info->gpio_kickstand, info->kickstand_value);
+
+	mutex_lock(&info->lock);
+	/* Toggle the type if level-triggered (pseudo-edge). */
+	if (info->irq_kickstand_type & IRQ_TYPE_LEVEL_HIGH) {
+		info->irq_kickstand_type &= ~IRQ_TYPE_LEVEL_HIGH;
+		info->irq_kickstand_type |= IRQ_TYPE_LEVEL_LOW;
+	} else if (info->irq_kickstand_type & IRQ_TYPE_LEVEL_LOW) {
+		info->irq_kickstand_type &= ~IRQ_TYPE_LEVEL_LOW;
+		info->irq_kickstand_type |= IRQ_TYPE_LEVEL_HIGH;
+	}
+	set_irq_type(info->irq_kickstand, info->irq_kickstand_type);
+	mutex_unlock(&info->lock);
+	enable_irq(info->irq_kickstand);
 }
 
 static irqreturn_t bu52014hfv_isr(int irq, void *dev)
@@ -134,11 +172,13 @@ static irqreturn_t bu52014hfv_isr(int irq, void *dev)
 		queue_work(info->work_queue, &info->irq_north_work);
 	else if (irq == info->irq_south)
 		queue_work(info->work_queue, &info->irq_south_work);
+	else if (irq == info->irq_kickstand)
+		queue_work(info->work_queue, &info->irq_kickstand_work);
 
 	return IRQ_HANDLED;
 }
 
-static int __devinit bu52014hfv_probe(struct platform_device *pdev)
+static int bu52014hfv_probe_dock_init(struct platform_device *pdev)
 {
 	struct bu52014hfv_platform_data *pdata = pdev->dev.platform_data;
 	struct bu52014hfv_info *info;
@@ -160,7 +200,6 @@ static int __devinit bu52014hfv_probe(struct platform_device *pdev)
 
 	info->irq_north = gpio_to_irq(pdata->docked_north_gpio);
 	info->irq_south = gpio_to_irq(pdata->docked_south_gpio);
-	info->set_switch_func = pdata->set_switch_func;
 	if (pdata->north_is_desk) {
 		info->north_value = DESK_DOCK;
 		info->south_value = CAR_DOCK;
@@ -168,6 +207,8 @@ static int __devinit bu52014hfv_probe(struct platform_device *pdev)
 		info->north_value = CAR_DOCK;
 		info->south_value = DESK_DOCK;
 	}
+
+	info->set_switch_func = pdata->set_switch_func;
 
 	info->work_queue = create_singlethread_workqueue("bu52014hfv_wq");
 	if (!info->work_queue) {
@@ -201,6 +242,7 @@ static int __devinit bu52014hfv_probe(struct platform_device *pdev)
 
 	enable_irq_wake(info->irq_north);
 	enable_irq_wake(info->irq_south);
+
 	if (!(info->set_switch_func)) {
 		info->sdev.name = "dock";
 		info->sdev.print_name = print_name;
@@ -231,18 +273,103 @@ error_kmalloc_failed:
 	return ret;
 }
 
+static int bu52014hfv_probe_kickstand_init(struct platform_device *pdev)
+{
+	struct bu52014hfv_platform_data *pdata = pdev->dev.platform_data;
+	struct bu52014hfv_info *info;
+	int ret = -1;
+
+	info = kzalloc(sizeof(struct bu52014hfv_info), GFP_KERNEL);
+	if (!info) {
+		ret = -ENOMEM;
+		pr_err("%s: could not allocate space for module data: %d\n",
+		       __func__, ret);
+		goto error_kmalloc_failed;
+	}
+
+	mutex_init(&info->lock);
+
+	/* Initialize hall effect driver data */
+	info->gpio_kickstand = pdata->kickstand_gpio;
+	info->irq_kickstand = gpio_to_irq(pdata->kickstand_gpio);
+	info->kickstand_value = DESK_DOCK; /* kickstand emulates desk dock */
+
+	info->set_switch_func = pdata->set_switch_func;
+
+	info->work_queue = create_singlethread_workqueue("bu52014hfv_wq");
+	if (!info->work_queue) {
+		ret = -ENOMEM;
+		pr_err("%s: cannot create work queue: %d\n", __func__, ret);
+		goto error_create_wq_failed;
+	}
+
+	INIT_WORK(&info->irq_kickstand_work,
+		bu52014hfv_irq_kickstand_work_func);
+
+	/* GPIO is active low */
+	info->irq_kickstand_type = IRQ_TYPE_LEVEL_LOW;
+	ret = request_irq(info->irq_kickstand, bu52014hfv_isr,
+			  IRQ_TYPE_LEVEL_LOW | IRQF_DISABLED,
+				  BU52014HFV_MODULE_NAME, info);
+	if (ret) {
+		pr_err("%s: kickstand request irq failed: %d\n", __func__, ret);
+		goto error_request_irq_kickstand_failed;
+	}
+
+	enable_irq_wake(info->irq_kickstand);
+
+	if (!(info->set_switch_func)) {
+		info->sdev.name = "dock";
+		info->sdev.print_name = print_name;
+		ret = switch_dev_register(&info->sdev);
+		if (ret) {
+			pr_err("%s: error registering switch device %d\n",
+				__func__, ret);
+			goto error_switch_device_failed;
+		}
+	}
+	platform_set_drvdata(pdev, info);
+
+	bu52014hfv_update(info, info->gpio_kickstand, info->kickstand_value);
+
+	return 0;
+
+error_switch_device_failed:
+	free_irq(info->irq_kickstand, info);
+error_request_irq_kickstand_failed:
+	destroy_workqueue(info->work_queue);
+error_create_wq_failed:
+	kfree(info);
+error_kmalloc_failed:
+	return ret;
+}
+
+static int __devinit bu52014hfv_probe(struct platform_device *pdev)
+{
+	if (machine_is_sunfire()) {
+		return bu52014hfv_probe_kickstand_init(pdev);
+	} else {
+		return bu52014hfv_probe_dock_init(pdev);
+	}
+}
 static int __devexit bu52014hfv_remove(struct platform_device *pdev)
 {
 	struct bu52014hfv_info *info = platform_get_drvdata(pdev);
 
-	disable_irq_wake(info->irq_north);
-	disable_irq_wake(info->irq_south);
+	if (machine_is_sunfire()) {
+		disable_irq_wake(info->irq_kickstand);
+		free_irq(info->irq_kickstand, 0);
+		gpio_free(info->gpio_kickstand);
+	} else {
+		disable_irq_wake(info->irq_north);
+		disable_irq_wake(info->irq_south);
 
-	free_irq(info->irq_north, 0);
-	free_irq(info->irq_south, 0);
+		free_irq(info->irq_north, 0);
+		free_irq(info->irq_south, 0);
 
-	gpio_free(info->gpio_north);
-	gpio_free(info->gpio_south);
+		gpio_free(info->gpio_north);
+		gpio_free(info->gpio_south);
+	}
 
 	destroy_workqueue(info->work_queue);
 	if (!(info->set_switch_func))

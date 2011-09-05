@@ -21,6 +21,5 @@
 
 void __init tegra_init_fuse_cache(void);
 const u32 *tegra_kfuse_cache_get(size_t *size);
-const u32 tegra_usb_calib_cache_get(size_t *size);
 
 #endif

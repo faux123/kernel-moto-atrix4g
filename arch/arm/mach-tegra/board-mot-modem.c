@@ -385,11 +385,12 @@ int __init mot_modem_init(void)
 	} else
 		strcat(bp_ctrl_bus, " (NO mdm_ctrl)");
 
-	if (machine_is_olympus() || machine_is_tegra_daytona()) {
+	if (machine_is_olympus() || machine_is_tegra_daytona() ||
+		machine_is_sunfire()) {
 		strcpy(bp_data_bus, "and SPI");
 		mot_setup_mdm6600_spi_ipc();
 		mot_setup_mdm6600_usb_ipc(0);
-	} else if (machine_is_etna() || machine_is_sunfire()) {
+	} else if (machine_is_etna()) {
 		strcpy(bp_data_bus, "and USB");
 		mot_setup_mdm6600_usb_ipc(MDM6600_HOST_WAKE_GPIO);
 	}

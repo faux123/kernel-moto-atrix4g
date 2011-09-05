@@ -964,10 +964,6 @@ static void detection_work(struct work_struct *work)
 			} else {
 				if (cpcap_usb_det_debug)
 					pr_info("cpcap_usb_det: Waiting for VBUS to drain before switching on RVRS CHRG\n");
-
-				/* Unmask the IDFLOAT irq in case the line is not floating by the
-				 * time we read the sense bits */
-				cpcap_irq_unmask(data->cpcap, CPCAP_IRQ_IDFLOAT);
 			}
 		} else if (!isVBusValid) {
 			if (cpcap_usb_det_debug)

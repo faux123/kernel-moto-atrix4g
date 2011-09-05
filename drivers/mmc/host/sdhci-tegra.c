@@ -353,6 +353,14 @@ skip_gpio_wp:
 	if (plat->register_status_notify)
 		plat->register_status_notify(tegra_sdhci_status_notify_cb,
 									sdhost);
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+	if (plat->embedded_sdio != NULL)
+		mmc_set_embedded_sdio_data(sdhost->mmc,
+					   &plat->embedded_sdio->cis,
+					   &plat->embedded_sdio->cccr,
+					   plat->embedded_sdio->funcs,
+					   plat->embedded_sdio->num_funcs);
+#endif
 #endif
 
 	sdhost->data_width = plat->bus_width;
