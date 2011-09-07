@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.32.39
-# Sun Sep  4 03:48:04 2011
+# Wed Sep  7 17:43:04 2011
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -1285,6 +1285,7 @@ CONFIG_POWER_SUPPLY=y
 # CONFIG_TEGRA_BATTERY_ODM is not set
 CONFIG_CHARGER_CPCAP=y
 CONFIG_BATTERY_CPCAP=y
+CONFIG_MOT_CHARGING_DIS=y
 CONFIG_HWMON=y
 # CONFIG_HWMON_VID is not set
 # CONFIG_HWMON_DEBUG_CHIP is not set
