@@ -195,6 +195,14 @@ unsigned long output_ptr;
 unsigned long free_mem_ptr;
 unsigned long free_mem_end_ptr;
 
+#ifdef CONFIG_KERNEL_GZIP
+#include "../../../../lib/decompress_inflate.c"
+#endif
+
+#ifdef CONFIG_KERNEL_LZO
+#include "../../../../lib/decompress_unlzo.c"
+#endif
+
 #ifndef arch_error
 #define arch_error(x)
 #endif
