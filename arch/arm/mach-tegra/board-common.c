@@ -29,6 +29,9 @@
 #include <linux/ctype.h>
 #include <linux/dma-mapping.h>
 #include <linux/fsl_devices.h>
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#include <linux/bootmem.h>
+#endif
 
 #include <mach/iomap.h>
 #include <mach/irqs.h>
@@ -148,7 +151,6 @@ static struct platform_device tegra_kbc_device = {
 	},
 	.resource = tegra_kbc_resources,
 	.num_resources = ARRAY_SIZE(tegra_kbc_resources),
-	
 };
 #endif
 
@@ -275,6 +277,34 @@ static struct platform_device tegra_udc_device = {
 };
 #endif
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+static struct resource ram_console_resource[] = {
+	{
+		.flags  = IORESOURCE_MEM,
+	}
+};
+
+static struct platform_device ram_console_device = {
+	.name = "ram_console",
+	.id = -1,
+	.num_resources  = ARRAY_SIZE(ram_console_resource),
+	.resource       = ram_console_resource,
+};
+
+extern void init_ramconsole_memory(void) {
+	/* RAM Console can't use alloc_bootmem(), since that zeroes the
+	 * region */
+	unsigned long size = 128 * SZ_1K;
+	/* VRAM address - 128k */
+	ram_console_resource[0].start = 0x20000000;
+	ram_console_resource[0].end = ram_console_resource[0].start + size - 1;
+	pr_info("allocating %lu bytes at (%lx physical) for ram console\n",
+	size, (unsigned long)ram_console_resource[0].start);
+	/* We still have to reserve it, though */
+	reserve_bootmem(ram_console_resource[0].start,size,0);
+}
+#endif
+
 static struct platform_device *tegra_devices[] __initdata = {
 #ifdef CONFIG_MTD_NAND_TEGRA
 	&tegra_nand_device,
@@ -296,6 +326,9 @@ static struct platform_device *tegra_devices[] __initdata = {
 #endif
 #ifdef CONFIG_FB_TEGRA_GRHOST
 	&tegra_grhost_device,
+#endif
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	&ram_console_device,
 #endif
 };
 

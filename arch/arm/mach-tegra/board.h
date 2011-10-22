@@ -53,3 +53,7 @@ bool tegra_is_ap20_a03p(void);
 
 extern struct sys_timer tegra_timer;
 #endif
+
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+void init_ramconsole_memory(void);
+#endif
