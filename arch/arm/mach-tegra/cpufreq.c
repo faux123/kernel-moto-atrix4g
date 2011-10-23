@@ -73,14 +73,14 @@ static struct cpufreq_frequency_table freq_table_1000[] = {
 	{ 7, CPUFREQ_TABLE_END },
 };
 
-static struct cpufreq_frequency_table freq_table_1300[] = {
+static struct cpufreq_frequency_table freq_table_1500[] = {
 	{ 0, 216000 },
 	{ 1, 456000 },
 	{ 2, 800000 },
 	{ 3, 1000000 },
-	{ 4, 1100000 },
-	{ 5, 1200000 },
-	{ 6, 1300000 },
+	{ 4, 1200000 },
+	{ 5, 1300000 },
+	{ 6, 1450000 },
 	{ 7, CPUFREQ_TABLE_END },
 };
 
@@ -352,7 +352,7 @@ static int tegra_cpufreq_driver_init(struct cpufreq_policy *pol)
 #ifdef CONFIG_STOCK_VOLTAGE
 	freq_table = freq_table_1000;
 #else
-	freq_table = freq_table_1300;
+	freq_table = freq_table_1500;
 #endif //CONFIG_STOCK_VOLTAGE
 
 	pol->cpuinfo.transition_latency = 0;
