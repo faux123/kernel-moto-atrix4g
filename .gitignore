@@ -25,7 +25,9 @@
 *.elf
 *.bin
 *.gz
+*.gzip
 *.bz2
+*.lzo
 *.lzma
 *.patch
 *.gcno
