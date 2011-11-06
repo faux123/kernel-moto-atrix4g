@@ -29,6 +29,8 @@
 *.bz2
 *.lzo
 *.lzma
+*.xzkern
+*.xz
 *.patch
 *.gcno
 

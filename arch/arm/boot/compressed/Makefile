@@ -68,6 +68,7 @@ suffix_$(CONFIG_KERNEL_BZIP2)   := bzip2
 suffix_$(CONFIG_KERNEL_GZIP)	:= gzip
 suffix_$(CONFIG_KERNEL_LZO)	:= lzo
 suffix_$(CONFIG_KERNEL_LZMA)    := lzma
+suffix_$(CONFIG_KERNEL_XZ)      := xzkern
 
 targets       := vmlinux vmlinux.lds \
 		piggy.$(suffix_y) piggy.$(suffix_y).o \
@@ -109,8 +110,14 @@ lib1funcs = $(obj)/lib1funcs.o
 $(obj)/lib1funcs.S: $(srctree)/arch/$(SRCARCH)/lib/lib1funcs.S FORCE
 	$(call cmd,shipped)
 
+# For __aeabi_llsl
+ashldi3 = $(obj)/ashldi3.o
+
+$(obj)/ashldi3.S: $(srctree)/arch/$(SRCARCH)/lib/ashldi3.S FORCE
+	$(call cmd,shipped)
+
 $(obj)/vmlinux: $(obj)/vmlinux.lds $(obj)/$(HEAD) $(obj)/piggy.$(suffix_y).o \
-		$(addprefix $(obj)/, $(OBJS)) $(lib1funcs) FORCE
+		$(addprefix $(obj)/, $(OBJS)) $(lib1funcs) $(ashldi3) FORCE
 	$(call if_changed,ld)
 	@:
 
