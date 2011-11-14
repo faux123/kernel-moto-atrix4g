@@ -2929,7 +2929,7 @@ static int nvmap_ioctl_create(struct file *filp,
 	struct nvmem_create_handle op;
 	struct nvmap_handle_ref *r = NULL;
 	struct nvmap_file_priv *priv = filp->private_data;
-	unsigned long key;
+	unsigned long key = 0;
 	int err = 0;
 
 	err = copy_from_user(&op, arg, sizeof(op));

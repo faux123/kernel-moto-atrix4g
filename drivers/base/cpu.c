@@ -37,7 +37,7 @@ static ssize_t __ref store_online(struct sys_device *dev, struct sysdev_attribut
 				 const char *buf, size_t count)
 {
 	struct cpu *cpu = container_of(dev, struct cpu, sysdev);
-	ssize_t ret;
+	ssize_t ret = 0;
 
 	switch (buf[0]) {
 	case '0':

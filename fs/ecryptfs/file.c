@@ -326,7 +326,8 @@ const struct file_operations ecryptfs_dir_fops = {
 	.unlocked_ioctl = ecryptfs_unlocked_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = ecryptfs_compat_ioctl,
-#endif	.open = ecryptfs_open,
+#endif
+	.open = ecryptfs_open,
 	.flush = ecryptfs_flush,
 	.release = ecryptfs_release,
 	.fsync = ecryptfs_fsync,
