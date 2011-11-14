@@ -530,6 +530,7 @@ static int qtouch_force_calibration(struct qtouch_ts_data *ts)
 	return ret;
 }
 
+#if 0
 static int qtouch_force_backupnv(struct qtouch_ts_data *ts)
 {
 	struct qtm_object *obj;
@@ -549,6 +550,7 @@ static int qtouch_force_backupnv(struct qtouch_ts_data *ts)
 					__func__);
 	return ret;
 }
+#endif
 
 static int	mode_codes[5] = 
 {	

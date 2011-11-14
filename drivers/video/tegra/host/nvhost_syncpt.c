@@ -184,7 +184,7 @@ int nvhost_syncpt_wait_timeout(struct nvhost_syncpt *sp, u32 id,
 	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(wq);
 	void *ref;
 	int err = 0;
-	struct nvhost_dev *dev = syncpt_to_dev(sp);
+	//struct nvhost_dev *dev = syncpt_to_dev(sp);
 
 	BUG_ON(!check_max(sp, id, thresh));
 

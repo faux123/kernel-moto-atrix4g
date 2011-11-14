@@ -160,7 +160,7 @@ static void tegra_spi_slave_cleanup(struct spi_slave_device *pSpiDevice)
 
 static int tegra_spi_slave_transaction(struct NvSpiSlave *pShimSpi, struct spi_slave_message *msg)
 {
-	NvBool ret;
+	NvBool ret = false;
 	NvU32 BitsPerWord;
 	NvU32 ClockInKHz;
 	NvU32 ChipSelect;

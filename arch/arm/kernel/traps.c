@@ -254,7 +254,7 @@ DEFINE_SPINLOCK(die_lock);
 NORET_TYPE void die(const char *str, struct pt_regs *regs, int err)
 {
 	struct thread_info *thread = current_thread_info();
-	unsigned long flags,lirq=0;
+	unsigned long flags=0,lirq=0;
 
 	oops_enter();
 

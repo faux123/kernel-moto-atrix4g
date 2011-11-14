@@ -799,7 +799,7 @@ static int tegra_suspend_enter(suspend_state_t state)
 	struct irq_desc *desc;
 	void __iomem *mc = IO_ADDRESS(TEGRA_MC_BASE);
 	unsigned long flags;
-	u32 mc_data[2];
+	u32 mc_data[2]={0,0};
 	int irq;
 
 	local_irq_save(flags);
