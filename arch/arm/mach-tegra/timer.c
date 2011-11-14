@@ -204,7 +204,7 @@ static unsigned long measure_input_freq(unsigned int *m, unsigned int *n)
 static void __init tegra_init_timer(void)
 {
 	unsigned long rate;
-	unsigned int m, n;
+	unsigned int m=0, n=0;
 	int ret;
 
 #ifdef CONFIG_HAVE_ARM_TWD

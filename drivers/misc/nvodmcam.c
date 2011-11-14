@@ -464,7 +464,7 @@ static int __init nvodmcam_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static struct platform_driver nvodmcam_pdrv = {
+static struct platform_driver nvodmcam_probe_driver = {
 	.driver = { .name = NVODMCAM_DRIVER_NAME, },
 	.probe = nvodmcam_probe,
 };
@@ -477,7 +477,7 @@ static int __init nvodmcam_init(void)
 	memset(&p, 0, sizeof(p));
 	memset(&clients, 0, sizeof(clients));
 
-	ret = platform_driver_register(&nvodmcam_pdrv);
+	ret = platform_driver_register(&nvodmcam_probe_driver);
 	if (ret) {
 		printk(KERN_ERR "nvodmcam: failed to register pdrv %d\n", ret);
 		return ret;
@@ -490,7 +490,7 @@ static void __exit nvodmcam_exit(void)
 {
 	printk("nvodmcam_exit\n");
 	misc_deregister(&nvodmcam_mdev);
-	platform_driver_unregister(&nvodmcam_pdrv);
+	platform_driver_unregister(&nvodmcam_probe_driver);
 
 	// FIXME: release gpios?
 
