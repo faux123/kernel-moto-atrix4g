@@ -73,6 +73,18 @@ static struct cpufreq_frequency_table freq_table_1000[] = {
 	{ 7, CPUFREQ_TABLE_END },
 };
 
+#ifdef CONFIG_OC_1300
+static struct cpufreq_frequency_table freq_table_1500[] = {
+	{ 0, 216000 },
+	{ 1, 456000 },
+	{ 2, 800000 },
+	{ 3, 1000000 },
+	{ 4, 1100000 },
+	{ 5, 1200000 },
+	{ 6, 1300000 },
+	{ 7, CPUFREQ_TABLE_END },
+};
+#else
 static struct cpufreq_frequency_table freq_table_1500[] = {
 	{ 0, 216000 },
 	{ 1, 456000 },
@@ -83,6 +95,7 @@ static struct cpufreq_frequency_table freq_table_1500[] = {
 	{ 6, 1450000 },
 	{ 7, CPUFREQ_TABLE_END },
 };
+#endif
 
 static struct cpufreq_frequency_table freq_table_750[] = {
 	{ 0, 216000 },

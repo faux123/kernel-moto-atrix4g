@@ -266,4 +266,9 @@ config STOCK_VOLTAGE
 	depends on ARCH_TEGRA
 	default n
 
+config OC_1300
+	bool "Limit max OC at 1300"
+	depends on ARCH_TEGRA && !STOCK_VOLTAGE
+	default n
+
 endif
