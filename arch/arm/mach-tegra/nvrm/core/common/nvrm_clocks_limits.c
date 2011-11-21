@@ -86,6 +86,34 @@ NvU32 FakeShmooVmaxIndex = NVRM_VOLTAGE_STEPS - 1;
 
 #define MAX_CPU_OC_FREQ (1450000)
 
+#ifdef CONFIG_OC_1300
+
+NvU32 FakeShmooVoltages[] = {
+    750,
+    800,
+    900,
+    1000,
+    1100,
+    1200,
+    1300,
+};
+
+NvRmScaledClkLimits FakepScaledCpuLimits = {
+    NV_DEVID_CPU, // FakepScaledCpuLimits.HwDeviceId
+    0, // FakepScaledCpuLimits.SubClockId
+    32, // FakepScaledCpuLimits.MinKHz
+    // Clock table
+    {
+	216000,
+    	456000,
+    	800000,
+    	1000000,
+        1100000,
+	1200000,
+	1300000,
+    }
+};
+#else
 NvU32 FakeShmooVoltages[] = {
     800,
     900,
@@ -111,6 +139,7 @@ NvRmScaledClkLimits FakepScaledCpuLimits = {
 	1450000,
     }
 };
+#endif	/* CONFIG_OC_1300 */
 
 #else	// STOCK_VOLTAGE_VALUES
 #define MAX_CPU_OC_FREQ (1000000)
