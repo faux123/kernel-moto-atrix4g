@@ -38,7 +38,6 @@
 #include "nvrm_dma.h"
 #include "nvrm_ioctls.h"
 #include "nvrm_power_private.h"
-#include "nvrm/core/common/nvrm_clocks.h"
 #include "mach/nvrm_linux.h"
 #include "nvos_ioctl.h"
 #include "nvreftrack.h"
@@ -623,9 +622,6 @@ int tegra_pm_notifier(struct notifier_block *nb,
     // Notify the event to nvrm_daemon.
     switch (event) {
     case PM_SUSPEND_PREPARE:
-        NvRmPrivLockSharedPll();
-        NvRmPrivDvsStop();
-        NvRmPrivUnlockSharedPll();
 #ifndef CONFIG_HAS_EARLYSUSPEND
         notify_daemon(STRING_PM_DISPLAY_OFF);
 #endif

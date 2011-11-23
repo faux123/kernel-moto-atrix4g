@@ -31,7 +31,6 @@
 
 #include "ptrace.h"
 #include "signal.h"
-#include "../../../kernel/power/power.h"
 
 static const char *handler[]= { "prefetch abort", "data abort", "address exception", "interrupt" };
 
@@ -254,29 +253,16 @@ DEFINE_SPINLOCK(die_lock);
 NORET_TYPE void die(const char *str, struct pt_regs *regs, int err)
 {
 	struct thread_info *thread = current_thread_info();
-	unsigned long flags=0,lirq=0;
 
 	oops_enter();
 
-	/* prevent spin_lock when suspending, it may hang */
-	if (get_suspend_state() != PM_SUSPEND_PREPARE)
-		spin_lock_irq(&die_lock);
-        else {
-		lirq=1;
-		local_irq_save(flags);
-	}
-
+	spin_lock_irq(&die_lock);
 	console_verbose();
 	bust_spinlocks(1);
 	__die(str, err, thread, regs);
 	bust_spinlocks(0);
 	add_taint(TAINT_DIE);
-
-	if (lirq)
-		local_irq_restore(flags);
-        else
-		spin_unlock_irq(&die_lock);
-
+	spin_unlock_irq(&die_lock);
 	oops_exit();
 
 	if (in_interrupt())
