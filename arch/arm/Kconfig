@@ -1453,11 +1453,7 @@ config CMDLINE
 	  time by entering them here. As a minimum, you should specify the
 	  memory size and the root device (e.g., mem=64M root=/dev/nfs).
 
-config ARCH_HAS_SILLY_ATRIX
-	bool "Atrix International Override"
-	default n
-
-if ARCH_HAS_SILLY_ATRIX
+if TEGRA_ODM_OLYMPUS
 config CMDLINE_PREPEND_ATRIX
     string "Silly hack for ATRIX international bootloader mess"
     default y
