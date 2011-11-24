@@ -237,10 +237,6 @@ config PM_DEEPSLEEP
 	  after enabling this feature, when PM state is set to DEEPSLEEP, the kerne
 	  ignore all key press except long press power key.
 
-config GB_COMPAT
-	bool "Build Gingerbread-compatible kernel drivers"
-	default y
-
 config FAKE_SHMOO
 	bool "Tegra2 Overclocking Enable"
 	depends on ARCH_TEGRA
