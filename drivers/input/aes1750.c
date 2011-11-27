@@ -1430,7 +1430,7 @@ static int __devinit aes1750_probe(struct spi_device *spi)
 	atomic_set(&aes1750->is_suspended, 0);
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
-	aes1750->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
+	aes1750->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB + 100;
 	aes1750->early_suspend.suspend = aes1750_early_suspend;
 	aes1750->early_suspend.resume = aes1750_late_resume;
 	/* If the device is suspended, then register_early_suspend will
