@@ -1328,25 +1328,15 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 					continue;
 				if ( !ts->suspendMode )
 				{
-					#ifndef CONFIG_GB_COMPAT
-					input_report_abs(ts->input_dev, ABS_MT_SLOT, i+1);
-					input_report_abs(ts->input_dev, ABS_MT_TRACKING_ID, i+1);
-					#else
 					input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR,
 							 ts->finger_data[i].z_data);
 					input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR,
 							 ts->finger_data[i].w_data);
-					#endif
 					input_report_abs(ts->input_dev, ABS_MT_POSITION_X,
 							 ts->finger_data[i].x_data);
 					input_report_abs(ts->input_dev, ABS_MT_POSITION_Y,
 							 ts->finger_data[i].y_data);
-					#ifndef CONFIG_GB_COMPAT
-					input_report_abs(ts->input_dev, ABS_MT_PRESSURE,
-							 ts->finger_data[i].z_data);
-					#else
 					input_mt_sync(ts->input_dev);
-					#endif
 				}
 			}
 			input_sync(ts->input_dev);
@@ -2228,9 +2218,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 					     pdata->key_array.keys[i].code);
 	}
 
-	#ifdef CONFIG_GB_COMPAT
 	set_bit(EV_SYN, ts->input_dev->evbit);
-	#endif
 	/* register the software virtual keys, if any are provided */
 	for (i = 0; i < pdata->vkeys.count; ++i)
 		input_set_capability(ts->input_dev, EV_KEY,
@@ -2252,32 +2240,15 @@ static int qtouch_ts_probe(struct i2c_client *client,
 					pdata->abs_min_y,pdata->abs_max_y,
 					pdata->abs_min_p, pdata->abs_max_p,
 					pdata->abs_min_w, pdata->abs_max_w);
-			#ifndef CONFIG_GB_COMPAT
-			__set_bit(INPUT_PROP_DIRECT, ts->input_dev->propbit);
-			#endif
 			input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X,
 				pdata->abs_min_x, pdata->abs_max_x,
 				pdata->fuzz_x, 0);
 			input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y,
 				pdata->abs_min_y, pdata->abs_max_y,
 				pdata->fuzz_y, 0);
-			#ifndef CONFIG_GB_COMPAT
-			input_set_abs_params(ts->input_dev, ABS_MT_PRESSURE,
-				pdata->abs_min_p, pdata->abs_max_p,
-				pdata->fuzz_p, 0);
-			set_bit(EV_ABS, ts->input_dev->evbit);
-			set_bit(ABS_MT_POSITION_X, ts->input_dev->absbit);
-			set_bit(ABS_MT_POSITION_Y, ts->input_dev->absbit);
-			set_bit(ABS_MT_PRESSURE, ts->input_dev->absbit);
-			set_bit(ABS_MT_SLOT, ts->input_dev->absbit);
-			set_bit(ABS_MT_TRACKING_ID, ts->input_dev->absbit);
-			input_set_abs_params(ts->input_dev, ABS_MT_TRACKING_ID, 0, 5, 0, 0);
-			input_set_abs_params(ts->input_dev, ABS_MT_SLOT, 0, 5, 0, 0);
-			#else
 			input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR,
 				pdata->abs_min_p, pdata->abs_max_p,
 				pdata->fuzz_p, 0);
-
 			input_set_abs_params(ts->input_dev, ABS_MT_WIDTH_MAJOR,
 				pdata->abs_min_w, pdata->abs_max_w,
 				pdata->fuzz_w, 0);
@@ -2287,7 +2258,6 @@ static int qtouch_ts_probe(struct i2c_client *client,
 			set_bit(BTN_TOUCH, ts->input_dev->keybit);
 			set_bit(ABS_X, ts->input_dev->keybit);
 			set_bit(ABS_Y, ts->input_dev->keybit);
-			#endif
 		}
 		else
 		{
@@ -2307,7 +2277,7 @@ static int qtouch_ts_probe(struct i2c_client *client,
 			set_bit(KEY_MENU, ts->input_dev->keybit);
 			set_bit(BTN_2, ts->input_dev->keybit);
 			set_bit(EV_ABS, ts->input_dev->evbit);
-
+	
 			input_set_capability(ts->input_dev, EV_KEY, BTN_TOUCH);
 			input_set_capability(ts->input_dev, EV_KEY, BTN_2);
 			input_set_abs_params(ts->input_dev, ABS_X,
