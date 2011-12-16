@@ -323,6 +323,7 @@ static int device_resume_noirq(struct device *dev, pm_message_t state)
 			goto End;
 	}
 
+
 	if (dev->type && dev->type->pm) {
 		pm_dev_dbg(dev, state, "EARLY type ");
 		error = dpm_run_callback(dev, dev->type->pm->resume_noirq);
@@ -332,7 +333,7 @@ static int device_resume_noirq(struct device *dev, pm_message_t state)
 
 	if (dev->class && dev->class->pm) {
 		pm_dev_dbg(dev, state, "EARLY class ");
-		error = dpm_run_callback(dev, dev->bus->pm->resume_noirq);
+		error = dpm_run_callback(dev, dev->class->pm->resume_noirq);
 	}
 
 End:
