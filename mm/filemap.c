@@ -626,19 +626,6 @@ void __lock_page_nosync(struct page *page)
 							TASK_UNINTERRUPTIBLE);
 }
 
-int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
-			 unsigned int flags)
-{
-	if (!(flags & FAULT_FLAG_ALLOW_RETRY)) {
-		__lock_page(page);
-		return 1;
-	} else {
-		up_read(&mm->mmap_sem);
-		wait_on_page_locked(page);
-		return 0;
-	}
-}
-
 /**
  * find_get_page - find and get a page reference
  * @mapping: the address_space to search
@@ -1543,8 +1530,7 @@ int filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 		 * waiting for the lock.
 		 */
 		do_async_mmap_readahead(vma, ra, file, page, offset);
-		if (!lock_page_or_retry(page, vma->vm_mm, vmf->flags))
-			return ret | VM_FAULT_RETRY;
+		lock_page(page);
 
 		/* Did it get truncated? */
 		if (unlikely(page->mapping != mapping)) {
